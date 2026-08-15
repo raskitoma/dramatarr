@@ -1,0 +1,95 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  scroll-margin-block-start: calc(var(--header-height) + var(--space-4));
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--text-lg);
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 70ch;
+}
+
+.panel > button {
+  align-self: flex-start;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  /* Bounded so a 200-episode series does not push the confirm button off the screen — the
+     admin has to be able to reach the control after skimming the list. */
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.paths {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Monospace, and wrapping rather than truncating: a filename cut in the middle is exactly
+   the thing an admin cannot verify. */
+.from,
+.to {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.from {
+  color: var(--text-subtle);
+}
+
+.to {
+  color: var(--text);
+}
+
+/* The arrow is decorative and lives in CSS so it is never read out as content. */
+.to::before {
+  content: '→ ';
+  color: var(--text-subtle);
+}
+
+.reason {
+  color: var(--warning);
+  font-size: var(--text-xs);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 40rem) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

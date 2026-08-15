@@ -1,0 +1,373 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-7) 0;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+}
+
+.sectionHint {
+  margin-top: calc(var(--space-3) * -1);
+  max-width: 70ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- Profile ------------------------------------------------------------------------------ */
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- Profile picture ---------------------------------------------------------------------- */
+
+.avatarBlock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.avatarPreview {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 7rem;
+}
+
+.avatarState {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.avatarControls {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 18rem;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.avatarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Native file input: the browser's own button is the most recognizable "choose a file" control
+   there is, so it keeps its chrome and only inherits the app's type and spacing. */
+.fileInput {
+  width: 100%;
+  max-width: 100%;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+.fileInput::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.fileInput:not(:disabled)::file-selector-button {
+  cursor: pointer;
+}
+
+.fileInput:not(:disabled)::file-selector-button:hover {
+  background: var(--surface-sunken);
+}
+
+.identityText {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.identityName {
+  overflow: hidden;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identityEmail {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Forms -------------------------------------------------------------------------------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.formFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.hint {
+  max-width: 70ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.notice {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The whole label is the target, and with a hint under it the row is already tall enough on
+   its own; without one it is not. base.css cannot reach a <label>, so the floor is set here. */
+@media (pointer: coarse) {
+  .switch {
+    min-block-size: 44px;
+  }
+}
+
+/* --- Sign-in methods ---------------------------------------------------------------------- */
+
+/* Three tiles that stay side by side while they fit and stack when they do not — the point of
+   the block is the comparison, so they share a row for as long as the width allows. */
+.methods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.method {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.methodHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.methodIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.methodName {
+  margin-right: auto;
+  font-weight: var(--weight-medium);
+}
+
+.methodState {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.methodHint {
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.methodActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+/* --- Rows --------------------------------------------------------------------------------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.rowMain {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 16rem;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rowTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rowName {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  /* User agents and device nicknames are long and unbroken; wrap rather than overflow. */
+  overflow-wrap: anywhere;
+}
+
+.rowActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .identity {
+    flex-wrap: wrap;
+  }
+}
+
+/* --- Phones ------------------------------------------------------------------------------- */
+
+@media (max-width: 719px) {
+  /* A 24px gutter inside a 328px card leaves the forms too little room; the cards keep their
+     shape, just less of it. */
+  .card {
+    padding: var(--space-4);
+  }
+
+  .row {
+    padding: var(--space-3);
+  }
+
+  /* The row's own actions must not end up on a line of their own with nothing beside them:
+     wrapping under the device name is fine, wrapping into a lone right-aligned pair is not. */
+  .rowActions {
+    gap: var(--space-3);
+  }
+
+  .avatarBlock {
+    gap: var(--space-4);
+  }
+
+  .avatarPreview {
+    width: 100%;
+  }
+
+  .formFooter > * {
+    flex: 1 1 auto;
+  }
+}

@@ -1,0 +1,27 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button, fallback_link %}
+
+{% block preheader %}Tu enlace de acceso caduca en {{ expires_minutes }} minutos.{% endblock %}
+{% block heading %}Entra en {{ site_name }}{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Hola{% if display_name %}, {{ display_name }}{% endif %}. Pulsa el botón y estarás dentro.
+</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Cuando entres, añade una llave de acceso en tu cuenta: la próxima vez no te hará falta el correo.
+</p>
+{% endblock %}
+
+{% block action %}{{ button(magic_url, "Entrar en " ~ site_name) }}{% endblock %}
+
+{% block after %}
+<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#71717f;">
+  El enlace caduca en {{ expires_minutes }} minutos y solo sirve una vez.
+</p>
+{{ fallback_link(magic_url, "¿El botón no funciona? Copia esta dirección en tu navegador:") }}
+{% endblock %}
+
+{% block footer %}
+Si no has pedido este enlace, ignora este correo: tu cuenta sigue a salvo y nadie ha entrado.
+{% endblock %}

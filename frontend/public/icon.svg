@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="dramatarr">
+  <title>dramatarr</title>
+
+  <!-- Shapes are kept few and chunky on purpose: this has to stay readable at 16px in a
+       browser tab, where thin strokes and small holes turn into mush. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d64e8"/>
+      <stop offset="1" stop-color="#4a3fc4"/>
+    </linearGradient>
+    <linearGradient id="strip" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e6e4ff"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- Phone. Drawn first so the film strip can sit on top and read as emerging from it. -->
+  <g>
+    <rect x="15" y="21" width="25" height="35" rx="4.5" fill="#ffffff"/>
+    <rect x="18" y="25" width="19" height="26" rx="2" fill="#221f52"/>
+    <!-- Home indicator, the one small detail that makes it read as a phone and not a card. -->
+    <rect x="24" y="52.6" width="7" height="1.6" rx="0.8" fill="#221f52" opacity="0.55"/>
+  </g>
+
+  <!-- Film strip bursting out of the screen, up and to the right. -->
+  <g transform="rotate(-32 30 30)">
+    <rect x="26" y="22.5" width="34" height="15" rx="2.5" fill="url(#strip)"/>
+    <!-- Sprocket holes, punched in the background colour so they read as holes rather than
+         as printed dots. -->
+    <g fill="#4a3fc4">
+      <rect x="29.5" y="24.6" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="36.5" y="24.6" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="43.5" y="24.6" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="50.5" y="24.6" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="29.5" y="32.7" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="36.5" y="32.7" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="43.5" y="32.7" width="3.6" height="2.7" rx="0.9"/>
+      <rect x="50.5" y="32.7" width="3.6" height="2.7" rx="0.9"/>
+    </g>
+    <!-- Frame divider, so the middle band does not read as one blank slab. -->
+    <rect x="40.6" y="27.8" width="1.2" height="4.4" rx="0.6" fill="#c9c4f2"/>
+    <rect x="51.6" y="27.8" width="1.2" height="4.4" rx="0.6" fill="#c9c4f2"/>
+  </g>
+</svg>

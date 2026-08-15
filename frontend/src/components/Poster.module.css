@@ -1,0 +1,108 @@
+.poster {
+  --poster-width: 160px;
+  /* Check mark ink: --watched is a light mint in the dark palette, so white on it would be
+   * unreadable. Flip to the page background there, same trick the filled buttons use. */
+  --on-watched: var(--text-on-accent);
+
+  position: relative;
+  inline-size: var(--poster-width);
+  max-inline-size: 100%;
+  aspect-ratio: var(--poster-ratio);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .poster {
+    --on-watched: var(--bg);
+  }
+}
+
+:root[data-theme='dark'] .poster {
+  --on-watched: var(--bg);
+}
+
+.sm {
+  --poster-width: 96px;
+}
+
+.md {
+  --poster-width: 160px;
+}
+
+.lg {
+  --poster-width: 240px;
+}
+
+.sm .placeholder {
+  font-size: var(--text-xl);
+}
+
+.lg .placeholder {
+  font-size: var(--text-3xl);
+}
+
+/* Let a grid cell drive the width when the parent says so. */
+.fluid {
+  --poster-width: 100%;
+}
+
+.image {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  /* No fade-in animation: posters arrive in grids and a staggered fade reads as jank. */
+}
+
+.placeholder {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  /* CJK glyphs are full-width; centering them needs the box, not a text baseline. */
+  text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.watched {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-end: var(--space-2);
+  display: grid;
+  place-items: center;
+  inline-size: 22px;
+  block-size: 22px;
+  background: var(--watched);
+  color: var(--on-watched);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.check {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.progress {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  /* Squared off against the poster edge so it reads as a fill line, not a floating pill. */
+  padding: 0;
+}
+
+/* Reaches into ProgressBar's track on purpose: over artwork it has to be a flush edge-to-edge
+ * line on a scrim, not the rounded pill it is on a page. Scoped through .poster so the
+ * specificity wins regardless of stylesheet order in the production bundle. */
+.poster .progress > * {
+  border-radius: 0;
+  background: var(--overlay);
+}

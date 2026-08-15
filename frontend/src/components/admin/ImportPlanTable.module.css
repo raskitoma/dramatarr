@@ -1,0 +1,104 @@
+/* The table scrolls inside its own box, vertically as well as horizontally: a 58-row plan
+   must not push the Import button below the fold, and the page itself must never scroll
+   sideways on a phone. `tabIndex` on the scroller makes the overflow keyboard-reachable. */
+.scroller {
+  overflow: auto;
+  max-height: 22rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overscroll-behavior: contain;
+}
+
+.scroller:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  min-width: 32rem;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Sticky through a long scroll: at row 40 the columns still say what they are. */
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.nameCell {
+  font-weight: var(--weight-normal);
+  width: 100%;
+}
+
+.filename {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.orderKey {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.arrowCell {
+  width: 1.5rem;
+  padding-inline: 0;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+.targetCell {
+  white-space: nowrap;
+}
+
+/* The whole point of the row: heavier than the filename it replaces, and monospaced so the
+   column reads as a sequence rather than 58 unrelated strings. */
+.episodeCode {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.confidenceCell {
+  text-align: right;
+  white-space: nowrap;
+}

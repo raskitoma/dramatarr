@@ -1,0 +1,260 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-7) 0;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+/* Tightened one step across the board. These screens are dense by nature — a dozen labelled
+   fields per card — and the roomier spacing meant scrolling past three cards to reach the
+   fourth. `--space-3`/`--space-4` keeps the fields legibly separated without the air. */
+.card {
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+}
+
+.sectionHint {
+  margin-top: calc(var(--space-2) * -1);
+  max-width: 70ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* A block of related fields inside a section, kept visually subordinate to it: the rule above
+   it says "new subject" without implying a second save button. */
+.subsectionTitle {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.subsectionHint {
+  margin-top: var(--space-1);
+  max-width: 70ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.spanAll {
+  grid-column: 1 / -1;
+}
+
+.sectionFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.savedNote {
+  margin-right: auto;
+  color: var(--success);
+  font-size: var(--text-sm);
+  min-height: 1.25em;
+}
+
+.cronDescription {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--accent);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.secretRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.secretRow > :first-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.secretRow input {
+  flex: 1 1 12rem;
+}
+
+/* The values pasted into Google Cloud Console. Monospaced because a wrong character is the
+   whole failure mode, and read-only because they are derived, not chosen. */
+.uri {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.uriHint {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.testCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-self: end;
+}
+
+.testResult {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  min-height: 1.25em;
+}
+
+/* A test whose answer is a sentence, not a word: the button and its result share a line and
+   the result wraps under it on a narrow screen. */
+.testRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The one failure that has a known fix, given the room to state it. Warning rather than
+   danger: nothing is broken, an instance simply has not been told to speak JSON yet. */
+.fixNote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-lg);
+  background: var(--warning-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  max-width: 70ch;
+}
+
+.fixTitle {
+  font-weight: var(--weight-semibold);
+}
+
+/* YAML the admin copies verbatim, so whitespace is content: it scrolls rather than wraps. */
+.fixCode {
+  overflow-x: auto;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  white-space: pre;
+}
+
+/* --- Image engines ---------------------------------------------------------------------- */
+
+.engines {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+}
+
+.engineLegend {
+  padding: 0 var(--space-2);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+/* Engine names are short and there can be a dozen of them, so they tile instead of stacking. */
+.engineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.engineOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.engineOption input {
+  accent-color: var(--accent);
+}
+
+.engineNote {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 70ch;
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Index beside the forms. The index column is fixed so the forms keep a stable width as the
+   longest label changes with the interface language. */
+.layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+}

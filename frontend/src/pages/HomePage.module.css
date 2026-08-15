@@ -1,0 +1,133 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.centered {
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Grid/flex children must be allowed to shrink or the scroller widens the page. */
+  min-width: 0;
+}
+
+.heading {
+  font-size: var(--text-xl);
+}
+
+/* Continue watching: one horizontal row, snapping, scrollable with the trackpad or by
+   tabbing through the cards. Never widens the page itself. */
+.scroller {
+  --resume-card: 172px;
+
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-bottom: var(--space-2);
+  margin: 0;
+  list-style: none;
+}
+
+.scrollItem {
+  flex: 0 0 var(--resume-card);
+  scroll-snap-align: start;
+}
+
+.resumeLink {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+}
+
+.resumeLink:hover {
+  text-decoration: none;
+}
+
+.resumeLink:hover .resumeSeries {
+  color: var(--accent);
+}
+
+.resumeSeries {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resumeEpisode {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.resumeCode {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+
+.resumeTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resumeRemaining {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-5) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .scroller {
+    --resume-card: 200px;
+  }
+}
+
+@media (max-width: 400px) {
+  .scroller {
+    --resume-card: 148px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+
+/* On a phone the row runs edge to edge, so the next card peeks past the gutter instead of being
+ * sliced off flush against it — that peek is the only thing on a touch screen that says the row
+ * scrolls at all. The inset mirrors AppLayout's own gutter, which is what it has to cancel; with
+ * a single card on screen the result is identical to no bleed at all. */
+@media (max-width: 719px) {
+  .scroller {
+    margin-inline: calc(max(var(--space-4), env(safe-area-inset-left)) * -1)
+      calc(max(var(--space-4), env(safe-area-inset-right)) * -1);
+    padding-inline: max(var(--space-4), env(safe-area-inset-left))
+      max(var(--space-4), env(safe-area-inset-right));
+    scroll-padding-inline-start: max(var(--space-4), env(safe-area-inset-left));
+  }
+}

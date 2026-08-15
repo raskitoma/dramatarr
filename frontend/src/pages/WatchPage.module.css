@@ -1,0 +1,158 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  inline-size: 100%;
+  max-inline-size: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+
+.centered {
+  display: grid;
+  place-items: center;
+  min-block-size: 60dvh;
+  padding: var(--space-6) var(--space-4);
+}
+
+/* --- header bar --------------------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+}
+
+.back {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  flex-shrink: 0;
+  /* A link back out of a full-screen-ish player is a real touch target, not a caption. */
+  min-block-size: 44px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.backGlyph {
+  display: inline-flex;
+}
+
+.glyph {
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+}
+
+.titles {
+  min-inline-size: 0;
+}
+
+.seriesTitle {
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+.episodeLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.episodeCode {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.episodeTitle {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* --- direct-play warning ------------------------------------------------------------- */
+
+.warning {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  color: var(--text);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+}
+
+.warningGlyph {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding-block-start: var(--space-1);
+  color: var(--warning);
+}
+
+.warningText {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.warningTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.warningHint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* --- stage ---------------------------------------------------------------------------- */
+
+/* The stage owns the height budget and the player takes its *width* from the media's shape,
+ * which is portrait here — 720x1280. The previous version fixed the player at 16/9 and let
+ * `object-fit: contain` shrink a portrait episode into a small centred stamp; giving the box
+ * the height and letting the aspect ratio decide the width is what makes it fill the screen
+ * instead. A landscape source still fits: it simply runs out of width first. */
+.stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: clamp(280px, calc(100dvh - var(--space-8) * 2.5), 860px);
+  min-block-size: 0;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+@media (width <= 40rem) {
+  .page {
+    gap: var(--space-2);
+    padding: var(--space-2) 0 var(--space-2);
+  }
+
+  .bar,
+  .warning {
+    margin-inline: var(--space-3);
+  }
+
+  .bar {
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .seriesTitle {
+    font-size: var(--text-base);
+  }
+
+  .episodeLine {
+    font-size: var(--text-xs);
+  }
+
+  /* Everything the phone has left after the title strip goes to the picture. */
+  .stage {
+    block-size: calc(100dvh - var(--space-8) - env(safe-area-inset-bottom));
+    border-radius: 0;
+  }
+}

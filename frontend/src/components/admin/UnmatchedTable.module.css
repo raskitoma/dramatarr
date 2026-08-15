@@ -1,0 +1,177 @@
+/* Wide table, narrow phones: the table scrolls inside its own box so the page never does.
+   Below 720px it stops being a table at all — see the stacking block at the end of this file,
+   which matches the series table this sits next to under the same tab strip. */
+.scroller {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.pathCell {
+  font-weight: var(--weight-normal);
+  max-width: 42ch;
+}
+
+.path {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-1);
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.chip {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.error {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.numeric {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The per-cell column name, on only once the header row is gone. */
+.cellLabel {
+  display: none;
+}
+
+/* Below 720px a 520px-wide table is a sideways scroll on every phone, and the Assign button —
+ * the only thing anyone comes to this tab to press — is the column that ends up off-screen.
+ * One bordered card per file instead, mirroring the series table under the same tabs. */
+@media (max-width: 719px) {
+  .scroller {
+    overflow-x: visible;
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  .table {
+    min-width: 0;
+    font-size: var(--text-base);
+  }
+
+  .table,
+  .table thead,
+  .table tbody,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody tr {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+
+  .table tbody tr + tr {
+    margin-top: var(--space-3);
+  }
+
+  /* A whole card lighting up under a finger that is only scrolling past reads as a bug. */
+  .table tbody tr:hover {
+    background: var(--surface);
+  }
+
+  /* Names the :last-child pair too, which would otherwise outrank this on specificity. */
+  .table tbody th,
+  .table tbody td,
+  .table tbody tr:last-child th,
+  .table tbody tr:last-child td {
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .table tbody tr > * + * {
+    margin-top: var(--space-3);
+  }
+
+  /* The path is the card's heading, so it keeps a rule under it. */
+  .table tbody tr th.pathCell {
+    max-width: none;
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cellLabel {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .actionsCell {
+    text-align: left;
+  }
+}

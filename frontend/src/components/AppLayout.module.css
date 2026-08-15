@@ -1,0 +1,40 @@
+.main {
+  display: block;
+  width: 100%;
+  max-width: var(--content-max);
+  /* Grid and flex children inside pages can only be told to shrink if their container can:
+     without this a single wide table row widens the whole document on a phone. */
+  min-width: 0;
+  margin-inline: auto;
+  /* The last control on a page must clear the home indicator, not sit under it. */
+  padding-block: var(--space-5) calc(var(--space-8) + env(safe-area-inset-bottom));
+  padding-inline: max(var(--space-4), env(safe-area-inset-left))
+    max(var(--space-4), env(safe-area-inset-right));
+}
+
+/* The player owns its whole viewport; no gutters, no max width. */
+.bleed {
+  display: block;
+  width: 100%;
+}
+
+/* Focusing <main> from the skip link must not paint a ring around the entire page. */
+.main:focus,
+.bleed:focus {
+  outline: none;
+}
+
+.loader {
+  display: grid;
+  place-items: center;
+  min-height: 50dvh;
+  padding-block: var(--space-7);
+}
+
+@media (min-width: 720px) {
+  .main {
+    padding-block: var(--space-6) calc(var(--space-8) + env(safe-area-inset-bottom));
+    padding-inline: max(var(--space-5), env(safe-area-inset-left))
+      max(var(--space-5), env(safe-area-inset-right));
+  }
+}

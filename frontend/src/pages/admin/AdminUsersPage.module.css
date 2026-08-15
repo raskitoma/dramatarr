@@ -1,0 +1,386 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+}
+
+/* Users table ------------------------------------------------------------------------------ */
+
+.scroller {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* No min-width floor. It used to be 720px, which is wider than the content box at any viewport
+   below ~770px — so the band between the stacking breakpoint and a laptop was the one place the
+   table really did scroll sideways. Icon row actions made the columns narrow enough to drop it,
+   and the scroller stays as a safety net. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+.table thead th {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Between the stacking breakpoint and a laptop the table is at its tightest. Cell gutters are
+   the cheapest 40px to give up, and giving them up is what keeps the actions column on screen
+   instead of behind a sideways scroll. */
+@media (max-width: 900px) {
+  .table th,
+  .table td {
+    padding-inline: var(--space-3);
+  }
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inactiveRow {
+  opacity: 0.65;
+}
+
+.cell {
+  min-width: 0;
+}
+
+/* The per-cell column name. Invisible while the real column headers are on screen; the
+   stacked layout below turns it on, because that is where they stop existing. */
+.cellLabel {
+  display: none;
+}
+
+.cellValue {
+  min-width: 0;
+}
+
+.userCell {
+  font-weight: var(--weight-normal);
+  min-width: 12rem;
+}
+
+/* The flex row lives inside the cell rather than on it: a table cell set to `display: flex`
+   stops stretching to the height of its row, which leaves its bottom border floating. */
+.userLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.userText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.userNameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.userName {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.protectedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The reason the controls beside it are dead. Left-aligned against the actions column so it
+   reads as a note on those buttons rather than as a status of the row. */
+.protectedNote {
+  max-width: 32ch;
+  margin-top: var(--space-2);
+  margin-left: auto;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  text-align: left;
+}
+
+.email {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* No shrink-to-fit here, unlike the library table: this column also carries the founding-account
+   note, and squeezing it to the width of two icon buttons would break that sentence over eight
+   lines. The `nowrap` that keeps the buttons together sits on the button row instead, where it
+   cannot reach the note. */
+.actionsCell {
+  text-align: right;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.rowError {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.dialogMeta {
+  margin-top: var(--space-2);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+/* Invites ---------------------------------------------------------------------------------- */
+
+.inviteList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.inviteRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.inviteText {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.inviteEmail {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.inviteMeta {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.inviteForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.created {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sent,
+.notSent {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.sent {
+  border: 1px solid var(--success);
+  background: var(--success-soft);
+}
+
+.notSent {
+  border: 1px solid var(--warning);
+  background: var(--warning-soft);
+}
+
+/* Wraps rather than squeezing: inside a dialog on a 360px screen the URL field and the copy
+   button cannot both stay on one line and remain usable. */
+.copyRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.copyRow > :first-child {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+/* --- Phones ------------------------------------------------------------------------------- */
+
+/* Below the header's own breakpoint the table stops being a table: one card per member, each
+ * field naming the column it came from. The alternative — a grid that scrolls sideways inside
+ * a 360px viewport — puts the actions column exactly where nobody will look for it, and the
+ * last one is always the one cut off. */
+@media (max-width: 719px) {
+  .card {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .scroller {
+    overflow-x: visible;
+    border: none;
+    border-radius: 0;
+  }
+
+  .table {
+    min-width: 0;
+    font-size: var(--text-base);
+  }
+
+  .table,
+  .table thead,
+  .table tbody,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  /* Every cell now carries its own label, so the header row is pure repetition. */
+  .table thead {
+    display: none;
+  }
+
+  .table tbody tr {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+  }
+
+  .table tbody tr + tr {
+    margin-top: var(--space-3);
+  }
+
+  /* Also names the :last-child pair from the desktop rules, which would otherwise outrank
+     this on specificity and keep the old padding on the final row. */
+  .table tbody th,
+  .table tbody td,
+  .table tbody tr:last-child th,
+  .table tbody tr:last-child td {
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .table tbody tr > * + * {
+    margin-top: var(--space-3);
+  }
+
+  /* The member is the card's heading, so it keeps a rule under it. */
+  .table tbody tr th.userCell {
+    min-width: 0;
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cellLabel {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .actionsCell {
+    text-align: left;
+  }
+
+  .rowActions {
+    justify-content: flex-start;
+    gap: var(--space-3);
+  }
+
+  .protectedNote {
+    max-width: none;
+    margin-left: 0;
+  }
+
+  .muted {
+    white-space: normal;
+  }
+
+  .inviteRow {
+    gap: var(--space-2);
+  }
+}

@@ -1,0 +1,20 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button %}
+
+{% block preheader %}La configuración SMTP de {{ site_name }} funciona.{% endblock %}
+{% block heading %}El correo funciona{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Si estás leyendo esto, la configuración SMTP de <strong>{{ site_name }}</strong> es correcta.
+</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Ya puedes enviar invitaciones y enlaces de acceso a la gente de casa.
+</p>
+{% endblock %}
+
+{% block action %}{{ button(public_url, "Abrir " ~ site_name) }}{% endblock %}
+
+{% block footer %}
+Mensaje de prueba enviado desde los ajustes de {{ site_name }}.
+{% endblock %}

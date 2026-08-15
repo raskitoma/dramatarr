@@ -1,0 +1,43 @@
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+}
+
+.icon {
+  flex: none;
+  margin-block-start: 1px;
+  color: var(--danger);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.message {
+  min-inline-size: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+/* The stable error code, for when a household admin has to describe the failure to someone
+ * else. Muted enough that it never competes with the sentence above it. */
+.code {
+  display: block;
+  margin-block-start: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

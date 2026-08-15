@@ -1,0 +1,145 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.form {
+  max-width: 32rem;
+}
+
+/* --- Query box ---------------------------------------------------------------------------- */
+
+.searchControl {
+  position: relative;
+  display: block;
+  min-inline-size: 0;
+}
+
+.searchControl input {
+  /* Gutter, glyph, gutter. */
+  padding-inline-start: calc(var(--space-3) * 2 + 1.25em);
+}
+
+.searchIcon {
+  position: absolute;
+  inset-inline-start: var(--space-3);
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--text-subtle);
+  /* Decoration only: the field is named by its own label, and a magnifier that looks
+     pressable but is not would be the worse of the two options. */
+  pointer-events: none;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-height: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+/* Count and timing are supporting detail, not the headline. */
+.statusMeta {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.centered {
+  display: grid;
+  place-items: center;
+  min-height: 30vh;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  font-size: var(--text-lg);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-5) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.episodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.episode {
+  min-width: 0;
+}
+
+.episodeLink {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.episodeLink:hover {
+  text-decoration: none;
+  border-color: var(--border-strong);
+}
+
+.episodeSeries {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+/* Wraps rather than overflows: at 360px an episode title routinely outruns the row, and a flex
+   item defaults to min-width:auto, which would push the card past the viewport edge. */
+.episodeTitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.episodeTitle > * {
+  min-width: 0;
+}
+
+.episodeCode {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.episodeNote {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.episodeUnavailable {
+  font-size: var(--text-xs);
+  color: var(--unavailable);
+}

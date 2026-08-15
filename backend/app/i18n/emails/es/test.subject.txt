@@ -1,0 +1,1 @@
+Prueba de correo de {{ site_name }}

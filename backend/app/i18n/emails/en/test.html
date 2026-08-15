@@ -1,0 +1,20 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button %}
+
+{% block preheader %}SMTP for {{ site_name }} is working.{% endblock %}
+{% block heading %}Email is working{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  If you are reading this, the SMTP settings for <strong>{{ site_name }}</strong> are correct.
+</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  You can now send invitations and sign-in links to the rest of the household.
+</p>
+{% endblock %}
+
+{% block action %}{{ button(public_url, "Open " ~ site_name) }}{% endblock %}
+
+{% block footer %}
+Test message sent from the {{ site_name }} settings page.
+{% endblock %}

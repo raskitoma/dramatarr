@@ -1,0 +1,9 @@
+Si estás leyendo esto, la configuración SMTP de {{ site_name }} es correcta.
+
+Ya puedes enviar invitaciones y enlaces de acceso a la gente de casa.
+
+Abrir {{ site_name }}:
+{{ public_url }}
+
+--
+Mensaje de prueba enviado desde los ajustes de {{ site_name }}.

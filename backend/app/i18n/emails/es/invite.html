@@ -1,0 +1,30 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button, fallback_link %}
+
+{% block preheader %}Tu invitación para entrar en {{ site_name }}.{% endblock %}
+{% block heading %}Te damos la bienvenida{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  {% if inviter_name %}{{ inviter_name }} te ha invitado{% else %}Te han invitado{% endif %}
+  a <strong>{{ site_name }}</strong>, la videoteca de series de casa.
+</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Para entrar crearás una <strong>llave de acceso</strong>: sin contraseñas que recordar, solo
+  tu huella, tu cara o el PIN de tu dispositivo.
+</p>
+{% endblock %}
+
+{% block action %}{{ button(invite_url, "Aceptar la invitación") }}{% endblock %}
+
+{% block after %}
+<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#71717f;">
+  El enlace caduca el {{ expires_at.strftime('%d/%m/%Y a las %H:%M UTC') }} y solo puede usarse una vez.
+</p>
+{{ fallback_link(invite_url, "¿El botón no funciona? Copia esta dirección en tu navegador:") }}
+{% endblock %}
+
+{% block footer %}
+Recibiste este correo porque se invitó a {{ email }} a {{ site_name }}.
+Si no esperabas esta invitación, puedes ignorarla sin más.
+{% endblock %}

@@ -1,0 +1,50 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A ring drawn from the border box so it inherits the surrounding text color and needs no
+ * raw color of its own. */
+.spinner {
+  display: inline-block;
+  flex: none;
+  border-style: solid;
+  border-color: currentColor;
+  border-block-start-color: transparent;
+  border-inline-end-color: transparent;
+  border-radius: var(--radius-full);
+  opacity: 0.9;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+.sm {
+  inline-size: 14px;
+  block-size: 14px;
+  border-width: 2px;
+}
+
+.md {
+  inline-size: 20px;
+  block-size: 20px;
+  border-width: 2px;
+}
+
+.lg {
+  inline-size: 32px;
+  block-size: 32px;
+  border-width: 3px;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A busy indicator still has to indicate; slow it down rather than freezing it. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.8s;
+  }
+}

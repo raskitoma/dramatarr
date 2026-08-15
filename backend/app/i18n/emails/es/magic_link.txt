@@ -1,0 +1,10 @@
+Hola{% if display_name %}, {{ display_name }}{% endif %}. Abre este enlace y estarás dentro de {{ site_name }}:
+
+{{ magic_url }}
+
+El enlace caduca en {{ expires_minutes }} minutos y solo sirve una vez.
+
+Cuando entres, añade una llave de acceso en tu cuenta: la próxima vez no te hará falta el correo.
+
+--
+Si no has pedido este enlace, ignora este correo: tu cuenta sigue a salvo y nadie ha entrado.

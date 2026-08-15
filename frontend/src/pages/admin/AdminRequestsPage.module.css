@@ -1,0 +1,297 @@
+/* The admin's wishlist queue.
+ *
+ * Same two-column shell as the settings screen — index on the left, content on the right,
+ * collapsing to a scrollable strip above the content on a narrow viewport. */
+
+/* The two-column shell lives in TocLayout; this file styles only what sits inside it. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+}
+
+.intro {
+  max-width: 65ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  /* Matches the anchor offset the ToC assumes. */
+  scroll-margin-block-start: calc(var(--header-height) + var(--space-4));
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+}
+
+.helpText {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 65ch;
+}
+
+/* --- Filters ------------------------------------------------------------------------------ */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.filter:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.filter[aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+
+.filterCount {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+/* --- Rows --------------------------------------------------------------------------------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.rowPoster {
+  inline-size: 4rem;
+  flex: none;
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.rowTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.rowYear {
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.requester {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+
+.provider {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.note,
+.reply {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--border-strong);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  color: var(--text);
+}
+
+.reply {
+  color: var(--text-muted);
+}
+
+.noteLabel {
+  display: block;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.resolvedBy {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+}
+
+.links a:hover {
+  color: var(--accent);
+}
+
+/* --- Reply box ---------------------------------------------------------------------------- */
+
+.replyBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block-start: var(--space-2);
+}
+
+.replyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --- Actions ------------------------------------------------------------------------------ */
+
+.rowActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-inline-size: 8.5rem;
+}
+
+/* --- Summary ------------------------------------------------------------------------------ */
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--space-3);
+}
+
+.summaryCell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.summaryLabel {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summaryValue {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Narrow ------------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 40rem) {
+  .row {
+    /* The poster goes first: at this width the actions need a full row of their own, and a
+       three-column grid would squeeze the title into two words per line. */
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .rowActions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-inline-size: 0;
+  }
+}

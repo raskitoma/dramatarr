@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Tu biblioteca de series, en casa" />
+    <title>dramatarr</title>
+
+    <!-- SVG first: modern browsers prefer it and it stays crisp on any display. The 32px PNG
+         is the fallback for the ones that still ignore SVG favicons. -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#5b5bd6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0f14" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Applied before first paint. Without this the page renders in the OS theme and then
+      // snaps to the stored preference, which is a visible flash on every load.
+      (function () {
+        try {
+          var stored = localStorage.getItem('dramatarr.theme')
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored)
+          }
+          var locale = localStorage.getItem('dramatarr.locale')
+          if (locale) document.documentElement.setAttribute('lang', locale)
+        } catch (e) {
+          // Private mode with storage disabled — fall through to the system theme.
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

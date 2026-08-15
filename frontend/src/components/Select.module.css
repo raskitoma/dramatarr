@@ -1,0 +1,60 @@
+.wrapper {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.select {
+  inline-size: 100%;
+  block-size: 36px;
+  padding-inline: var(--space-3) var(--space-6);
+  background: var(--surface);
+  color: var(--text);
+  /* Matches Input: --border-strong is too faint (~1.6:1) for a control edge. */
+  border: 1px solid var(--text-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  -webkit-appearance: none;
+  appearance: none;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+}
+
+.select:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.select:focus-visible {
+  border-color: var(--accent);
+}
+
+.select:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.invalid,
+.invalid:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+
+/* Chevron drawn with borders in currentColor — no inline SVG, so no raw color anywhere. */
+.chevron {
+  position: absolute;
+  inset-inline-end: var(--space-4);
+  inset-block-start: 50%;
+  inline-size: 7px;
+  block-size: 7px;
+  border-inline-end: 1.5px solid currentColor;
+  border-block-end: 1.5px solid currentColor;
+  color: var(--text-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.select:disabled ~ .chevron {
+  opacity: 0.5;
+}

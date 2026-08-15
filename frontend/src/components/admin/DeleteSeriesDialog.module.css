@@ -1,0 +1,120 @@
+.subject {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* What goes away ---------------------------------------------------------------------------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.statLabel {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statValue {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.statNote {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+/* The read-only promise, and what the next scan will do -------------------------------------- */
+
+.readOnly {
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* Loud on purpose: this is the difference between a deletion that lasts and one that quietly
+   undoes itself on the next scan. */
+.warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warning);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.warningTitle {
+  font-weight: var(--weight-semibold);
+}
+
+.warningCount {
+  font-variant-numeric: tabular-nums;
+}
+
+.gone {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* Explicit confirmation ---------------------------------------------------------------------- */
+
+.confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  cursor: pointer;
+}
+
+.checkbox {
+  flex: 0 0 auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.125rem;
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+
+/* The focus ring comes from base.css; nothing to add here. */
+
+@media (max-width: 520px) {
+  .stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

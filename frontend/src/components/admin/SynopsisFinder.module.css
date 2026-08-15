@@ -1,0 +1,86 @@
+.finder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+  min-width: 0;
+}
+
+.note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  max-width: 70ch;
+  line-height: var(--leading-normal);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+  padding: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Whose page this is. Always visible: the admin is about to read it and copy from it, so
+   knowing the source is the difference between quoting a platform and quoting an aggregator. */
+.domain {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+/* The armed replace: drops to its own full-width line rather than crowding the row, so the
+   warning is read before the button next to it is pressed. */
+.confirm {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--danger);
+}
+
+.confirmText {
+  color: var(--text);
+  font-size: var(--text-xs);
+  max-width: 60ch;
+  line-height: var(--leading-normal);
+}
+
+/* The message and the one control that widens the search, kept together so the explanation
+   and its remedy are read as one thing. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* An instance problem, not a content problem. Coloured as a warning so it is not read as
+   part of the result list. */
+.warning {
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 2px solid var(--warning);
+  color: var(--text);
+  font-size: var(--text-xs);
+  max-width: 70ch;
+}

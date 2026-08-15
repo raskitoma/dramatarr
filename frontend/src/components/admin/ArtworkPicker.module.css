@@ -1,0 +1,234 @@
+.subject {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The consequence of choosing, said once. Dashed rather than coloured: it is a rule to read,
+   not an error to fix — the same treatment the metadata editor gives its lock hint. */
+.lockNote {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  max-width: 70ch;
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.filter > :first-child {
+  flex: 0 1 12rem;
+  min-width: 0;
+}
+
+.filterHint {
+  flex: 1 1 14rem;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.sectionTitle {
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Which search produced what follows. Sits between the heading and the grid because it
+   qualifies the results, and reads as a caption rather than as another heading. */
+.providerNote {
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.emptyNote,
+.configureNote {
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  max-width: 62ch;
+}
+
+.grid,
+.wideGrid {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid {
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+}
+
+/* Backdrops are 16:9, so two per row read better than five thumbnails nobody can judge. */
+.wideGrid {
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+
+/* The candidates are raw remote images rather than cached posters, so the aspect box lives
+   here instead of coming from the Poster component. */
+.thumb,
+.wideThumb {
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.thumb {
+  aspect-ratio: var(--poster-ratio);
+}
+
+.wideThumb {
+  aspect-ratio: 16 / 9;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.card:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.card:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.cardSize {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cardLanguage {
+  color: var(--text-subtle);
+}
+
+/* The engine that found it. Set apart from the dimensions and the language because it is the
+   only part of the row that is a name from someone else's system. */
+.cardEngine {
+  overflow: hidden;
+  max-width: 100%;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* --- URL and file ------------------------------------------------------------------------- */
+
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.urlField {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.preview {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+}
+
+.previewBody {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.previewNote {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 52ch;
+}
+
+.fileInput {
+  width: 100%;
+  max-width: 100%;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+.fileInput::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.fileInput:not(:disabled)::file-selector-button {
+  cursor: pointer;
+}
+
+.fileInput:not(:disabled)::file-selector-button:hover {
+  background: var(--surface-sunken);
+}

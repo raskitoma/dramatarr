@@ -1,0 +1,12 @@
+{% if inviter_name %}{{ inviter_name }} has invited you{% else %}You have been invited{% endif %} to {{ site_name }}, the household series library.
+
+You will set up a passkey to get in: no password to remember, just your fingerprint, your face, or your device PIN.
+
+Accept the invitation here:
+{{ invite_url }}
+
+This link expires on {{ expires_at.strftime('%d %b %Y at %H:%M UTC') }} and works only once.
+
+--
+You received this because {{ email }} was invited to {{ site_name }}.
+If you were not expecting it, you can safely ignore this message.

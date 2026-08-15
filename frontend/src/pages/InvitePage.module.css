@@ -1,0 +1,121 @@
+/* Enrollment card. Same footprint as the login card, a little wider for the welcome copy. */
+
+.page {
+  --invite-card-max: 26rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--space-6) var(--space-4);
+  background: var(--bg);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: var(--invite-card-max);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.welcome {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+.email {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The one line that explains what a passkey is, for people who have never made one. */
+.intro {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+}
+
+.note {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* Same idiom as the login card: the two enrollment routes are alternatives, not a sequence. */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+}
+
+.divider::before,
+.divider::after {
+  flex: 1;
+  height: 1px;
+  content: '';
+  background: var(--border);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.live:empty {
+  display: none;
+}
+
+.live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) 0;
+}
+
+@media (max-width: 26rem) {
+  .card {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .page {
+    padding: var(--space-4) var(--space-3);
+  }
+}

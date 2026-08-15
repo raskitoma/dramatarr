@@ -1,0 +1,12 @@
+{% if inviter_name %}{{ inviter_name }} te ha invitado{% else %}Te han invitado{% endif %} a {{ site_name }}, la videoteca de series de casa.
+
+Para entrar crearás una llave de acceso: sin contraseñas que recordar, solo tu huella, tu cara o el PIN de tu dispositivo.
+
+Acepta la invitación aquí:
+{{ invite_url }}
+
+El enlace caduca el {{ expires_at.strftime('%d/%m/%Y a las %H:%M UTC') }} y solo puede usarse una vez.
+
+--
+Recibiste este correo porque se invitó a {{ email }} a {{ site_name }}.
+Si no esperabas esta invitación, puedes ignorarla sin más.

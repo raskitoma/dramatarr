@@ -1,0 +1,55 @@
+.avatar {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  /* The hue is user data, so it is mixed into surface tokens rather than used raw — that is
+     what keeps the initials on it readable whatever colour the server assigned, in either
+     theme. An uploaded picture covers the circle entirely, so the mix only shows through the
+     border, which is what keeps both branches the same shape. */
+  background: color-mix(in srgb, var(--avatar-color, var(--accent)) 22%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--avatar-color, var(--accent)) 55%, var(--border));
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  user-select: none;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Faces are rarely centred in a phone photo, but they are almost never in the bottom third. */
+  object-position: center top;
+}
+
+.initials {
+  font-size: inherit;
+}
+
+.sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: var(--text-xs);
+}
+
+.md {
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: var(--text-sm);
+}
+
+.lg {
+  width: 3rem;
+  height: 3rem;
+  font-size: var(--text-base);
+}
+
+.xl {
+  width: 5rem;
+  height: 5rem;
+  font-size: var(--text-xl);
+}

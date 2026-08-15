@@ -1,0 +1,9 @@
+If you are reading this, the SMTP settings for {{ site_name }} are correct.
+
+You can now send invitations and sign-in links to the rest of the household.
+
+Open {{ site_name }}:
+{{ public_url }}
+
+--
+Test message sent from the {{ site_name }} settings page.

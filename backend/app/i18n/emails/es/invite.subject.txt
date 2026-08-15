@@ -1,0 +1,1 @@
+Tu invitación a {{ site_name }}

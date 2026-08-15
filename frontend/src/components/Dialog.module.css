@@ -1,0 +1,127 @@
+.dialog {
+  --dialog-width: 32rem;
+
+  /* Percent, not vw: a top-layer element resolves it against the viewport minus scrollbars,
+   * so the dialog cannot sit a scrollbar's width wider than the screen. */
+  inline-size: min(var(--dialog-width), calc(100% - var(--space-5)));
+  max-inline-size: none;
+  max-block-size: min(calc(100dvh - var(--space-6)), 44rem);
+  padding: 0;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.sm {
+  --dialog-width: 24rem;
+}
+
+.md {
+  --dialog-width: 32rem;
+}
+
+.lg {
+  --dialog-width: 48rem;
+}
+
+.dialog::backdrop {
+  background: var(--overlay);
+}
+
+.dialog[open] {
+  animation: dialog-in var(--duration-normal) var(--ease);
+}
+
+.dialog[open]::backdrop {
+  animation: backdrop-in var(--duration-normal) var(--ease);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3)) scale(0.98);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The panel is the click-shield: anything that lands on the <dialog> itself is backdrop.
+ * It inherits the dialog's height cap so that .body — flex:1 with min-block-size:0 — is the
+ * thing that scrolls, instead of tall content being clipped by the dialog's overflow. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  max-block-size: inherit;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-block-end: 1px solid var(--border);
+}
+
+.heading {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.description {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+}
+
+.body {
+  flex: 1;
+  min-block-size: 0;
+  padding: var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border-block-start: 1px solid var(--border);
+}
+
+@media (max-width: 480px) {
+  .dialog {
+    inline-size: calc(100% - var(--space-4));
+  }
+
+  .header,
+  .body {
+    padding-inline: var(--space-4);
+  }
+
+  .footer {
+    padding-inline: var(--space-4);
+  }
+
+  /* Stacked full-width actions read better than two cramped buttons at 360px. */
+  .footer > * {
+    flex: 1 1 auto;
+  }
+}

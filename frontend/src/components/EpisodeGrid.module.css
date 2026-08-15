@@ -1,0 +1,240 @@
+/* Tile metrics live on .grid so the whole matrix rescales from one place.
+ *
+ * At 360px the page gutters leave 328px, which auto-fills to three 104px tiles; a 1440px page
+ * fits twelve, so fifty-eight episodes land in five rows. The poster URL arrives as --tile-art
+ * once it has loaded — see useSharedPoster — and every tile paints from that one image. */
+.grid {
+  --tile-min: 96px;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 720px) {
+  .grid {
+    --tile-min: 104px;
+  }
+}
+
+.tile {
+  position: relative;
+  container-type: inline-size;
+  aspect-ratio: 3 / 4;
+  /* The tile is the tap target; it never falls under the 44px floor even if art is missing. */
+  min-block-size: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  overflow: hidden;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .tile:hover:not(.isUnavailable) {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+/*
+ * The focus ring has to be drawn by the tile, not by what is focused inside it.
+ * Everything focusable here — the full-bleed link, the watched toggle, the percent chip — is
+ * pinned to an edge of a box that clips its overflow, so each one's own ring would be sliced
+ * off by exactly the edge it sits against. An element's outline is not clipped by its own
+ * overflow, so the tile can draw the ring the parts inside it cannot.
+ */
+.tile:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The whole tile is the link. It is a layer, not a label, so the controls that sit on top of
+   it are siblings rather than nested — a button inside an anchor is not valid markup. */
+.face {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  color: var(--text);
+  border-radius: inherit;
+  text-decoration: none;
+}
+
+.face:hover {
+  text-decoration: none;
+}
+
+/* Every tile shows the same poster, dimmed hard: with fifty-eight identical images the artwork
+   is texture and the number is the content, and the low opacity is also what keeps --text at
+   full contrast over an image nobody chose for legibility. */
+.art {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0.3;
+}
+
+.grid[data-art='true'] .art {
+  background-image: var(--tile-art);
+}
+
+.number {
+  position: relative;
+  /* Scales with the tile rather than the viewport, so a narrow column shrinks the digits and a
+     wide one does not blow them up. The rem value is the fallback where cqi is unsupported. */
+  font-size: var(--text-2xl);
+  font-size: 34cqi;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* --- watched --------------------------------------------------------------------------- */
+
+.isWatched {
+  border-color: var(--watched);
+}
+
+.isWatched .art {
+  filter: grayscale(1);
+  opacity: 0.14;
+}
+
+/* Muted, not faint. --text-subtle over the pale washed-out art of a watched tile measures
+   about 2.7:1 in the light palette, under the 3:1 that large text owes; --text-muted clears 5:1
+   in both palettes and the drop from bold still reads as "done" beside an unwatched tile. */
+.isWatched .number {
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+
+/* --- unavailable ----------------------------------------------------------------------- */
+
+/* Declared by metadata, absent from the NAS: no artwork, dashed edge, and a face that is
+   focusable but does nothing. */
+.isUnavailable {
+  background: var(--surface);
+  border-style: dashed;
+}
+
+.isUnavailable .art {
+  display: none;
+}
+
+.isUnavailable .number {
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+
+.isUnavailable .face {
+  cursor: not-allowed;
+}
+
+/* --- controls -------------------------------------------------------------------------- */
+
+/* Doubled selector to beat Button's own single-class metrics regardless of bundle order. */
+.state.state {
+  --control-height: 44px;
+
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  color: var(--text-subtle);
+  border-radius: var(--radius-full);
+}
+
+/* The glyph carries its own disc so it stays readable over whatever the poster puts behind it,
+   while the 44px button around it stays invisible. */
+.state.state svg {
+  font-size: 1.25rem;
+  background: var(--surface);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.stateOn.stateOn {
+  color: var(--watched);
+}
+
+/* The percent has to be on screen for an in-progress episode anyway, so the readout is also the
+   control that resets it: one always-visible tap target, no menu, nothing behind a hover. Its
+   accessible name is "42 % · Borrar progreso", which contains the visible text. */
+.clear {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  padding: var(--space-2);
+  /* Clears the progress bar pinned to the very bottom edge. */
+  padding-block-end: var(--space-3);
+}
+
+.clearPill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--in-progress);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+}
+
+.clearPill svg {
+  font-size: 0.8125rem;
+}
+
+.clear[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (hover: hover) {
+  .clear:not([aria-disabled='true']):hover .clearPill {
+    background: var(--surface-raised);
+    color: var(--accent-hover);
+  }
+}
+
+.bar {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 3;
+  border-radius: 0;
+}
+
+/* High-contrast mode drops background images and most fills; the number, the border and the
+   focus ring are all that is left, and all three survive. */
+@media (forced-colors: active) {
+  .art {
+    display: none;
+  }
+
+  .state.state svg,
+  .clearPill {
+    background: Canvas;
+    border: 1px solid CanvasText;
+  }
+}

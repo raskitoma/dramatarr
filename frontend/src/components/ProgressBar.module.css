@@ -1,0 +1,39 @@
+.track {
+  --bar-height: 8px;
+
+  position: relative;
+  inline-size: 100%;
+  block-size: var(--bar-height);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.sm {
+  --bar-height: 4px;
+}
+
+.fill {
+  block-size: 100%;
+  border-radius: inherit;
+  transition: inline-size var(--duration-slow) var(--ease);
+}
+
+.accent .fill {
+  background: var(--in-progress);
+}
+
+.success .fill {
+  background: var(--watched);
+}
+
+/* Windows high-contrast mode drops background colors; keep the fill visible there. */
+@media (forced-colors: active) {
+  .track {
+    border: 1px solid CanvasText;
+  }
+
+  .fill {
+    background: Highlight;
+  }
+}

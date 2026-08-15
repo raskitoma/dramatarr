@@ -1,0 +1,10 @@
+Hi{% if display_name %} {{ display_name }}{% endif %} — open this link and you are inside {{ site_name }}:
+
+{{ magic_url }}
+
+This link expires in {{ expires_minutes }} minutes and works only once.
+
+Once you are signed in, add a passkey to your account and you will not need email next time.
+
+--
+If you did not ask for this link, ignore this email: your account is safe and nobody signed in.

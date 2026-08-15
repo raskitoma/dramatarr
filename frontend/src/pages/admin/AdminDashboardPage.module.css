@@ -1,0 +1,165 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+/* --- Stat tiles --------------------------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column-reverse; /* number first visually, label beneath */
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.tile[data-alert='true'] {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.tileLabel {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.tileValue {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.tile[data-alert='true'] .tileValue,
+.tile[data-alert='true'] .tileLabel {
+  color: var(--warning);
+}
+
+/* --- Queue card --------------------------------------------------------------------------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cardTitle {
+  font-size: var(--text-lg);
+}
+
+.cardLink {
+  margin-left: auto;
+  font-size: var(--text-sm);
+}
+
+.running {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.runningHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.runningType {
+  font-weight: var(--weight-medium);
+}
+
+.runningPercent {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.runningMessage {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.queueCount {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.queueCountValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.unmatchedLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+@media (width <= 40rem) {
+  .page {
+    padding: var(--space-4) var(--space-3);
+    gap: var(--space-4);
+  }
+
+  .tiles {
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  }
+
+  .tile {
+    padding: var(--space-3);
+  }
+
+  .tileValue {
+    font-size: var(--text-2xl);
+  }
+
+  .cardLink {
+    margin-left: 0;
+  }
+}

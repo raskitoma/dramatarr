@@ -1,0 +1,63 @@
+# Pinned rather than inferred. Compose otherwise names the project after the directory it finds
+# this file in — which on the NAS is `src`, so an inferred name silently builds a *second*,
+# parallel stack: new containers on the same SQLite database and the same library mount, while
+# the real ones keep running. That happened once, and the only reason it was caught immediately
+# is that the duplicate could not bind the published port. The name belongs in version control,
+# not in a `.env` that a careless rsync can take with it.
+name: dramatarr
+
+services:
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DRAMATARR_SECRET_KEY: ${DRAMATARR_SECRET_KEY:?set DRAMATARR_SECRET_KEY in .env}
+      DRAMATARR_ENVIRONMENT: production
+      DRAMATARR_DATABASE_URL: sqlite+aiosqlite:////data/dramatarr.db
+      DRAMATARR_LIBRARY_ROOT: /library
+      DRAMATARR_DATA_DIR: /data
+      DRAMATARR_PUBLIC_URL: ${DRAMATARR_PUBLIC_URL:-http://localhost:8080}
+      DRAMATARR_WEBAUTHN_RP_ID: ${DRAMATARR_WEBAUTHN_RP_ID:-localhost}
+      DRAMATARR_WEBAUTHN_RP_NAME: ${DRAMATARR_WEBAUTHN_RP_NAME:-dramatarr}
+      DRAMATARR_WEBAUTHN_ORIGIN: ${DRAMATARR_WEBAUTHN_ORIGIN:-http://localhost:8080}
+      DRAMATARR_DEFAULT_LOCALE: ${DRAMATARR_DEFAULT_LOCALE:-es}
+      DRAMATARR_BOOTSTRAP_ADMIN_EMAIL: ${DRAMATARR_BOOTSTRAP_ADMIN_EMAIL:-}
+      DRAMATARR_SESSION_TTL_DAYS: ${DRAMATARR_SESSION_TTL_DAYS:-30}
+      DRAMATARR_LOG_LEVEL: ${DRAMATARR_LOG_LEVEL:-INFO}
+    user: "${DRAMATARR_UID:-1000}:${DRAMATARR_GID:-1000}"
+    volumes:
+      # The NAS library.
+      #
+      # Writable, and that is a deliberate downgrade from the `:ro` this used to carry. Exactly
+      # one feature needs it — `app/services/renamer.py`, which renames a matched series' files
+      # so their names mean something — and it is gated behind an admin action with a preview.
+      # Nothing else in the application writes here: the scanner, the streamer, the metadata
+      # jobs and the deletion routes all still treat this mount as read-only.
+      #
+      # If you would rather keep the guarantee than have the feature, put `:ro` back. The
+      # rename job is the only thing that stops working, and it fails with a clear error
+      # rather than corrupting anything.
+      - ${DRAMATARR_LIBRARY_PATH:?set DRAMATARR_LIBRARY_PATH to your NAS mount}:/library
+      # Database, cached images, generated thumbnails and extracted subtitles.
+      # A host path rather than a named volume: on a NAS this has to sit on the pool you
+      # actually back up, and be findable without going through `docker volume inspect`.
+      - ${DRAMATARR_DATA_PATH:?set DRAMATARR_DATA_PATH to a writable host directory}:/data
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${DRAMATARR_PORT:-8080}:80"

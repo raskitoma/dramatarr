@@ -1,0 +1,30 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button, fallback_link %}
+
+{% block preheader %}Your invitation to join {{ site_name }}.{% endblock %}
+{% block heading %}Welcome aboard{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  {% if inviter_name %}{{ inviter_name }} has invited you{% else %}You have been invited{% endif %}
+  to <strong>{{ site_name }}</strong>, the household series library.
+</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  You will set up a <strong>passkey</strong> to get in: no password to remember, just your
+  fingerprint, your face, or your device PIN.
+</p>
+{% endblock %}
+
+{% block action %}{{ button(invite_url, "Accept the invitation") }}{% endblock %}
+
+{% block after %}
+<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#71717f;">
+  This link expires on {{ expires_at.strftime('%d %b %Y at %H:%M UTC') }} and works only once.
+</p>
+{{ fallback_link(invite_url, "Button not working? Copy this address into your browser:") }}
+{% endblock %}
+
+{% block footer %}
+You received this because {{ email }} was invited to {{ site_name }}.
+If you were not expecting it, you can safely ignore this message.
+{% endblock %}

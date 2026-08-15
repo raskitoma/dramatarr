@@ -1,0 +1,52 @@
+.input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  block-size: 36px;
+  padding-inline: var(--space-3);
+  background: var(--surface);
+  color: var(--text);
+  /* Deliberately heavier than --border-strong, which sits at ~1.6:1 against the surface and
+   * so cannot carry the edge of an interactive control (WCAG 1.4.11 wants 3:1). Dividers
+   * elsewhere still use the border tokens. Select and Textarea match this. */
+  border: 1px solid var(--text-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.input:hover:not(:disabled):not(:read-only) {
+  border-color: var(--text-muted);
+}
+
+/* The global focus ring from base.css stays; this only tints the border underneath it. */
+.input:focus-visible {
+  border-color: var(--accent);
+}
+
+.input:disabled,
+.input:read-only {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.invalid,
+.invalid:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+
+/* Search inputs get the native clear affordance styled out of the way on WebKit. */
+.input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}

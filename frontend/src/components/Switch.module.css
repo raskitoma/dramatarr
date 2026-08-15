@@ -1,0 +1,92 @@
+.root {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  cursor: pointer;
+}
+
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The real checkbox stays in the layout (not display:none) so it keeps receiving focus and
+ * pointer events; the track below is the visual. */
+.input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.track {
+  position: relative;
+  flex: none;
+  inline-size: 40px;
+  block-size: 24px;
+  margin-block-start: 1px;
+  background: var(--surface-sunken);
+  /* --border-strong lands around 1.6:1 on the page background, below the 3:1 that WCAG
+   * 1.4.11 asks of a control's own boundary; --text-subtle clears it in both palettes. */
+  border: 1px solid var(--text-subtle);
+  border-radius: var(--radius-full);
+  transition:
+    background-color var(--duration-normal) var(--ease),
+    border-color var(--duration-normal) var(--ease);
+}
+
+.thumb {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 3px;
+  inline-size: 16px;
+  block-size: 16px;
+  background: var(--surface-raised);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-normal) var(--ease);
+}
+
+.input:checked ~ .track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.input:checked ~ .track .thumb {
+  transform: translateX(16px);
+}
+
+/* Right-to-left safety: the thumb travels toward the inline end either way. */
+:global([dir='rtl']) .input:checked ~ .track .thumb {
+  transform: translateX(-16px);
+}
+
+.input:focus-visible ~ .track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.label {
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.hint {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+}

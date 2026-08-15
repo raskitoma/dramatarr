@@ -1,0 +1,56 @@
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pages {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page {
+  min-inline-size: 36px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gap {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-inline-size: 24px;
+  block-size: 36px;
+  color: var(--text-muted);
+}
+
+.gap::before {
+  content: '…';
+  line-height: var(--leading-normal);
+}
+
+/* Below the smallest breakpoint the numbers are dropped for the "page x of y" readout, so
+ * the control still fits a 360px viewport without scrolling sideways. */
+.summary {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 479px) {
+  .pages {
+    display: none;
+  }
+}
+
+@media (min-width: 480px) {
+  .summary {
+    display: none;
+  }
+}

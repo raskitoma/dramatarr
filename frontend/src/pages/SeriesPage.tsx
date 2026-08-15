@@ -1,0 +1,461 @@
+/** Series detail — `/series/:slug`.
+ *
+ * The spec's checklist for this view (§9): title, available-of-declared episode count, which
+ * episodes are watched, which one is in progress and at what percent, an aggregate bar, and a
+ * primary action that knows whether you are resuming, starting or rewatching. Alternate titles
+ * are shown because in a multilingual library they are how you confirm this is the right show.
+ *
+ * Everything on that checklist stays in the header; everything else was moved out of it. The
+ * episodes now sit directly under it rather than below the synopsis, and the synopsis, the
+ * genres and the alternate titles follow — on a phone the point of opening a series you are
+ * fifty episodes into is the episode list, not the blurb you read the first time.
+ */
+
+import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Link, useLocation, useParams } from 'wouter'
+
+import { useRefreshSeriesMetadata, useSeriesDetail, useSetSeriesWatched } from '@/api/library'
+import type { EpisodeSummary, SeasonGroup, SeriesDetail, SeriesStatus, SeriesTitleOut } from '@/api/types'
+import { Badge } from '@/components/Badge'
+import { Button } from '@/components/Button'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { EpisodeGrid } from '@/components/EpisodeGrid'
+import { EpisodeRow, episodeLabelParts } from '@/components/EpisodeRow'
+import { IconButton } from '@/components/IconButton'
+import { Poster } from '@/components/Poster'
+import { ProgressBar } from '@/components/ProgressBar'
+import { Spinner } from '@/components/Spinner'
+import { useToast } from '@/components/Toast'
+import { cx } from '@/components/cx'
+import {
+  CheckCircleIcon,
+  EditIcon,
+  GridIcon,
+  ListIcon,
+  PlayIcon,
+  RefreshIcon,
+  UnwatchIcon,
+} from '@/components/icons'
+import { useAuth } from '@/hooks/useAuth'
+import { formatTimecode } from '@/lib/format'
+
+import styles from './SeriesPage.module.css'
+
+const STATUS_LABEL_KEY: Record<SeriesStatus, string> = {
+  ongoing: 'series.statusOngoing',
+  completed: 'series.statusCompleted',
+  unknown: 'series.statusUnknown',
+}
+
+const STATUS_TONE: Record<SeriesStatus, 'info' | 'success' | 'neutral'> = {
+  ongoing: 'info',
+  completed: 'success',
+  unknown: 'neutral',
+}
+
+// --- Episode layout ------------------------------------------------------------------------
+
+type EpisodeView = 'grid' | 'list'
+
+const VIEW_STORAGE_KEY = 'dramatarr.episodeView'
+
+/** Null when this device has never chosen, which is what lets the series pick its own default. */
+function readStoredView(): EpisodeView | null {
+  try {
+    const value = localStorage.getItem(VIEW_STORAGE_KEY)
+    if (value === 'grid' || value === 'list') return value
+  } catch {
+    // Storage unavailable; the per-series default stands for this session.
+  }
+  return null
+}
+
+/**
+ * What to show a reader who has never picked.
+ *
+ * Rows earn their height when episodes have their own stills and titles. When every still is
+ * null and no episode is named — a short vertical drama, dozens of five-minute instalments —
+ * the rows are identical strips and the matrix is strictly more readable, so that is the
+ * default there. An explicit choice always wins over this.
+ */
+function defaultViewFor(episodes: EpisodeSummary[]): EpisodeView {
+  const detailed = episodes.some((episode) => episode.stillUrl !== null || episode.title !== null)
+  return detailed ? 'list' : 'grid'
+}
+
+/** Machine-generated romanizations ("miqing", "mq") are search fuel, not something to read;
+ *  "Also known as" lists the titles a person would recognize. */
+function humanTitles(detail: SeriesDetail): SeriesTitleOut[] {
+  const seen = new Set<string>([detail.title.trim().toLocaleLowerCase()])
+  if (detail.originalTitle) seen.add(detail.originalTitle.trim().toLocaleLowerCase())
+
+  const out: SeriesTitleOut[] = []
+  for (const entry of detail.titles) {
+    if (entry.kind === 'romanization' || entry.kind === 'acronym') continue
+    const key = entry.title.trim().toLocaleLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(entry)
+  }
+  return out
+}
+
+function EpisodeBoard({
+  season,
+  posterUrl,
+  view,
+}: {
+  season: SeasonGroup
+  posterUrl: string | null
+  view: EpisodeView
+}) {
+  const { t } = useTranslation()
+
+  if (view === 'grid') {
+    return (
+      <EpisodeGrid episodes={season.episodes} posterUrl={posterUrl} label={t('series.episodes')} />
+    )
+  }
+
+  return (
+    <ul className={styles.episodes}>
+      {season.episodes.map((episode) => (
+        <EpisodeRow key={episode.id} episode={episode} />
+      ))}
+    </ul>
+  )
+}
+
+export function SeriesPage() {
+  const { t } = useTranslation()
+  const params = useParams()
+  const [, navigate] = useLocation()
+  const { isAdmin } = useAuth()
+  const toast = useToast()
+
+  const rawSlug = params['slug']
+  const slug = typeof rawSlug === 'string' && rawSlug.length > 0 ? rawSlug : undefined
+  const query = useSeriesDetail(slug)
+  const detail = query.data
+
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
+  const [chosenView, setChosenView] = useState<EpisodeView | null>(readStoredView)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  const refreshMetadata = useRefreshSeriesMetadata()
+  const setSeriesWatched = useSetSeriesWatched()
+
+  const alsoKnownAs = useMemo(() => (detail ? humanTitles(detail) : []), [detail])
+
+  const seasons: SeasonGroup[] = detail?.seasons ?? []
+  /* Land on the season you would actually resume in, unless a tab was clicked. */
+  const fallbackSeason = detail?.nextEpisode?.seasonNumber ?? seasons[0]?.seasonNumber ?? null
+  const activeNumber =
+    selectedSeason !== null && seasons.some((season) => season.seasonNumber === selectedSeason)
+      ? selectedSeason
+      : fallbackSeason
+  const activeSeason = seasons.find((season) => season.seasonNumber === activeNumber)
+  const view = chosenView ?? defaultViewFor(activeSeason?.episodes ?? [])
+
+  const chooseView = (next: EpisodeView): void => {
+    setChosenView(next)
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, next)
+    } catch {
+      // The choice simply will not survive a reload.
+    }
+  }
+
+  if (query.isLoading) {
+    return (
+      <div className={styles.centered}>
+        <Spinner size="lg" label={t('common.loading')} />
+      </div>
+    )
+  }
+
+  if (query.isError) {
+    return <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+  }
+
+  if (!detail) {
+    return <EmptyState title={t('errors.NOT_FOUND')} />
+  }
+
+  const next = detail.nextEpisode
+  const fullyWatched =
+    detail.availableEpisodeCount > 0 && detail.watchedEpisodeCount >= detail.availableEpisodeCount
+
+  const primaryLabel = next
+    ? next.resumePositionSeconds !== null
+      ? t('series.resumeFrom', { time: formatTimecode(next.resumePositionSeconds) })
+      : fullyWatched
+        ? t('series.rewatch')
+        : t('series.play')
+    : null
+
+  const episodeCountText =
+    detail.declaredEpisodeCount !== null
+      ? t('series.availableOf', {
+          available: detail.availableEpisodeCount,
+          declared: detail.declaredEpisodeCount,
+        })
+      : t('series.availableCount', { count: detail.availableEpisodeCount })
+
+  const seriesWatchedLabel = fullyWatched
+    ? t('series.markSeriesUnwatched')
+    : t('series.markSeriesWatched')
+
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
+    let target = index
+    if (event.key === 'ArrowRight') target = index + 1
+    else if (event.key === 'ArrowLeft') target = index - 1
+    else if (event.key === 'Home') target = 0
+    else if (event.key === 'End') target = seasons.length - 1
+    else return
+
+    event.preventDefault()
+    const count = seasons.length
+    if (count === 0) return
+    const wrapped = ((target % count) + count) % count
+    const season = seasons[wrapped]
+    if (!season) return
+    setSelectedSeason(season.seasonNumber)
+    tabRefs.current[wrapped]?.focus()
+  }
+
+  return (
+    <article className={styles.page}>
+      <header
+        className={styles.hero}
+        style={
+          detail.backdropUrl !== null
+            ? ({ '--backdrop': `url("${detail.backdropUrl}")` } as CSSProperties)
+            : undefined
+        }
+        data-has-backdrop={detail.backdropUrl !== null ? 'true' : 'false'}
+      >
+        <div className={styles.heroInner}>
+          <div className={styles.heroPoster}>
+            {/* The <h1> beside it already names the series, so this poster is decorative. */}
+            <Poster src={detail.posterUrl} alt="" size="lg" fluid />
+          </div>
+
+          <div className={styles.heroText}>
+            <h1 className={styles.title}>{detail.title}</h1>
+
+            <p className={styles.meta}>
+              {detail.year !== null ? <span>{detail.year}</span> : null}
+              {detail.network !== null ? <span>{detail.network}</span> : null}
+              {detail.contentRating !== null ? <span>{detail.contentRating}</span> : null}
+              <Badge tone={STATUS_TONE[detail.status]}>{t(STATUS_LABEL_KEY[detail.status])}</Badge>
+            </p>
+
+            <p className={styles.counts}>{episodeCountText}</p>
+
+            <div className={styles.progress}>
+              <ProgressBar
+                percent={detail.progressPercent}
+                tone={fullyWatched ? 'success' : 'accent'}
+                size="md"
+                label={t('series.progressOverall')}
+              />
+              <p className={styles.progressLabel}>
+                {t('series.watchedCount', {
+                  watched: detail.watchedEpisodeCount,
+                  total: detail.availableEpisodeCount,
+                })}
+              </p>
+            </div>
+
+            {/* One line on a phone: the primary action keeps its words, the rest keep their
+                labels for screen readers and tooltips while showing only the glyph. */}
+            <div className={styles.actions}>
+              {next && primaryLabel ? (
+                <Button
+                  variant="primary"
+                  onClick={() => navigate(`/watch/${encodeURIComponent(next.id)}`)}
+                >
+                  <PlayIcon />
+                  {primaryLabel}
+                </Button>
+              ) : null}
+
+              <Button
+                variant="secondary"
+                title={seriesWatchedLabel}
+                loading={setSeriesWatched.isPending}
+                onClick={() =>
+                  setSeriesWatched.mutate(
+                    { seriesId: detail.id, watched: !fullyWatched },
+                    { onError: () => toast.show(t('errors.generic'), 'error') },
+                  )
+                }
+              >
+                {fullyWatched ? <UnwatchIcon /> : <CheckCircleIcon />}
+                <span className={styles.actionLabel}>{seriesWatchedLabel}</span>
+              </Button>
+
+              {isAdmin ? (
+                <>
+                  <Link
+                    href={`/admin/library/${encodeURIComponent(detail.id)}`}
+                    className={styles.adminLink}
+                    title={t('admin.library.editSeries')}
+                  >
+                    <EditIcon />
+                    <span className={styles.actionLabel}>{t('admin.library.editSeries')}</span>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    title={t('admin.library.refreshMetadata')}
+                    loading={refreshMetadata.isPending}
+                    onClick={() =>
+                      refreshMetadata.mutate(detail.id, {
+                        onSuccess: () => toast.show(t('series.refreshQueued'), 'success'),
+                        onError: () => toast.show(t('errors.generic'), 'error'),
+                      })
+                    }
+                  >
+                    <RefreshIcon />
+                    <span className={styles.actionLabel}>{t('admin.library.refreshMetadata')}</span>
+                  </Button>
+                </>
+              ) : null}
+            </div>
+
+            {next ? (
+              <p className={styles.nextUp}>
+                {t('series.episodeLabel', episodeLabelParts(next))}
+                {' · '}
+                {next.title ?? t('series.episodeNumber', { number: next.episodeNumber })}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </header>
+
+      <div className={styles.body}>
+        <section className={styles.block} aria-labelledby="series-episodes">
+          <div className={styles.blockHeader}>
+            <h2 className={styles.blockHeading} id="series-episodes">
+              {t('series.episodes')}
+            </h2>
+
+            {/* Pressed state rides the design system's own filled/ghost pair rather than a
+                bespoke highlight, so it survives both themes without new colors. */}
+            {activeSeason && activeSeason.episodes.length > 0 ? (
+              <div className={styles.viewToggle} role="group" aria-label={t('series.episodeView')}>
+                <IconButton
+                  label={t('series.viewGrid')}
+                  variant={view === 'grid' ? 'secondary' : 'ghost'}
+                  aria-pressed={view === 'grid'}
+                  className={styles.viewButton}
+                  onClick={() => chooseView('grid')}
+                >
+                  <GridIcon />
+                </IconButton>
+                <IconButton
+                  label={t('series.viewList')}
+                  variant={view === 'list' ? 'secondary' : 'ghost'}
+                  aria-pressed={view === 'list'}
+                  className={styles.viewButton}
+                  onClick={() => chooseView('list')}
+                >
+                  <ListIcon />
+                </IconButton>
+              </div>
+            ) : null}
+          </div>
+
+          {seasons.length > 1 ? (
+            <div className={styles.tabs} role="tablist" aria-label={t('series.seasons')}>
+              {seasons.map((season, index) => {
+                const selected = season.seasonNumber === activeNumber
+                return (
+                  <button
+                    key={season.seasonNumber}
+                    type="button"
+                    role="tab"
+                    id={`season-tab-${season.seasonNumber}`}
+                    aria-selected={selected}
+                    aria-controls={`season-panel-${season.seasonNumber}`}
+                    tabIndex={selected ? 0 : -1}
+                    className={cx(styles.tab, selected && styles.tabActive)}
+                    ref={(node) => {
+                      tabRefs.current[index] = node
+                    }}
+                    onClick={() => setSelectedSeason(season.seasonNumber)}
+                    onKeyDown={(event) => onTabKeyDown(event, index)}
+                  >
+                    {t('series.season', { number: season.seasonNumber })}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+
+          {activeSeason ? (
+            seasons.length > 1 ? (
+              <div
+                role="tabpanel"
+                id={`season-panel-${activeSeason.seasonNumber}`}
+                aria-labelledby={`season-tab-${activeSeason.seasonNumber}`}
+              >
+                <EpisodeBoard season={activeSeason} posterUrl={detail.posterUrl} view={view} />
+              </div>
+            ) : (
+              <EpisodeBoard season={activeSeason} posterUrl={detail.posterUrl} view={view} />
+            )
+          ) : (
+            <EmptyState title={t('common.empty')} />
+          )}
+        </section>
+
+        <section className={styles.block} aria-labelledby="series-overview">
+          <h2 className={styles.blockHeading} id="series-overview">
+            {t('series.overview')}
+          </h2>
+          <p className={styles.overview}>{detail.overview ?? t('series.noOverview')}</p>
+
+          {detail.originalTitle !== null ? (
+            <p className={styles.detailLine}>
+              <span className={styles.detailLabel}>{t('series.originalTitle')}</span>
+              <span>{detail.originalTitle}</span>
+            </p>
+          ) : null}
+
+          {detail.genres.length > 0 ? (
+            <ul className={styles.genres} aria-label={t('series.genres')}>
+              {detail.genres.map((genre) => (
+                <li key={genre}>
+                  <Link href={`/browse?genre=${encodeURIComponent(genre)}`} className={styles.genre}>
+                    {genre}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+
+        {alsoKnownAs.length > 0 ? (
+          <section className={styles.block} aria-labelledby="series-aka">
+            <h2 className={styles.blockHeading} id="series-aka">
+              {t('series.alsoKnownAs')}
+            </h2>
+            <ul className={styles.akaList}>
+              {alsoKnownAs.map((entry) => (
+                <li key={entry.id} className={styles.akaItem}>
+                  <span>{entry.title}</span>
+                  {entry.language ? <span className={styles.akaLang}>{entry.language}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
+    </article>
+  )
+}

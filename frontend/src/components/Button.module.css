@@ -1,0 +1,146 @@
+.button {
+  /* Control metrics. `sm` only overrides these four. */
+  --control-height: 36px;
+  --control-padding: var(--space-4);
+  --control-gap: var(--space-2);
+  --control-font: var(--text-base);
+
+  /* Foreground for filled variants.
+   * The dark palette's --accent / --danger are light tints, so white-on-accent drops to about
+   * 3:1 there. Flipping the filled foreground to the page background keeps every filled
+   * button above 5:1 in both themes, using only tokens. */
+  --on-accent: var(--text-on-accent);
+  --on-danger: var(--text-on-accent);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--control-gap);
+  block-size: var(--control-height);
+  padding-inline: var(--control-padding);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--control-font);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease),
+    transform var(--duration-fast) var(--ease);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .button {
+    --on-accent: var(--bg);
+    --on-danger: var(--bg);
+  }
+}
+
+:root[data-theme='dark'] .button {
+  --on-accent: var(--bg);
+  --on-danger: var(--bg);
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.button:not(:disabled):not([aria-disabled='true']):active {
+  transform: translateY(1px);
+}
+
+.sm {
+  --control-height: 28px;
+  --control-padding: var(--space-3);
+  --control-gap: var(--space-1);
+  --control-font: var(--text-sm);
+}
+
+.full {
+  inline-size: 100%;
+}
+
+.iconOnly {
+  padding-inline: 0;
+  inline-size: var(--control-height);
+  flex: none;
+}
+
+/* --- variants ------------------------------------------------------------------------- */
+
+.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.primary:not(:disabled):not([aria-disabled='true']):hover {
+  background: var(--accent-hover);
+}
+
+.secondary {
+  background: var(--surface-raised);
+  color: var(--text);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.secondary:not(:disabled):not([aria-disabled='true']):hover {
+  background: var(--surface-sunken);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ghost:not(:disabled):not([aria-disabled='true']):hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+/* Destructive reads as an outlined tint at rest and fills on hover: the solid fill alone
+ * cannot hold contrast in both themes, the tint can. */
+.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.danger:not(:disabled):not([aria-disabled='true']):hover {
+  background: var(--danger);
+  color: var(--on-danger);
+}
+
+/* --- loading -------------------------------------------------------------------------- */
+
+/* The label keeps its box so the button never resizes mid-request; the spinner is layered
+ * over it. */
+.content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--control-gap);
+}
+
+.loading .content {
+  visibility: hidden;
+}
+
+.spinnerSlot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}

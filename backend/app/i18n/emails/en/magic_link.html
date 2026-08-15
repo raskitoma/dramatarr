@@ -1,0 +1,27 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button, fallback_link %}
+
+{% block preheader %}Your sign-in link expires in {{ expires_minutes }} minutes.{% endblock %}
+{% block heading %}Sign in to {{ site_name }}{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Hi{% if display_name %} {{ display_name }}{% endif %} — tap the button and you are in.
+</p>
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Once you are signed in, add a passkey to your account and you will not need email next time.
+</p>
+{% endblock %}
+
+{% block action %}{{ button(magic_url, "Sign in to " ~ site_name) }}{% endblock %}
+
+{% block after %}
+<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#71717f;">
+  This link expires in {{ expires_minutes }} minutes and works only once.
+</p>
+{{ fallback_link(magic_url, "Button not working? Copy this address into your browser:") }}
+{% endblock %}
+
+{% block footer %}
+If you did not ask for this link, ignore this email: your account is safe and nobody signed in.
+{% endblock %}
