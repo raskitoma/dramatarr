@@ -903,6 +903,15 @@ export interface DiscoveryResult {
    */
   tmdbId: number | null
   imdbId: string | null
+  /**
+   * The platform that published the page, when its host is one the household configured.
+   *
+   * The one fact a platform result carries that is safe to write into the catalogue. Its
+   * snippet is someone else's prose cut mid-sentence and is never stored; its host, by
+   * contrast, *is* the network — no inference involved. Null on reference databases and on
+   * anything unrecognized, because a wrong network is worse than an empty one.
+   */
+  network: string | null
 }
 
 export interface Discovery {
@@ -958,6 +967,7 @@ interface WireDiscoveryResult {
   } | null
   tmdbId?: number | string | null
   imdbId?: string | null
+  network?: string | null
 }
 
 interface WireDiscovery {
@@ -1023,6 +1033,9 @@ function toDiscoveryResult(row: WireDiscoveryResult): DiscoveryResult | null {
     // panel cannot afford, because it looks exactly like "the web found nothing useful".
     tmdbId: toPositiveInt(row.tmdbId ?? row.ids?.tmdbId),
     imdbId: toImdbId(row.imdbId ?? row.ids?.imdbId),
+    // Resolved server-side against the household's own provider list, so the spelling here
+    // already matches what the network picker offers.
+    network: String(row.network ?? '').trim() || null,
   }
 }
 

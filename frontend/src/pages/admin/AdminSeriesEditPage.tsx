@@ -506,6 +506,9 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
               // Binding enqueues a metadata refresh, so the filled-in fields arrive a moment
               // later. Re-seeding the form is what puts them on screen without a reload.
               onApplied={() => setSeed(null)}
+              // Into the form, not into the database. It lands in the picker below, marked
+              // unsaved like any other edit, and goes out with the next save.
+              onNetwork={(network) => setForm((current) => ({ ...current, network }))}
             />
           </div>
 

@@ -43,9 +43,24 @@ export interface SynopsisFinderProps {
   seriesTitle: string
   /** Called once a result has been applied, so the editor can reload the filled-in fields. */
   onApplied?: () => void
+  /**
+   * Hands the platform a result was published on back to the form.
+   *
+   * A callback rather than a write, and that is the point. The other actions here bind a
+   * record and let a job fill the row, so reloading the form is the only way to show what
+   * happened. This one is a single known value going into a field the admin is already looking
+   * at — putting it in the form lets them see it, change their mind, and save it with
+   * everything else, instead of having the page mutate under an edit in progress.
+   */
+  onNetwork?: (network: string) => void
 }
 
-export function SynopsisFinder({ seriesId, seriesTitle, onApplied }: SynopsisFinderProps) {
+export function SynopsisFinder({
+  seriesId,
+  seriesTitle,
+  onApplied,
+  onNetwork,
+}: SynopsisFinderProps) {
   const { t } = useTranslation()
   const { show } = useToast()
   const queryClient = useQueryClient()
@@ -202,6 +217,7 @@ export function SynopsisFinder({ seriesId, seriesTitle, onApplied }: SynopsisFin
             <ul className={styles.list}>
               {results.slice(0, 8).map((result) => {
                 const id = result.tmdbId ?? result.imdbId
+                const network = result.network
                 return (
                   <li key={result.url} className={styles.row}>
                     <a
@@ -214,6 +230,20 @@ export function SynopsisFinder({ seriesId, seriesTitle, onApplied }: SynopsisFin
                       {result.title || result.domain}
                     </a>
                     <span className={styles.domain}>{result.domain}</span>
+                    {/* The one thing a platform page can fill. Offered on every row that
+                        names a platform, including rows that also carry an id — a MyDramaList
+                        hit resolves the record but says nothing about who published it. */}
+                    {network && onNetwork ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() => onNetwork(network)}
+                      >
+                        {t('admin.library.synopsisUseNetwork', { network })}
+                      </Button>
+                    ) : null}
                     {/* Only rows that name a record can be applied. The rest stay links —
                         there is nothing structured behind them to pull. */}
                     {id === null || id === undefined ? null : (

@@ -642,6 +642,15 @@ class DiscoveryResult(APIModel):
     #: `themoviedb.org`, `mydramalist.com` — rendered next to the snippet so the admin can see
     #: whose words they are reading before they trust them.
     source_domain: str = ""
+    #: The platform this page belongs to, when `source_domain` is one the household configured
+    #: — `dramabox.com` → `DramaBox`.
+    #:
+    #: The one structured fact a platform page reliably carries. Its snippet is somebody else's
+    #: prose cut mid-sentence and is never stored, but *which platform published it* is not a
+    #: guess: it is the host, read through the same provider table the network picker uses. So
+    #: a row that can never fill a synopsis can still fill the network, which is the field this
+    #: library is emptiest in.
+    network: str | None = None
     ids: DiscoveredIds = Field(default_factory=DiscoveredIds)
     #: True when `ids` carries a TMDB or IMDb id, i.e. when this row is one click from a real
     #: match. The UI leads with these; the rest are context.

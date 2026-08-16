@@ -52,6 +52,7 @@ function result(overrides: Record<string, unknown> = {}) {
     engine: 'naver',
     tmdbId: null,
     imdbId: 'tt43685491',
+    network: null,
     ...overrides,
   }
 }
@@ -68,12 +69,16 @@ function discovery(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function renderFinder(onApplied = () => {}): ReactElement {
+function renderFinder(
+  onApplied = () => {},
+  onNetwork: ((network: string) => void) | undefined = () => {},
+): ReactElement {
   return (
     <SynopsisFinder
       seriesId="s1"
       seriesTitle="Definitely Not the Dragon God"
       onApplied={onApplied}
+      onNetwork={onNetwork}
     />
   )
 }
@@ -90,8 +95,11 @@ function renderIn(ui: ReactElement) {
 }
 
 /** The panel is closed until asked: opening it reaches the household's SearXNG. */
-async function open(onApplied = () => {}) {
-  renderIn(renderFinder(onApplied))
+async function open(
+  onApplied = () => {},
+  onNetwork: ((network: string) => void) | undefined = () => {},
+) {
+  renderIn(renderFinder(onApplied, onNetwork))
   fireEvent.click(screen.getByRole('button', { name: /buscar la ficha/i }))
   await waitFor(() => expect(discoverSeries).toHaveBeenCalled())
 }
@@ -191,5 +199,53 @@ describe('SynopsisFinder', () => {
     expect(screen.queryByRole('button', { name: /reemplazar lo que ya hay/i })).toBeNull()
     // The platform row stays a plain link — behind it there is a snippet, not a record.
     expect(screen.getByRole('link', { name: /DramaBox/i })).toBeTruthy()
+  })
+
+  it('hands the platform back to the form instead of writing it', async () => {
+    discoverSeries.mockResolvedValue(
+      discovery({
+        results: [
+          result({
+            title: 'Dragon God — DramaBox',
+            url: 'https://www.dramabox.com/drama/999',
+            domain: 'dramabox.com',
+            imdbId: null,
+            network: 'DramaBox',
+          }),
+        ],
+      }),
+    )
+    const onNetwork = vi.fn()
+    await open(() => {}, onNetwork)
+
+    fireEvent.click(await screen.findByRole('button', { name: /poner cadena: DramaBox/i }))
+
+    // Into the form. Nothing was saved, so an edit in progress on the same page survives.
+    expect(onNetwork).toHaveBeenCalledWith('DramaBox')
+    expect(applyImdbMetadata).not.toHaveBeenCalled()
+    expect(matchSeries).not.toHaveBeenCalled()
+  })
+
+  it('gives a row with neither an id nor a platform nothing to press', async () => {
+    discoverSeries.mockResolvedValue(
+      discovery({
+        results: [
+          result({
+            title: 'Some blog post',
+            url: 'https://example.com/post',
+            domain: 'example.com',
+            imdbId: null,
+            network: null,
+          }),
+        ],
+      }),
+    )
+
+    await open()
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /Some blog post/i })).toBeTruthy())
+    // A wrong network is worse than an empty one, so an unrecognized domain offers nothing.
+    expect(screen.queryAllByRole('button', { name: /poner cadena/i })).toEqual([])
+    expect(screen.queryAllByRole('button', { name: /usar esta metadata/i })).toEqual([])
   })
 })

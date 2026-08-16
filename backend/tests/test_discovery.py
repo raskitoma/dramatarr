@@ -1021,3 +1021,116 @@ async def test_a_healthy_instance_reports_no_failures(
     await configure(db)
     serve_searxng(serve([row("https://www.themoviedb.org/tv/1396")]))
     assert (await discover(db, "algo")).unresponsive_engines == []
+
+
+# ==========================================================================================
+# Which platform published it
+# ==========================================================================================
+#
+# Measured on the live library: of eleven series, five had no network at all — the emptiest
+# field in the catalogue, and the one no metadata source fills, because TMDB and IMDb do not
+# record which vertical-drama app a show came from.
+#
+# The search already knew. A hit on `reelshort.com` names the platform with no inference at
+# all; the host *is* the answer. It was being rendered as grey provenance text and thrown
+# away. This is deliberately the only thing read off a platform page — the snippet beside it
+# is still someone else's prose, still cut mid-sentence, and still never stored.
+
+
+async def test_a_platform_page_names_its_platform(
+    db: AsyncSession, serve_searxng: Callable[..., list[httpx.Request]]
+) -> None:
+    await configure(db)
+    serve_searxng(
+        serve(
+            [
+                row("https://www.dramabox.com/drama/123"),
+                row("https://es.reelshort.com/shorts/456"),
+            ]
+        )
+    )
+
+    found = await discover_scoped(db, "algo")
+
+    # Spelled the way the platform spells itself, not the way the domain does — the same
+    # canonical names the network picker offers, so the two never disagree.
+    assert [r.network for r in found.results] == ["DramaBox", "ReelShort"]
+
+
+async def test_the_wide_search_labels_platforms_too(
+    db: AsyncSession, serve_searxng: Callable[..., list[httpx.Request]]
+) -> None:
+    """Who published a page has nothing to do with whether the search was narrowed.
+
+    Making the label depend on the platforms toggle would mean the same result carries a
+    network in one search and not in the other, for no reason the admin could see.
+    """
+    await configure(db)
+    serve_searxng(serve([row("https://www.netshort.com/detail/9")]))
+
+    found = await discover_scoped(db, "algo")  # no domains: the whole web
+
+    assert found.narrowed is False
+    assert found.results[0].network == "NetShort"
+
+
+async def test_a_page_that_is_not_a_platform_claims_nothing(
+    db: AsyncSession, serve_searxng: Callable[..., list[httpx.Request]]
+) -> None:
+    """IMDb is a reference database, not a network. Guessing here would write a wrong value
+    into a field an admin would then have to notice and undo."""
+    await configure(db)
+    serve_searxng(
+        serve([row("https://www.imdb.com/title/tt1234567/"), row("https://example.com/x")])
+    )
+
+    found = await discover_scoped(db, "algo")
+
+    assert [r.network for r in found.results] == [None, None]
+
+
+async def test_a_lookalike_domain_is_not_the_platform(
+    db: AsyncSession, serve_searxng: Callable[..., list[httpx.Request]]
+) -> None:
+    """`notdramabox.com` contains the name and is not the platform. The same hole the host
+    filter closes, closed again here — this one writes to a column."""
+    await configure(db)
+    serve_searxng(serve([row("https://notdramabox.com/drama/1")]))
+
+    assert (await discover_scoped(db, "algo")).results[0].network is None
+
+
+async def test_the_households_own_list_decides(
+    db: AsyncSession, serve_searxng: Callable[..., list[httpx.Request]]
+) -> None:
+    """A configured list replaces the built-in table rather than extending it.
+
+    That is what makes the settings screen mean something: an admin who removed a platform
+    should stop seeing it proposed, and one who added their own should see theirs.
+    """
+    from app.services.vocab import Provider
+
+    await configure(db)
+    serve_searxng(
+        serve([row("https://mi-plataforma.com/x"), row("https://www.dramabox.com/drama/1")])
+    )
+
+    found = await discover_scoped(
+        db, "algo", providers=[Provider(name="Mi Plataforma", domain="mi-plataforma.com")]
+    )
+
+    assert [r.network for r in found.results] == ["Mi Plataforma", None]
+
+
+async def test_the_route_carries_the_network_to_the_client(
+    db: AsyncSession, client: AsyncClient, serve_searxng: Callable[..., list[httpx.Request]]
+) -> None:
+    """End to end, because the label is resolved in the API layer: the provider list reads
+    settings, and settings must be read off the session before any network call starts."""
+    await configure(db)
+    serve_searxng(serve([row("https://www.dramabox.com/drama/123")]))
+
+    response = await client.get("/api/library/discover", params={"q": "algo"})
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["network"] == "DramaBox"

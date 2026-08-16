@@ -51,6 +51,7 @@ from app.services.images import (
     _configured_searxng,
     _searxng_get,
 )
+from app.services.vocab import Provider, provider_for_domain
 
 log = logging.getLogger(__name__)
 
@@ -501,6 +502,25 @@ def _on_a_platform(url: str, domains: Sequence[str]) -> bool:
     return any(host == domain or host.endswith(f".{domain}") for domain in domains)
 
 
+def label_networks(
+    results: DiscoveryResults, providers: Sequence[Provider] | None = None
+) -> DiscoveryResults:
+    """Name the platform behind every row whose host is one, in place.
+
+    Separate from the filtering because it applies to *both* searches. A wide search that
+    happens to surface a `reelshort.com` page knows just as much about who published it as a
+    narrowed one does, and throwing that away on the wide path would make the answer depend on
+    a toggle that has nothing to do with it.
+
+    `providers=None` falls back to the built-in table, which is what a household that has not
+    edited its platform list should get. An empty *list* is different and means exactly what it
+    says — nothing configured, so nothing recognized.
+    """
+    for row in results.results:
+        row.network = provider_for_domain(row.source_domain, providers)
+    return results
+
+
 async def discover_scoped(
     session: AsyncSession,
     query: str,
@@ -508,6 +528,7 @@ async def discover_scoped(
     year: int | None = None,
     limit: int = DEFAULT_LIMIT,
     domains: Sequence[str] = (),
+    providers: Sequence[Provider] | None = None,
 ) -> DiscoveryResults:
     """`discover`, genuinely restricted to the household's platforms.
 
@@ -540,7 +561,7 @@ async def discover_scoped(
         ][:limit]
         results.resolvable_count = sum(1 for row in results.results if row.resolvable)
         results.narrowed = True
-    return results
+    return label_networks(results, providers)
 
 
 async def discover_with(
@@ -598,6 +619,7 @@ __all__ = [
     "discover_with",
     "extract_ids",
     "is_resolvable",
+    "label_networks",
     "rank",
     "search_query",
 ]

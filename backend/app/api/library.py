@@ -290,23 +290,29 @@ async def tmdb_lookup(
 # engine crawled — see the SSRF note in `app.services.images`.
 
 
-async def _platform_domains(session: AsyncSession, enabled: bool) -> tuple[str, ...]:
-    """The configured platforms' domains, or nothing when the caller did not ask for them.
+async def _platform_scope(
+    session: AsyncSession, enabled: bool
+) -> tuple[list[Provider], tuple[str, ...]]:
+    """The household's platforms, and the domains to narrow to when narrowing was asked for.
 
-    Narrowing to the household's own platforms is what makes this useful for a library TMDB
-    has never heard of: the pages that describe a vertical drama are on the platform that made
-    it, and a general web search buries them under aggregators. It is opt-in because the wider
-    search is still the right one for anything conventional.
+    Narrowing is what makes this useful for a library TMDB has never heard of: the pages that
+    describe a vertical drama are on the platform that made it, and a general web search buries
+    them under aggregators. It is opt-in because the wider search is still the right one for
+    anything conventional.
 
-    The reference databases travel with them. A platform page says the show exists and what it
-    is called; IMDb says what *year* it is — the field this editor most often cannot fill, and
-    the reason they are included rather than left to the unfiltered search.
+    The reference databases travel with the domains. A platform page says the show exists and
+    what it is called; IMDb says what *year* it is — the field this editor most often cannot
+    fill, and the reason they are included rather than left to the unfiltered search.
+
+    The provider list comes back either way, because it labels every result's platform and that
+    is just as true of a `reelshort.com` page found by a wide search. Resolved **here**, in one
+    await, rather than inside the search: it reads settings, and settings live on the session
+    that must not be touched while a network call is in flight.
     """
+    providers = await configured_providers(SettingsService(session))
     if not enabled:
-        return ()
-    return provider_domains(
-        await configured_providers(SettingsService(session)), with_metadata_sites=True
-    )
+        return providers, ()
+    return providers, provider_domains(providers, with_metadata_sites=True)
 
 
 @router.get("/discover", response_model=DiscoveryResults)
@@ -325,8 +331,9 @@ async def discover(
     Used from the match dialog when TMDB search has come up empty, and from nothing else. The
     snippets in the response are there so a human can pick a row; they are never stored.
     """
+    providers, domains = await _platform_scope(session, platforms)
     return await discovery_service.discover_scoped(
-        session, q, year=year, limit=limit, domains=await _platform_domains(session, platforms)
+        session, q, year=year, limit=limit, domains=domains, providers=providers
     )
 
 
@@ -351,12 +358,14 @@ async def discover_for_series(
     """
     series = await library_service.get_series_or_404(session, series_id)
     query = (q or "").strip() or series.title
+    providers, domains = await _platform_scope(session, platforms)
     results = await discovery_service.discover_scoped(
         session,
         query,
         year=year if year is not None else series.year,
         limit=limit,
-        domains=await _platform_domains(session, platforms),
+        domains=domains,
+        providers=providers,
     )
     results.series_id = series.id
     return results
