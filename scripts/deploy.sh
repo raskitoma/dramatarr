@@ -35,8 +35,15 @@ rsync -az --delete \
 
 # Migrations run from the app's lifespan on boot, so the snapshot has to be taken before the
 # containers come back up, every time — not only on the deploys known to carry one.
+#
+# The stamp is computed *here* and interpolated. Writing `\$(date …)` for the remote shell to
+# expand looks equivalent and is not: the path is inside single quotes on the far side, so it
+# never expanded, and every deploy quietly overwrote one file literally named
+# `dramatarr-$(date +%Y%m%d-%H%M%S).db`. The safety net looked present in `ls` and held exactly
+# one snapshot. Caught only by reading the directory.
+stamp=$(date +%Y%m%d-%H%M%S)
 echo "→ snapshotting the database"
-ssh "$HOST" "cp '$ROOT/data/dramatarr.db' '$ROOT/backups/dramatarr-\$(date +%Y%m%d-%H%M%S).db'"
+ssh "$HOST" "cp '$ROOT/data/dramatarr.db' '$ROOT/backups/dramatarr-$stamp.db'"
 
 echo "→ building and recreating"
 ssh "$HOST" "cd '$ROOT/src' && docker compose build && docker compose up -d --force-recreate"
