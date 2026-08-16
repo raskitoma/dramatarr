@@ -308,6 +308,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "es": "Ya existe un episodio con ese número en esta temporada.",
         "en": "An episode with that number already exists in this season.",
     },
+    "SERIES_BULK_EMPTY": {
+        "es": "No elegiste ningún campo para cambiar.",
+        "en": "You didn't choose any field to change.",
+    },
     "SERIES_NOT_FOUND": {"es": "No encontramos esa serie.", "en": "We couldn't find that series."},
     # --- OMDb (IMDb metadata) ---
     "OMDB_NOT_CONFIGURED": {

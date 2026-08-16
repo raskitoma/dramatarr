@@ -59,6 +59,8 @@ from app.schemas.library import (
     MatchIn,
     RenameItemOut,
     RenamePlanOut,
+    SeriesBulkPatch,
+    SeriesBulkResult,
     SeriesDeleted,
     SeriesDeletionPreview,
     SeriesDetail,
@@ -92,6 +94,7 @@ from app.services.search.service import search_library
 from app.services.settings import SettingsService
 from app.services.tmdb import IMAGE_BASE, get_tmdb_client, try_tmdb_client
 from app.services.vocab import (
+    Provider,
     canonical_content_rating,
     canonical_network,
     configured_providers,
@@ -113,21 +116,8 @@ TMDB_IMAGE_BASE = f"{IMAGE_BASE}/w185"
 ARTWORK_PICK_SIZE = "original"
 ARTWORK_THUMB_SIZE = "w342"
 
-#: Fields whose change means "a human curated this row".
-_SERIES_METADATA_FIELDS = {
-    "title",
-    "sort_title",
-    "original_title",
-    "original_language",
-    "overview",
-    "year",
-    "status",
-    "content_rating",
-    "genres",
-    "network",
-    "declared_episode_count",
-    "imdb_id",
-}
+#: The series half of this list moved to `library_service.SERIES_METADATA_FIELDS`, where the
+#: single and bulk patch routes share it. Episodes have no bulk route, so theirs stays here.
 _EPISODE_METADATA_FIELDS = {
     "title",
     "overview",
@@ -399,45 +389,56 @@ async def patch_series(
     session: SessionDep, admin: AdminUser, series_id: str, body: SeriesPatch
 ) -> SeriesDetail:
     series = await library_service.get_series_or_404(session, series_id)
-    changes = body.model_dump(exclude_unset=True)
-
-    # Canonicalized here rather than in the schema so that *every* writer of these three
-    # columns goes through one implementation — the metadata job does the same on its own
-    # path. Normalizing on read instead would leave the mess in the database, where the next
-    # tool to read it finds `Dramabox` and `DramaBox` as two different networks.
-    if "genres" in changes:
-        changes["genres"] = normalize_genres(changes["genres"] or [])
-    if "network" in changes:
-        changes["network"] = canonical_network(changes["network"])
-    if "content_rating" in changes:
-        changes["content_rating"] = canonical_content_rating(changes["content_rating"])
-
-    titles_changed = False
-    metadata_changed = False
-    for field, value in changes.items():
-        if field == "metadata_locked":
-            continue
-        if getattr(series, field) == value:
-            continue
-        setattr(series, field, value)
-        metadata_changed = metadata_changed or field in _SERIES_METADATA_FIELDS
-        titles_changed = titles_changed or field in {"title", "original_title", "sort_title"}
-
-    if "title" in changes and "sort_title" not in changes:
-        series.sort_title = normalize(series.title) or series.title
-        titles_changed = True
-
-    if metadata_changed:
-        series.metadata_locked = True
-    # An explicit flag in the body wins, so an admin can hand the row back to the jobs.
-    if body.metadata_locked is not None:
-        series.metadata_locked = body.metadata_locked
-
-    series.updated_at = utcnow()
-    await session.flush()
-    if titles_changed:
-        await reindex_series(session, series.id)
+    # Canonicalizing, locking and re-indexing all live in the service, so that this route and
+    # the bulk one below cannot drift apart. See `library_service.apply_series_patch`.
+    await library_service.apply_series_patch(
+        session,
+        series,
+        body.model_dump(exclude_unset=True),
+        metadata_locked=body.metadata_locked,
+    )
     return await library_service.series_detail(session, series, admin.id)
+
+
+@router.post("/series/bulk", response_model=SeriesBulkResult)
+async def bulk_patch_series(
+    session: SessionDep, admin: AdminUser, body: SeriesBulkPatch
+) -> SeriesBulkResult:
+    """Apply one edit to many series.
+
+    Exists because the fields an admin most often has to fix — status, year, network, rating —
+    are the same for a whole batch of imports, and doing them one screen at a time is the sort
+    of work a person abandons halfway through, leaving a catalogue half-corrected.
+
+    Only the fields actually present in `patch` are written, so a bulk status change cannot
+    quietly blank forty synopses. Ids that no longer exist come back in `missing` rather than
+    failing the request: a stale selection — a row deleted in another tab — should not throw
+    away the other thirty-nine edits.
+
+    Not transactional per row on purpose. One `flush` per series through the shared path, one
+    commit at the end: either the batch lands or the request failed, and a partially applied
+    batch is not a state this leaves behind.
+    """
+    changes = body.patch.model_dump(exclude_unset=True)
+    if not changes and body.patch.metadata_locked is None:
+        raise AppError("SERIES_BULK_EMPTY", "The patch changes nothing", 400)
+
+    found = (
+        (await session.execute(select(Series).where(Series.id.in_(body.ids)))).scalars().all()
+    )
+    by_id = {series.id: series for series in found}
+
+    for series in found:
+        await library_service.apply_series_patch(
+            session,
+            series,
+            dict(changes),
+            metadata_locked=body.patch.metadata_locked,
+        )
+
+    missing = [series_id for series_id in body.ids if series_id not in by_id]
+    log.info("bulk patch: %d series updated, %d missing", len(found), len(missing))
+    return SeriesBulkResult(updated=len(found), missing=missing)
 
 
 @router.patch("/episodes/{episode_id}", response_model=EpisodeDetail)

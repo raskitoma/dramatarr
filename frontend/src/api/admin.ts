@@ -561,6 +561,27 @@ export function patchSeries(id: string, patch: SeriesPatch): Promise<SeriesDetai
   return api.patch<SeriesDetail>(`/library/series/${id}`, patch)
 }
 
+/** What a bulk edit actually did. `missing` names ids that were gone by the time it ran. */
+export interface SeriesBulkResult {
+  updated: number
+  missing: string[]
+}
+
+/**
+ * Apply one patch to many series.
+ *
+ * A single request rather than a loop of `patchSeries`, and the difference is not speed: forty
+ * separate PATCHes can half-succeed, leaving the admin to work out which twenty landed. This
+ * either applies to the whole selection or fails, and names the ids that no longer exist
+ * instead of failing over them.
+ *
+ * Only the keys present in `patch` are written, which is the same contract as `patchSeries` and
+ * matters far more here — an accidental `overview: null` would blank forty synopses.
+ */
+export function bulkPatchSeries(ids: string[], patch: SeriesPatch): Promise<SeriesBulkResult> {
+  return api.post<SeriesBulkResult>('/library/series/bulk', { ids, patch })
+}
+
 export function getAdminEpisode(id: string): Promise<AdminEpisodeDetail> {
   return api.get<AdminEpisodeDetail>(`/library/episodes/${id}`)
 }

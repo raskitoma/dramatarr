@@ -485,3 +485,23 @@
     gap: var(--space-3);
   }
 }
+
+/* The selection column. Narrow and top-aligned: the rows are two lines tall thanks to the
+   poster, and a vertically centred checkbox beside a title floats away from it. */
+.pickCell {
+  inline-size: 2.5rem;
+  vertical-align: top;
+}
+
+.pick {
+  inline-size: 1.05rem;
+  block-size: 1.05rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* A selected row has to be obvious while the bar is covering the top of the table — without
+   this, scrolling down through a long selection shows nothing about what is selected. */
+.table tr[data-selected='true'] > * {
+  background: var(--surface-sunken);
+}

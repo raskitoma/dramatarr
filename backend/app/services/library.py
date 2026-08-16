@@ -99,7 +99,7 @@ from app.services.scanner.scan import safe_media_path
 from app.services.search.index import reindex_series
 from app.services.search.normalize import normalize
 from app.services.tmdb import IMAGE_BASE
-from app.services.vocab import normalize_genres
+from app.services.vocab import canonical_content_rating, canonical_network, normalize_genres
 from app.services.watch import get_progress, progress_for_episodes, resume_position
 from app.utils.ids import new_id, slugify
 from app.utils.time import as_aware, utcnow
@@ -1104,6 +1104,83 @@ async def _series_facts(session: AsyncSession, series_id: str) -> _SeriesFacts:
         elif status == MediaStatus.MISSING:
             facts.missing_file_count += 1
     return facts
+
+
+#: Fields whose change means "a human curated this row", so the nightly jobs must leave it be.
+SERIES_METADATA_FIELDS = frozenset(
+    {
+        "title",
+        "sort_title",
+        "original_title",
+        "original_language",
+        "overview",
+        "year",
+        "status",
+        "content_rating",
+        "genres",
+        "network",
+        "declared_episode_count",
+        "imdb_id",
+    }
+)
+
+
+async def apply_series_patch(
+    session: AsyncSession,
+    series: Series,
+    changes: dict[str, Any],
+    *,
+    metadata_locked: bool | None = None,
+) -> bool:
+    """Write an admin's edit onto one series. Returns whether the title index needs rebuilding.
+
+    Extracted so that editing one series and editing forty go through the **same** code, which
+    is the only way the two stay honest about the three things easy to get wrong in a bulk
+    path: canonicalizing genres, network and rating on the way in (or `dramabox` and `DramaBox`
+    become two networks in the filter list); setting `metadata_locked` so the nightly refresh
+    does not undo the edit; and recomputing `sort_title` when the title moved.
+
+    `changes` must already be the *set* fields only — a dict built from
+    `model_dump(exclude_unset=True)`. A patch that carried every field with its default would
+    blank the columns the admin never touched, and in bulk that is forty rows at once.
+    """
+    if "genres" in changes:
+        changes["genres"] = normalize_genres(changes["genres"] or [])
+    if "network" in changes:
+        changes["network"] = canonical_network(changes["network"])
+    if "content_rating" in changes:
+        changes["content_rating"] = canonical_content_rating(changes["content_rating"])
+
+    titles_changed = False
+    metadata_changed = False
+    for field_name, value in changes.items():
+        if field_name == "metadata_locked":
+            continue
+        if getattr(series, field_name) == value:
+            continue
+        setattr(series, field_name, value)
+        metadata_changed = metadata_changed or field_name in SERIES_METADATA_FIELDS
+        titles_changed = titles_changed or field_name in {
+            "title",
+            "original_title",
+            "sort_title",
+        }
+
+    if "title" in changes and "sort_title" not in changes:
+        series.sort_title = normalize(series.title) or series.title
+        titles_changed = True
+
+    if metadata_changed:
+        series.metadata_locked = True
+    # An explicit flag in the body wins, so an admin can hand the row back to the jobs.
+    if metadata_locked is not None:
+        series.metadata_locked = metadata_locked
+
+    series.updated_at = utcnow()
+    await session.flush()
+    if titles_changed:
+        await reindex_series(session, series.id)
+    return titles_changed
 
 
 async def apply_omdb_title(

@@ -709,6 +709,26 @@ class SeriesPatch(APIModel):
     metadata_locked: bool | None = None
 
 
+class SeriesBulkPatch(APIModel):
+    """One edit, many series.
+
+    Bounded at 200 ids because this runs inside a single request: a selection larger than a
+    page of results is almost always a mis-click on "select all" against an unfiltered library,
+    and a bounded refusal is friendlier than a request that holds the session open for a
+    minute. The client can send batches if it genuinely means thousands.
+    """
+
+    ids: list[str] = Field(min_length=1, max_length=200)
+    patch: SeriesPatch
+
+
+class SeriesBulkResult(APIModel):
+    updated: int = 0
+    #: Ids that no longer exist — a selection made before someone else deleted a row. Reported
+    #: rather than raised, so one stale id does not discard the rest of the batch.
+    missing: list[str] = Field(default_factory=list)
+
+
 class EpisodePatch(APIModel):
     title: str | None = Field(default=None, max_length=500)
     overview: str | None = None
@@ -786,6 +806,8 @@ __all__ = [
     "DiscoveredIds",
     "DiscoveryResult",
     "DiscoveryResults",
+    "SeriesBulkPatch",
+    "SeriesBulkResult",
     "EpisodeDetail",
     "EpisodePatch",
     "EpisodeSummary",

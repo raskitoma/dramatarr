@@ -20,7 +20,9 @@ import { Link } from 'wouter'
 import {
   adminKeys,
   assignUnmatched,
+  bulkPatchSeries,
   cleanupLibrary,
+  getVocabulary,
   isEmptyCleanup,
   listAdminSeries,
   listUnmatched,
@@ -28,9 +30,11 @@ import {
   type AdminSeriesQuery,
   type AdminSeriesRow,
   type LibraryCleanupResult,
+  type SeriesPatch,
 } from '@/api/admin'
 import { libraryKeys } from '@/api/library'
 import type { SeriesStatus, UnmatchedFile } from '@/api/types'
+import BulkEditBar from '@/components/admin/BulkEditBar'
 import DeleteSeriesDialog from '@/components/admin/DeleteSeriesDialog'
 import TmdbMatchDialog from '@/components/admin/TmdbMatchDialog'
 import UnmatchedTable from '@/components/admin/UnmatchedTable'
@@ -208,6 +212,10 @@ function SeriesTab() {
   const [page, setPage] = useState(1)
   const [matchTarget, setMatchTarget] = useState<AdminSeriesRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminSeriesRow | null>(null)
+  /* Ids rather than rows, and a Set rather than an array: a selection has to survive the list
+     refetching underneath it — which it does on every bulk apply — and rows are new objects
+     each time. */
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
 
   // Debounced only; the request itself still goes through TanStack Query.
   useEffect(() => {
@@ -241,8 +249,53 @@ function SeriesTab() {
     onError: () => show(t('errors.generic'), 'error'),
   })
 
+  const vocabulary = useQuery({
+    queryKey: adminKeys.vocabulary(),
+    queryFn: getVocabulary,
+    staleTime: 5 * 60_000,
+  })
+
+  const bulk = useMutation({
+    mutationFn: ({ ids, patch }: { ids: string[]; patch: SeriesPatch }) =>
+      bulkPatchSeries(ids, patch),
+    onSuccess: async (result) => {
+      show(t('admin.library.bulkDone', { count: result.updated }), 'success')
+      // The selection is dropped on purpose: leaving forty rows ticked after an edit is how a
+      // second, unintended bulk change happens.
+      setSelected(new Set())
+      await queryClient.invalidateQueries({ queryKey: adminKeys.all })
+      await queryClient.invalidateQueries({ queryKey: libraryKeys.all })
+    },
+    onError: () => show(t('errors.generic'), 'error'),
+  })
+
   const rows = seriesQuery.data?.items ?? []
   const total = seriesQuery.data?.total ?? 0
+
+  /* "All" means all of *this page*, never the whole filtered set. A checkbox that silently
+     selects two hundred unseen rows is how someone edits a library by accident. */
+  const pageIds = rows.map((row) => row.id)
+  const selectedOnPage = pageIds.filter((id) => selected.has(id))
+  const allOnPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length
+
+  function toggleRow(id: string): void {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
+
+  function togglePage(): void {
+    setSelected((current) => {
+      const next = new Set(current)
+      for (const id of pageIds) {
+        if (allOnPageSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }
 
   return (
     <section className={styles.panel}>
@@ -296,12 +349,32 @@ function SeriesTab() {
         />
       ) : null}
 
+      {selected.size > 0 ? (
+        <BulkEditBar
+          count={selected.size}
+          pending={bulk.isPending}
+          providers={vocabulary.data?.providers ?? []}
+          ratingGroups={vocabulary.data?.contentRatings ?? []}
+          onApply={(patch) => bulk.mutate({ ids: [...selected], patch })}
+          onClear={() => setSelected(new Set())}
+        />
+      ) : null}
+
       {rows.length > 0 ? (
         <div className={styles.scroller}>
           <table className={styles.table}>
             <caption className="sr-only">{t('admin.library.title')}</caption>
             <thead>
               <tr>
+                <th scope="col" className={styles.pickCell}>
+                  <input
+                    type="checkbox"
+                    className={styles.pick}
+                    checked={allOnPageSelected}
+                    aria-label={t('admin.library.bulkSelectPage')}
+                    onChange={togglePage}
+                  />
+                </th>
                 <th scope="col">{t('admin.library.titleValue')}</th>
                 <th scope="col">{t('series.year')}</th>
                 <th scope="col">{t('series.episodes')}</th>
@@ -313,7 +386,19 @@ function SeriesTab() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr key={row.id} data-selected={selected.has(row.id) ? 'true' : undefined}>
+                  {/* Not a `Cell`: that wrapper prints a column name beside its value in the
+                      stacked phone layout, and "Bulk edit: ☐" is not a sentence. The checkbox
+                      names itself through `aria-label`. */}
+                  <td className={cx(styles.cell, styles.pickCell)}>
+                    <input
+                      type="checkbox"
+                      className={styles.pick}
+                      checked={selected.has(row.id)}
+                      aria-label={t('admin.library.bulkSelectRow', { title: row.title })}
+                      onChange={() => toggleRow(row.id)}
+                    />
+                  </td>
                   {/* The flex row is an element inside the cell, not the cell itself: a `th`
                       set to `display: flex` stops stretching to the row's height, and its
                       bottom rule then floats halfway up a tall row. */}
