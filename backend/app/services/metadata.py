@@ -25,7 +25,7 @@ from datetime import date, datetime
 from typing import Any
 
 from rapidfuzz import fuzz
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError, NotFound
@@ -33,6 +33,7 @@ from app.models import (
     Episode,
     EpisodeTitle,
     JobType,
+    MediaFile,
     Series,
     SeriesStatus,
     SeriesTitle,
@@ -282,11 +283,24 @@ def _content_rating(details: Mapping[str, Any], language: str) -> str | None:
     return next(iter(by_region.values()), None)
 
 
+async def _episodes_with_files(session: AsyncSession, series_id: str) -> int:
+    """How many episodes of this series actually have a file on the mount."""
+    stmt = (
+        select(func.count(func.distinct(Episode.id)))
+        .select_from(Episode)
+        .join(MediaFile, MediaFile.episode_id == Episode.id)
+        .where(Episode.series_id == series_id)
+    )
+    return int((await session.execute(stmt)).scalar_one())
+
+
 def _apply_series_fields(
     series: Series,
     details: Mapping[str, Any],
     translations: Sequence[dict[str, Any]],
     language: str,
+    *,
+    episodes_on_disk: int = 0,
 ) -> None:
     overview = (details.get("overview") or "").strip()
     overview_lang = language
@@ -332,8 +346,18 @@ def _apply_series_fields(
     if original_language:
         series.original_language = original_language[:16]
 
+    # TMDB's episode count, but only while it can still be read as a total.
+    #
+    # Vertical short drama reaches TMDB as a *stub*: someone creates the show and one episode
+    # and never returns. This household's catalogue holds the evidence — an entry declaring 1
+    # episode against 66 files on the NAS, another declaring 14 against 62. Written through,
+    # that number turned the library screen into "66 of 1 available", which is not a scan that
+    # has not finished; it is the application repeating a claim it can see is false.
+    #
+    # So a declared total below what is already on disk is discarded rather than stored. The
+    # file count is the one of the two numbers that is a fact.
     declared = details.get("number_of_episodes")
-    if isinstance(declared, int) and declared > 0:
+    if isinstance(declared, int) and declared > 0 and declared >= episodes_on_disk:
         series.declared_episode_count = declared
 
     imdb_id = ((details.get("external_ids") or {}).get("imdb_id") or "").strip()
@@ -635,7 +659,15 @@ async def refresh_series_metadata(
     if series.metadata_locked:
         await _log(ctx, "info", "Series metadata is locked; only titles and episodes updated")
     else:
-        _apply_series_fields(series, details, translations, client.language)
+        _apply_series_fields(
+            series,
+            details,
+            translations,
+            client.language,
+            # Read here rather than inside, which is sync: touching a lazy relationship from
+            # there raises MissingGreenlet. See `_apply_series_fields` for what it guards.
+            episodes_on_disk=await _episodes_with_files(session, series.id),
+        )
 
     await _emit(ctx, 30, "Writing titles")
     added = await _sync_series_titles(

@@ -171,6 +171,16 @@ export const RefreshIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const InfoIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 11v5.5" />
+    {/* The dot is a zero-length stroke rather than a filled circle, so it keeps the same
+        round cap and weight as every other glyph here at every size. */}
+    <path d="M12 7.9v0.01" />
+  </Icon>
+)
+
 export const SearchIcon = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="11" cy="11" r="6.5" />

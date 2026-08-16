@@ -49,6 +49,7 @@ import Spinner from '@/components/Spinner'
 import { useToast } from '@/components/Toast'
 import { cx } from '@/components/cx'
 import { EditIcon, LinkIcon, RefreshIcon, SearchIcon, TrashIcon } from '@/components/icons'
+import { declaredIsPlausible } from '@/lib/format'
 
 import styles from './AdminLibraryPage.module.css'
 
@@ -335,12 +336,29 @@ function SeriesTab() {
                     {row.year ?? t('common.unknown')}
                   </Cell>
                   <Cell label={t('series.episodes')} className={styles.numeric}>
-                    {row.declaredEpisodeCount === null
-                      ? t('series.availableCount', { count: row.availableEpisodeCount })
-                      : t('series.availableOf', {
-                          available: row.availableEpisodeCount,
-                          declared: row.declaredEpisodeCount,
-                        })}
+                    {declaredIsPlausible(row.availableEpisodeCount, row.declaredEpisodeCount) ? (
+                      t('series.availableOf', {
+                        available: row.availableEpisodeCount,
+                        declared: row.declaredEpisodeCount,
+                      })
+                    ) : (
+                      <>
+                        {t('series.availableCount', { count: row.availableEpisodeCount })}
+                        {/* Named rather than silently dropped: this is the visible symptom of a
+                            match to the wrong show, and the admin is the one person who can
+                            undo it. Hiding the discrepancy would hide the defect. */}
+                        {row.declaredEpisodeCount === null ? null : (
+                          <span
+                            className={styles.mismatch}
+                            title={t('admin.library.declaredMismatchHint', {
+                              declared: row.declaredEpisodeCount,
+                            })}
+                          >
+                            <Badge tone="warning">{t('admin.library.declaredMismatch')}</Badge>
+                          </span>
+                        )}
+                      </>
+                    )}
                   </Cell>
                   <Cell label={t('admin.library.tmdbColumn')}>
                     {row.tmdbId === undefined ? (

@@ -216,3 +216,25 @@ export function initialsOf(name: string, fallback: string): string {
   const tail = last ? (Array.from(last)[0] ?? '') : ''
   return (head + tail).toLocaleUpperCase()
 }
+
+/**
+ * Whether a series' declared episode count can be shown as the total it claims to be.
+ *
+ * It usually can. But this library is vertical short drama, which TMDB does not carry, so a
+ * match is often to a *different* show with a similar name — and the live catalogue proved it:
+ * two series were bound to TMDB 324289, which declares **one** episode, while their folders
+ * hold sixty-six each. The screen printed "66 de 1 disponibles", which is not a rounding
+ * problem or a scan that has not finished. It is the application repeating a wrong claim with
+ * a straight face.
+ *
+ * So the rule is the only one that survives a bad match: a declared total below what is
+ * already on the NAS is not a total. Say how many there are and stop, and — where an admin can
+ * act on it — say that the metadata disagrees, because the fix is to re-match the series, not
+ * to edit the number.
+ */
+export function declaredIsPlausible(
+  available: number,
+  declared: number | null | undefined,
+): declared is number {
+  return typeof declared === 'number' && declared >= available
+}

@@ -39,7 +39,7 @@ import {
   UnwatchIcon,
 } from '@/components/icons'
 import { useAuth } from '@/hooks/useAuth'
-import { formatTimecode } from '@/lib/format'
+import { declaredIsPlausible, formatTimecode } from '@/lib/format'
 
 import styles from './SeriesPage.module.css'
 
@@ -196,13 +196,18 @@ export function SeriesPage() {
         : t('series.play')
     : null
 
-  const episodeCountText =
-    detail.declaredEpisodeCount !== null
-      ? t('series.availableOf', {
-          available: detail.availableEpisodeCount,
-          declared: detail.declaredEpisodeCount,
-        })
-      : t('series.availableCount', { count: detail.availableEpisodeCount })
+  // "X of Y" only while Y is still a credible total. A wrong TMDB match can declare one
+  // episode for a folder holding sixty-six, and printing that would be the page asserting
+  // something plainly false to a viewer who cannot fix it.
+  const episodeCountText = declaredIsPlausible(
+    detail.availableEpisodeCount,
+    detail.declaredEpisodeCount,
+  )
+    ? t('series.availableOf', {
+        available: detail.availableEpisodeCount,
+        declared: detail.declaredEpisodeCount,
+      })
+    : t('series.availableCount', { count: detail.availableEpisodeCount })
 
   const seriesWatchedLabel = fullyWatched
     ? t('series.markSeriesUnwatched')

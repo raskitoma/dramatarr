@@ -221,6 +221,13 @@
   display: inline-flex;
 }
 
+/* Sits under the count rather than beside it: the cell is narrow and the badge is the second
+   line of one statement — "sixty-six, and the metadata says otherwise". */
+.mismatch {
+  display: block;
+  margin-block-start: var(--space-1);
+}
+
 /* No nowrap: this class carries the year, which is short enough not to need it, and the episode
    count, which is a sentence — holding that on one line cost the table 60px it does not have. */
 .numeric {
