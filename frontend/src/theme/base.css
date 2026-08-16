@@ -10,6 +10,23 @@
   margin: 0;
 }
 
+/*
+ * Put back the one margin the reset above should not have taken.
+ *
+ * A modal `<dialog>` is centred by the user agent's own `margin: auto`, and nothing else does
+ * it — the element is in the top layer, so it is not laid out by any parent that could centre
+ * it. `* { margin: 0 }` overrides that, and every dialog in the application opened against the
+ * top-left corner instead. Measured in a browser rather than reasoned about: with the reset
+ * alone the box sits at top 0, left 0; with this rule, at 342/384 in a 1280x800 viewport,
+ * which is dead centre.
+ *
+ * Here rather than in `components/Dialog`, because the reset is what broke it and a dialog
+ * that does not go through that component would inherit the bug all over again.
+ */
+dialog {
+  margin: auto;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   scrollbar-gutter: stable;
