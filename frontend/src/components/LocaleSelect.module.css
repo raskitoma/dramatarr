@@ -1,0 +1,52 @@
+/* Deliberately the same shape as ThemeToggle: the two sit side by side in the header, and a
+   pill group next to a bordered select read as two unrelated controls. */
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  border-radius: var(--radius-full);
+  transition:
+    background var(--duration-fast) var(--ease),
+    opacity var(--duration-fast) var(--ease);
+  /* The unchosen flag is dimmed rather than greyed out: at this size a desaturated flag is
+     hard to identify, and identifying it is the whole reason it is a flag. */
+  opacity: 0.55;
+}
+
+/* `role="radio"` is not a `button` as far as the coarse-pointer floor in base.css is concerned,
+   so the 44px minimum is restated here — the same note as ThemeToggle's. */
+@media (pointer: coarse) {
+  .option {
+    min-width: var(--touch-target, 44px);
+    min-height: var(--touch-target, 44px);
+  }
+}
+
+.option:hover {
+  opacity: 1;
+  background: var(--surface);
+}
+
+.option[aria-checked='true'] {
+  opacity: 1;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.flag {
+  display: block;
+  flex: none;
+  border-radius: 2px;
+}

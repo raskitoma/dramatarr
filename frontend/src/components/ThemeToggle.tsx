@@ -123,7 +123,11 @@ export function ThemeToggle() {
             type="button"
             role="radio"
             aria-checked={selected}
+            // The only name this control has now that the words are gone. `title` puts the
+            // same string in the tooltip, so a glyph nobody recognizes is still one hover from
+            // explaining itself.
             aria-label={label}
+            title={label}
             // Only the selected option is in the tab order; arrows reach the others.
             tabIndex={selected ? 0 : -1}
             className={styles.option}
@@ -135,7 +139,6 @@ export function ThemeToggle() {
             }}
           >
             <ThemeIcon option={option} />
-            <span className={styles.text}>{label}</span>
           </button>
         )
       })}
