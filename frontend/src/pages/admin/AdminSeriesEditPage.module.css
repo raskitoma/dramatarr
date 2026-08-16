@@ -340,3 +340,34 @@
     flex-basis: 2rem;
   }
 }
+
+/* The header poster, now pressable. A button wrapper would otherwise inherit the app's control
+   metrics and box the artwork in padding and a border it does not want. */
+.posterZoom {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-md);
+  cursor: zoom-in;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.posterZoom:hover {
+  opacity: 0.85;
+}
+
+/* Bounded by the viewport, not by the image: these covers are 1080px tall originals, and a
+   dialog that grows past the screen puts its own close button out of reach. */
+.posterFull {
+  display: flex;
+  justify-content: center;
+}
+
+.posterFull img {
+  max-inline-size: 100%;
+  max-block-size: 70vh;
+  inline-size: auto;
+  block-size: auto;
+  border-radius: var(--radius-md);
+}

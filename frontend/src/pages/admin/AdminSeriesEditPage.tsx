@@ -283,6 +283,7 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
   const [genreDraft, setGenreDraft] = useState('')
   const [showTmdb, setShowTmdb] = useState(false)
   const [showArtwork, setShowArtwork] = useState(false)
+  const [zoomOpen, setZoomOpen] = useState(false)
   const [leaveTo, setLeaveTo] = useState<string | null>(null)
   const [touched, setTouched] = useState(false)
 
@@ -428,8 +429,23 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
 
       <header className={styles.header}>
         {/* The poster is here because it is what the choice is about: the picker's grid is
-            only meaningful next to the art the series shows today. */}
-        <Poster src={detail.posterUrl} alt={detail.title} size="sm" />
+            only meaningful next to the art the series shows today. At `sm` it is too small to
+            judge — these covers carry the title in small type and a platform watermark, both
+            of which decide whether this is the right art — so it opens full size. A button
+            rather than a clickable div, because it is one. */}
+        {detail.posterUrl === null ? (
+          <Poster src={null} alt={detail.title} size="sm" />
+        ) : (
+          <button
+            type="button"
+            className={styles.posterZoom}
+            title={t('admin.library.posterZoom')}
+            aria-label={t('admin.library.posterZoom')}
+            onClick={() => setZoomOpen(true)}
+          >
+            <Poster src={detail.posterUrl} alt={detail.title} size="sm" />
+          </button>
+        )}
         <div className={styles.headerText}>
           <h1 className={styles.title}>{detail.title}</h1>
           <p className={styles.path}>{detail.libraryPath}</p>
@@ -644,6 +660,20 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
           onChanged={() => void detailQuery.refetch()}
         />
       ) : null}
+
+      {/* The poster at the size the decision needs. `lg` rather than a bare `<img>` so it
+          still goes through the cached-path guard every other poster in the app uses — the
+          URL is stored metadata, and metadata is not a trusted image source. */}
+      <Dialog
+        open={zoomOpen}
+        onClose={() => setZoomOpen(false)}
+        title={detail.title}
+        size="md"
+      >
+        <div className={styles.posterFull}>
+          <Poster src={detail.posterUrl} alt={detail.title} size="lg" fluid />
+        </div>
+      </Dialog>
 
       <Dialog
         open={leaveTo !== null}
