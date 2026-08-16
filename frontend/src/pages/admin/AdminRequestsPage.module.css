@@ -32,6 +32,27 @@
   line-height: var(--leading-relaxed);
 }
 
+/* `align-self: flex-start` so it takes the width of its own words rather than the header's —
+   the header is a column, and a stretched link would read as a banner. */
+.shortcut {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.shortcut:hover {
+  color: var(--accent);
+  border-color: var(--border-strong);
+  text-decoration: none;
+}
+
 .section {
   display: flex;
   flex-direction: column;

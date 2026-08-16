@@ -58,6 +58,10 @@ import styles from './AdminRequestsPage.module.css'
 
 const PAGE_SIZE = 25
 
+/** Where the owner actually goes to find a requested show. Change it here; it is a bookmark,
+ *  not a service this application calls, so it needs no setting and no key. */
+const DRAMADOWN_URL = 'https://dramadown.raskitoma.io'
+
 const STATUS_TONE: Record<RequestStatus, BadgeTone> = {
   pending: 'warning',
   approved: 'info',
@@ -112,6 +116,21 @@ export function AdminRequestsPage() {
             {t('admin.requests.title')}
           </h1>
           <p className={styles.intro}>{t('admin.requests.intro')}</p>
+
+          {/* A shortcut, and only a shortcut. Attending a request means going and finding the
+              show by hand, and DramaDown is where the owner does that — so the useful thing
+              this screen can offer is one click to the other tab, not an integration. Nothing
+              here talks to it: no request is handed over, no transfer is started, and closing
+              that tab leaves this page exactly as it was. */}
+          <a
+            className={styles.shortcut}
+            href={DRAMADOWN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLinkIcon size="1em" aria-hidden="true" />
+            {t('admin.requests.openDramadown')}
+          </a>
         </header>
 
         <section id="requests-queue" className={styles.section}>
