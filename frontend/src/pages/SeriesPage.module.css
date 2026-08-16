@@ -43,8 +43,10 @@
   position: relative;
   z-index: 1;
   display: flex;
-  gap: var(--space-4);
-  align-items: flex-end;
+  gap: var(--space-5);
+  /* Top, not bottom. Bottom-aligning made sense when the text was four short lines; with a
+     synopsis in it the poster floated away from the title it belongs to. */
+  align-items: flex-start;
   padding: var(--space-5) var(--space-5) var(--space-4);
   min-width: 0;
 }
@@ -53,16 +55,41 @@
   padding-top: var(--space-6);
 }
 
+/* Grows with the viewport instead of staying a thumbnail on a 27-inch screen, and stops before
+   it starts competing with the title. */
 .heroPoster {
-  flex: 0 0 140px;
+  flex: 0 0 clamp(120px, 13vw, 190px);
 }
 
+/* One column on a phone, two side by side once there is room. The split is what makes a wide
+   hero look filled rather than left-aligned into a lot of nothing. */
 .heroText {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-6);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* What the show is. Capped at a readable measure — prose that runs the width of a desktop is
+   harder to read, not better used space, which is why the second column exists at all. */
+.heroMain {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  flex: 1 1 22rem;
   min-width: 0;
-  flex: 1 1 auto;
+  max-width: 62ch;
+}
+
+/* Where you are in it, and what you can do. Never narrower than its progress bar wants. */
+.heroSide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1 1 18rem;
+  min-width: 0;
+  max-width: 30rem;
 }
 
 .title {
@@ -110,11 +137,12 @@
   font-weight: var(--weight-medium);
 }
 
+/* No cap of its own any more: the column it sits in is the cap, so the bar, the counts and the
+   buttons all end on the same line instead of at three different widths. */
 .progress {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  max-width: 28rem;
 }
 
 .progressLabel {
@@ -131,12 +159,27 @@
   margin-top: var(--space-1);
 }
 
-/* Doubled selector so this beats Button's own single-class metrics whatever the bundle order.
-   Touch input gets the 44px floor; a mouse keeps the app's normal 36px control rhythm. */
+/* One square, four times over.
+ *
+ * These four controls are a `Button`, another `Button`, an anchor and a third `Button`, each
+ * with its own idea of padding — which is why the row rendered as a wide rectangle beside two
+ * squares beside a borderless glyph. With no visible text left in any of them, the horizontal
+ * padding has nothing to sit around, so it goes and the box becomes the same square for all
+ * four. Doubled selector to beat Button's own single-class metrics whatever the bundle order.
+ */
+.actions.actions > * {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  min-inline-size: 0;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+}
+
 @media (max-width: 720px), (pointer: coarse) {
   .actions.actions > * {
-    min-block-size: 44px;
-    min-inline-size: 44px;
+    inline-size: 44px;
+    block-size: 44px;
   }
 }
 
@@ -145,8 +188,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   color: var(--text-muted);
   border: 1px solid var(--border);
@@ -160,23 +201,21 @@
 }
 
 /*
- * The words of a secondary action, dropped from view on a phone but never from the accessible
- * name — the control keeps its label for a screen reader and as its tooltip, and the hero loses
- * a whole wrapped row of buttons. The primary Play action keeps its words at every width,
- * because it is the one that says whether you are resuming and from when.
+ * The words of every hero action, hidden from sight at every width and never from the
+ * accessible name — the control keeps its label for a screen reader and as its tooltip. This
+ * is the standard visually-hidden recipe rather than `display: none`, which would take the
+ * name with it and leave four buttons a screen reader announces as nothing at all.
  */
-@media (max-width: 640px) {
-  .actionLabel {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
+.actionLabel {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .nextUp {
@@ -228,6 +267,43 @@
   max-width: 68ch;
   color: var(--text-muted);
   line-height: var(--leading-relaxed);
+}
+
+/* The synopsis and the control that opens the rest of it, on one line so the button reads as
+   belonging to the paragraph rather than to the block below. */
+.overviewBlock {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The same paragraph, in the hero, cut to four lines. Below it sit the availability, the
+   progress bar and the actions; a fifteen-line synopsis would push the play button off a phone
+   screen. What the clamp hides is never lost — `useClipped` notices and offers the dialog. */
+.heroOverview {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+
+/* Aligned to the first line of the paragraph rather than centred on all four. */
+.overviewMore {
+  flex: none;
+  margin-block-start: -0.15rem;
+}
+
+.overviewFull {
+  color: var(--text);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
 }
 
 .detailLine {

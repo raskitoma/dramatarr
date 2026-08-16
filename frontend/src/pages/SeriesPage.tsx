@@ -11,7 +11,15 @@
  * fifty episodes into is the episode list, not the blurb you read the first time.
  */
 
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'wouter'
 
@@ -19,6 +27,7 @@ import { useRefreshSeriesMetadata, useSeriesDetail, useSetSeriesWatched } from '
 import type { EpisodeSummary, SeasonGroup, SeriesDetail, SeriesStatus, SeriesTitleOut } from '@/api/types'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
+import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { EpisodeGrid } from '@/components/EpisodeGrid'
@@ -33,6 +42,7 @@ import {
   CheckCircleIcon,
   EditIcon,
   GridIcon,
+  InfoIcon,
   ListIcon,
   PlayIcon,
   RefreshIcon,
@@ -102,6 +112,38 @@ function humanTitles(detail: SeriesDetail): SeriesTitleOut[] {
   return out
 }
 
+/**
+ * True when a CSS-clamped element is actually hiding something.
+ *
+ * Measured rather than guessed from the character count, because "too long" is a question about
+ * the rendered width: the same synopsis fits in three lines on a desktop and spills over six on
+ * a phone. Counting characters would put an "info" button on a paragraph that is fully visible
+ * — a control that opens a dialog showing exactly what is already on screen — and withhold it
+ * from one that is genuinely cut off.
+ *
+ * Re-measured on resize for the same reason. `contents` is in the dependency list so switching
+ * series re-runs it; the ref itself is stable and would not.
+ */
+function useClipped<T extends HTMLElement>(contents: string | null | undefined) {
+  const ref = useRef<T>(null)
+  const [clipped, setClipped] = useState(false)
+
+  const measure = useCallback(() => {
+    const element = ref.current
+    // The +1 absorbs sub-pixel line-height rounding, which otherwise reports a one-line
+    // paragraph as overflowing on some zoom levels.
+    setClipped(element !== null && element.scrollHeight > element.clientHeight + 1)
+  }, [])
+
+  useEffect(() => {
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [measure, contents])
+
+  return [ref, clipped] as const
+}
+
 function EpisodeBoard({
   season,
   posterUrl,
@@ -143,6 +185,8 @@ export function SeriesPage() {
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
   const [chosenView, setChosenView] = useState<EpisodeView | null>(readStoredView)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const [overviewOpen, setOverviewOpen] = useState(false)
+  const [overviewRef, overviewClipped] = useClipped<HTMLParagraphElement>(detail?.overview)
 
   const refreshMetadata = useRefreshSeriesMetadata()
   const setSeriesWatched = useSetSeriesWatched()
@@ -248,16 +292,47 @@ export function SeriesPage() {
             <Poster src={detail.posterUrl} alt="" size="lg" fluid />
           </div>
 
+          {/* Two columns on a wide screen: what the show *is* on the left, where you are in it
+              and what you can do about it on the right. As one column the hero left most of a
+              desktop's width empty, because a synopsis has to stop at a readable measure and
+              nothing was using the rest. */}
           <div className={styles.heroText}>
-            <h1 className={styles.title}>{detail.title}</h1>
+            <div className={styles.heroMain}>
+              <h1 className={styles.title}>{detail.title}</h1>
 
-            <p className={styles.meta}>
-              {detail.year !== null ? <span>{detail.year}</span> : null}
-              {detail.network !== null ? <span>{detail.network}</span> : null}
-              {detail.contentRating !== null ? <span>{detail.contentRating}</span> : null}
-              <Badge tone={STATUS_TONE[detail.status]}>{t(STATUS_LABEL_KEY[detail.status])}</Badge>
-            </p>
+              <p className={styles.meta}>
+                {detail.year !== null ? <span>{detail.year}</span> : null}
+                {detail.network !== null ? <span>{detail.network}</span> : null}
+                {detail.contentRating !== null ? <span>{detail.contentRating}</span> : null}
+                <Badge tone={STATUS_TONE[detail.status]}>
+                  {t(STATUS_LABEL_KEY[detail.status])}
+                </Badge>
+              </p>
 
+              {/* In the hero rather than in a section below the episode list. It is the one
+                  thing a person reads to decide whether to press play, and it was the only such
+                  thing that required scrolling past ninety episodes to reach. */}
+              <div className={styles.overviewBlock}>
+                <p className={styles.heroOverview} ref={overviewRef}>
+                  {detail.overview ?? t('series.noOverview')}
+                </p>
+                {/* Only when the clamp is actually hiding something — a button that opens a
+                    dialog showing the paragraph already on screen is worse than no button. */}
+                {overviewClipped ? (
+                  <IconButton
+                    // IconButton makes this both the accessible name and the tooltip, which is
+                    // the whole budget for explaining a control with no words on it.
+                    label={t('series.overviewFull')}
+                    className={styles.overviewMore}
+                    onClick={() => setOverviewOpen(true)}
+                  >
+                    <InfoIcon />
+                  </IconButton>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={styles.heroSide}>
             <p className={styles.counts}>{episodeCountText}</p>
 
             <div className={styles.progress}>
@@ -275,16 +350,18 @@ export function SeriesPage() {
               </p>
             </div>
 
-            {/* One line on a phone: the primary action keeps its words, the rest keep their
-                labels for screen readers and tooltips while showing only the glyph. */}
+            {/* Glyphs only, at every width. Every one of these keeps its words in the
+                accessible name and in the tooltip — `.actionLabel` hides text from sight
+                without hiding it from a screen reader, which a bare icon would. */}
             <div className={styles.actions}>
               {next && primaryLabel ? (
                 <Button
                   variant="primary"
+                  title={primaryLabel}
                   onClick={() => navigate(`/watch/${encodeURIComponent(next.id)}`)}
                 >
                   <PlayIcon />
-                  {primaryLabel}
+                  <span className={styles.actionLabel}>{primaryLabel}</span>
                 </Button>
               ) : null}
 
@@ -314,7 +391,9 @@ export function SeriesPage() {
                     <span className={styles.actionLabel}>{t('admin.library.editSeries')}</span>
                   </Link>
                   <Button
-                    variant="ghost"
+                    // Secondary, not ghost. Four icon buttons in a row where one has no border
+                    // reads as three controls and a mistake.
+                    variant="secondary"
                     title={t('admin.library.refreshMetadata')}
                     loading={refreshMetadata.isPending}
                     onClick={() =>
@@ -338,9 +417,19 @@ export function SeriesPage() {
                 {next.title ?? t('series.episodeNumber', { number: next.episodeNumber })}
               </p>
             ) : null}
+            </div>
           </div>
         </div>
       </header>
+
+      <Dialog
+        open={overviewOpen}
+        onClose={() => setOverviewOpen(false)}
+        title={detail.title}
+        size="md"
+      >
+        <p className={styles.overviewFull}>{detail.overview ?? t('series.noOverview')}</p>
+      </Dialog>
 
       <div className={styles.body}>
         <section className={styles.block} aria-labelledby="series-episodes">
@@ -419,11 +508,14 @@ export function SeriesPage() {
           )}
         </section>
 
-        <section className={styles.block} aria-labelledby="series-overview">
-          <h2 className={styles.blockHeading} id="series-overview">
-            {t('series.overview')}
+        {/* What is left once the synopsis moved up: the facts nobody needs before pressing
+            play. The section disappears entirely when there are none, rather than standing as
+            an empty heading. */}
+        {detail.originalTitle !== null || detail.genres.length > 0 ? (
+        <section className={styles.block} aria-labelledby="series-details">
+          <h2 className={styles.blockHeading} id="series-details">
+            {t('series.details')}
           </h2>
-          <p className={styles.overview}>{detail.overview ?? t('series.noOverview')}</p>
 
           {detail.originalTitle !== null ? (
             <p className={styles.detailLine}>
@@ -444,6 +536,7 @@ export function SeriesPage() {
             </ul>
           ) : null}
         </section>
+        ) : null}
 
         {alsoKnownAs.length > 0 ? (
           <section className={styles.block} aria-labelledby="series-aka">
