@@ -17,13 +17,38 @@ from app.errors import NotFound
 from app.models import Episode, MediaStatus, PlayEvent, WatchProgress
 from app.utils.time import as_aware, utcnow
 
-#: An episode counts as watched at 90%…
+#: An episode counts as watched at 90% of its duration, and at nothing else.
+#:
+#: There used to be a second rule beside it: complete when under two minutes remained, guarded
+#: to episodes longer than two minutes so a short clip could not qualify at once. It was
+#: written for television, and on this library it was a bug with a wide blast radius — measured
+#: against the real catalogue rather than reasoned about:
+#:
+#:     a 121s episode was marked WATCHED at   2s  (2% in)
+#:     a 150s episode was marked WATCHED at  31s  (21% in)
+#:     a 295s episode was marked WATCHED at 176s  (60% in)
+#:
+#: 1005 files carry a duration here; the median is **72 seconds** and the longest is 295. Sixty
+#: five of them sit in the 120–200s band where that rule fired first, which is to say: playing
+#: two seconds of them marked them watched, took them out of Continue Watching, and moved the
+#: series' progress bar.
+#:
+#: The arithmetic also shows the rule never helped anywhere. A fixed 120s tail only fires
+#: *before* the 90% mark while `0.1 × duration < 120`, i.e. below twenty minutes — so on
+#: long-form, the case it was written for, the percentage always won and the tail was dead
+#: code. It could only ever loosen completion for short content, which is the opposite of what
+#: a credits-detector is for.
+#:
+#: What actually covers "the last stretch is credits" is the player: it reports `ended` and the
+#: API marks the episode complete outright. That signal is exact, so no heuristic has to guess
+#: at it.
 COMPLETION_PERCENT = 90.0
-#: …or when this little is left. Guarded by `MIN_TAIL_DURATION` below so that a clip shorter
-#: than the tail window is not "complete" the instant it starts.
-COMPLETION_TAIL_SECONDS = 120.0
-MIN_TAIL_DURATION = 120.0
 #: Below this the UI must not offer Resume — restarting is cheaper than a 3-second skip.
+#:
+#: Deliberately still absolute. On a 72-second short this is the first fifth, and restarting a
+#: 72-second clip costs nothing; a proportional rule would only make the threshold *smaller*,
+#: offering to resume something the viewer barely started. The owner reports continuity works
+#: correctly on the phone, and this is the constant that decides that.
 RESUME_MIN_SECONDS = 15.0
 #: `play_events` exists only to order continue-watching; one row a minute is plenty.
 PLAY_EVENT_THROTTLE_SECONDS = 60.0
@@ -36,12 +61,14 @@ def compute_percent(position_seconds: float, duration_seconds: float) -> float:
 
 
 def is_complete(position_seconds: float, duration_seconds: float) -> bool:
+    """One rule, proportional, so it means the same thing for 70 seconds and for 70 minutes.
+
+    See `COMPLETION_PERCENT` for the absolute-tail rule this replaced and the measurements that
+    condemned it.
+    """
     if duration_seconds <= 0:
         return False
-    if compute_percent(position_seconds, duration_seconds) >= COMPLETION_PERCENT:
-        return True
-    remaining = duration_seconds - position_seconds
-    return duration_seconds > MIN_TAIL_DURATION and remaining < COMPLETION_TAIL_SECONDS
+    return compute_percent(position_seconds, duration_seconds) >= COMPLETION_PERCENT
 
 
 def resume_position(progress: WatchProgress | None) -> float | None:
@@ -319,7 +346,6 @@ async def progress_for_episodes(
 
 __all__ = [
     "COMPLETION_PERCENT",
-    "COMPLETION_TAIL_SECONDS",
     "RESUME_MIN_SECONDS",
     "clear_progress",
     "compute_percent",
