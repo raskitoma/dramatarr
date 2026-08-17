@@ -1208,65 +1208,6 @@ async def apply_series_patch(
     return titles_changed
 
 
-async def apply_omdb_title(
-    session: AsyncSession,
-    series: Series,
-    found: Any,
-    *,
-    overwrite: bool = False,
-) -> list[str]:
-    """Write an OMDb record onto a series. Returns the names of the fields actually filled.
-
-    **Blanks only, by default**, and that is the load-bearing decision. OMDb's plot is English;
-    this household writes in Spanish. An admin who went and wrote a synopsis, then came back
-    for the year, must not lose the synopsis to get it — so an existing value is left alone
-    unless they explicitly ask to replace it.
-
-    `imdb_id` is always written even when it was already there: it is the identifier this
-    record was fetched by, so storing it is what makes the fill reproducible.
-
-    The row is marked `metadata_locked`, exactly as a manual edit does. Filling from IMDb is a
-    human curating this series, and without the lock the nightly TMDB refresh would overwrite
-    it with the nothing TMDB has.
-    """
-    filled: list[str] = []
-
-    def put(field: str, value: Any) -> None:
-        if value in (None, "", (), []):
-            return
-        if not overwrite and getattr(series, field, None):
-            return
-        setattr(series, field, value)
-        filled.append(field)
-
-    put("title", found.title)
-    put("year", found.year)
-    put("overview", found.plot)
-    put("genres", normalize_genres(found.genres))
-    # A poster URL from OMDb points at IMDb's own image host. It is stored as the source path
-    # the way a TMDB path is; the image-cache job downloads it through the guarded fetch, so
-    # nothing here reaches the network for bytes.
-    put("poster_path", found.poster_url)
-
-    if found.plot and ("overview" in filled):
-        series.overview_source = OverviewSource.MANUAL
-        series.overview_source_url = f"https://www.imdb.com/title/{found.imdb_id}/"
-        series.overview_source_lang = "en"
-
-    series.imdb_id = found.imdb_id
-    if "imdb_id" not in filled:
-        filled.append("imdb_id")
-
-    if filled:
-        series.metadata_locked = True
-        series.updated_at = utcnow()
-        await session.flush()
-        if "title" in filled:
-            await reindex_series(session, series.id)
-        await session.commit()
-    return filled
-
-
 async def deletion_preview(session: AsyncSession, series: Series) -> SeriesDeletionPreview:
     """Everything the admin needs before confirming, including whether it would stick."""
     facts = await _series_facts(session, series.id)
@@ -2354,13 +2295,12 @@ async def apply_dramadex_title(
 ) -> list[str]:
     """Write a DramaDex record onto a series. Returns the field names actually filled.
 
-    This is the fill the application was missing. TMDB and OMDb could offer a year and, on a
-    good day, an English plot; DramaDex knows the platform, the cast, sixteen namespaces of
-    tags and the link to watch it — for a genre neither of the others catalogues.
+    This is the fill the application was missing. The sources this replaced could offer a year
+    and, on a good day, an English plot; DramaDex knows the platform, the cast, sixteen
+    namespaces of tags and the link to watch it — for a genre neither of the others catalogued.
 
-    **Blanks only unless `overwrite`**, the same rule the OMDb path follows and for the same
-    reason: this household writes its synopses in Spanish, and coming back for the cast must
-    not cost the paragraph somebody wrote.
+    **Blanks only unless `overwrite`**: this household writes its synopses in Spanish, and
+    coming back for the cast must not cost the paragraph somebody wrote.
 
     Cast and links are the exception, and deliberately so. They are a *cache* of DramaDex's
     answer rather than something an admin curates here, so they are replaced wholesale — a

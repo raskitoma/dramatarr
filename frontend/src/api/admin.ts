@@ -375,172 +375,6 @@ export function testSmtp(): Promise<TestResult> {
   return api.post<TestResult>('/admin/settings/test-smtp')
 }
 
-export function testTmdb(apiKey?: string): Promise<TestResult> {
-  return api.post<TestResult>('/admin/settings/test-tmdb', apiKey ? { apiKey } : {})
-}
-
-// --- Web image search -------------------------------------------------------------------------
-//
-// Configuration for the optional extra shelf of candidates in the artwork picker. Two providers
-// and no default: `searxng` points at an instance the household already runs, which is why it is
-// the documented choice — nothing to sign up for, no quota to exhaust, and the query stays on
-// their network. `google_cse` stays because it costs nothing to keep and someone has it set up.
-
-/**
- * Provider ids this build knows how to configure, in the order the select offers them.
- *
- * `''` is "off", and it is the shipped state: TMDB already supplies posters, so a web search
- * only adds a second shelf of candidates. A *stored* provider missing from this list is still
- * offered by the settings screen — an older UI must never quietly rewrite a newer server's
- * configuration to "off".
- */
-export const IMAGE_SEARCH_PROVIDERS: readonly string[] = ['', 'searxng', 'google_cse']
-
-/** The i18n key naming a provider, or `''` for one this build has no name for. */
-export function imageSearchProviderKey(provider: string): string {
-  if (provider === '') return 'admin.settings.imageSearchOff'
-  if (provider === 'searxng') return 'admin.settings.imageSearchSearxng'
-  if (provider === 'google_cse') return 'admin.settings.imageSearchGoogleCse'
-  return ''
-}
-
-/**
- * SearXNG's `safesearch` levels, low to high.
- *
- * Stored by name rather than as the instance's 0/1/2, because a settings row that reads
- * `moderate` says what it does; `readSafeSearch` still accepts the numbers, since that is what
- * an admin who edited the row by hand would have written.
- */
-export const SAFE_SEARCH_LEVELS: readonly string[] = ['off', 'moderate', 'strict']
-
-/** What `POST /admin/settings/test-search` answers when the instance is reachable. */
-export interface SearchTestResult {
-  ok: boolean
-  detail: string | null
-  /** Which implementation answered, so the result cannot be read against the wrong provider. */
-  provider: string
-  /** The instance's version, or null when it does not report one. */
-  version: string | null
-  /**
-   * How many of the instance's engines serve images — the number that decides whether this
-   * search will ever return a poster. Null for a provider with no such notion.
-   */
-  imageEngineCount: number | null
-}
-
-interface WireSearchTest {
-  ok?: boolean
-  detail?: string | null
-  provider?: string | null
-  version?: string | null
-  imageEngineCount?: number | null
-  /** Some builds answer with the engines themselves rather than a count. */
-  imageEngines?: number | unknown[] | null
-}
-
-function countEngines(payload: WireSearchTest): number | null {
-  if (typeof payload.imageEngineCount === 'number') return payload.imageEngineCount
-  if (typeof payload.imageEngines === 'number') return payload.imageEngines
-  if (Array.isArray(payload.imageEngines)) return payload.imageEngines.length
-  return null
-}
-
-/**
- * Probes the configured provider.
- *
- * Deliberately body-less: the server tests what it has **stored**, so the settings screen makes
- * the admin save first rather than reporting a success for a URL that is only on screen — the
- * same rule the SMTP test follows, and for the same reason.
- */
-export async function testSearch(): Promise<SearchTestResult> {
-  const data = await api.post<WireSearchTest>('/admin/settings/test-search')
-  return {
-    ok: data.ok !== false,
-    detail: data.detail ?? null,
-    provider: data.provider ?? '',
-    version: data.version ?? null,
-    imageEngineCount: countEngines(data),
-  }
-}
-
-/**
- * The one failure with a specific, likely fix behind it.
- *
- * A stock SearXNG answers in HTML only, so the very first test against a fresh instance fails
- * here — not because anything is misconfigured on this side, but because `json` is missing from
- * `search.formats` in its `settings.yml`. The settings screen singles the code out and shows
- * that fix rather than filing it under "the search failed".
- */
-export function isJsonFormatDisabled(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === 'SEARXNG_JSON_DISABLED'
-}
-
-/** One engine the instance has, as it names it. `bing images`, `duckduckgo images`, … */
-export interface SearchEngine {
-  name: string
-  /** The instance's own categories. `images` is the one that matters here. */
-  categories: string[]
-  enabled: boolean
-  /** The instance's `!bang` shortcut, when it has one. */
-  shortcut: string | null
-}
-
-interface WireEngine {
-  name?: string
-  categories?: unknown
-  enabled?: boolean
-  shortcut?: string | null
-}
-
-function toEngine(engine: WireEngine): SearchEngine {
-  const categories = Array.isArray(engine.categories)
-    ? engine.categories.filter((value): value is string => typeof value === 'string')
-    : []
-  return {
-    name: String(engine.name ?? ''),
-    categories,
-    // Absent means present-and-usable: the instance would not have listed it otherwise.
-    enabled: engine.enabled !== false,
-    shortcut: engine.shortcut ?? null,
-  }
-}
-
-/** The instance's engines, so the admin picks from names it actually has. */
-export async function listSearchEngines(): Promise<SearchEngine[]> {
-  const data = await api.get<WireEngine[] | { engines: WireEngine[] }>('/admin/search/engines')
-  const list = Array.isArray(data) ? data : (data.engines ?? [])
-  return list.map(toEngine).filter((engine) => engine.name !== '')
-}
-
-/**
- * The image engines among them.
- *
- * A server that already filtered its answer sends engines with no categories at all, and
- * dropping every one of them would leave the admin staring at an empty checkbox list next to a
- * test that just succeeded — so an empty match over a non-empty list is read as "already
- * filtered" rather than "no image engines".
- */
-export function imageEngines(engines: SearchEngine[]): SearchEngine[] {
-  const matching = engines.filter((engine) => engine.categories.includes('images'))
-  return matching.length === 0 ? engines : matching
-}
-
-/** Engine names from either stored shape, trimmed and de-duplicated, order preserved. */
-export function parseEngineList(value: unknown): string[] {
-  const raw = Array.isArray(value) ? value : String(value ?? '').split(',')
-  const names: string[] = []
-  for (const entry of raw) {
-    const name = typeof entry === 'string' ? entry.trim() : ''
-    if (name !== '' && !names.includes(name)) names.push(name)
-  }
-  return names
-}
-
-/** The comma-separated form, which is what both the free-text field and the wire use. */
-export function formatEngineList(names: readonly string[]): string {
-  return names.join(', ')
-}
-
 // --- Library curation -----------------------------------------------------------------------
 
 export function listAdminSeries(params: AdminSeriesQuery = {}): Promise<Page<AdminSeriesRow>> {
@@ -671,89 +505,8 @@ export function unlinkSeries(id: string): Promise<SeriesUnlinked> {
 
 // --- Artwork --------------------------------------------------------------------------------
 
-/** Which slot an image fills. The web search vouches for neither, so its results carry `''`. */
+/** Which slot an image fills. */
 export type ArtworkKind = 'poster' | 'backdrop'
-
-/**
- * One image on offer, whichever source produced it.
- *
- * `url` is exactly what `POST .../artwork` takes back, so a card never has to reconstruct an
- * address. Dimensions and rating are on every card because they are the whole basis for
- * choosing: a 300×450 upscale and a 2000×3000 scan look identical at thumbnail size.
- */
-export interface ArtworkCandidate {
-  /** `tmdb`, or the image-search provider's name (`searxng`, `google_cse`). */
-  source: string
-  /**
-   * Which of the provider's engines found this one — `bing images`, `duckduckgo images`, …
-   *
-   * Optional because only a metasearch provider has engines to name, and because an older
-   * server does not send it. Read it through `candidateEngine`, which falls back to the
-   * provider: the point on screen is that a result can be traced to where it came from, and a
-   * poster from a wallpaper site is worth a different look than one from a poster database.
-   */
-  engine?: string | null
-  kind: ArtworkKind | ''
-  url: string
-  thumbnailUrl: string | null
-  width: number | null
-  height: number | null
-  /** ISO-639-1, or null for textless artwork — usually the most useful kind. */
-  language: string | null
-  voteAverage: number | null
-  voteCount: number | null
-  /** Web results only: the page the image was found on. */
-  title: string
-  contextUrl: string | null
-}
-
-/**
- * Why a source contributed nothing.
- *
- * An unavailable source is not an error: a fresh install has no web search configured and a
- * series may not be linked to TMDB yet. Both are ordinary states with different answers, so
- * the code travels and the picker turns it into the right sentence.
- */
-export type ArtworkSourceReason = 'NOT_LINKED' | 'NOT_CONFIGURED' | 'PROVIDER_ERROR' | ''
-
-export interface ArtworkSource {
-  /** The channel: `tmdb` or `web`. */
-  name: string
-  /** Which implementation answered — `searxng`, `google_cse`, or `''` for none. */
-  provider: string
-  available: boolean
-  reason: ArtworkSourceReason
-  count: number
-}
-
-/** Where a candidate actually came from: the engine when there is one, else the provider. */
-export function candidateEngine(candidate: ArtworkCandidate): string {
-  const engine = (candidate.engine ?? '').trim()
-  return engine === '' ? candidate.source : engine
-}
-
-export interface ArtworkOptions {
-  seriesId: string
-  tmdbId: number | null
-  posters: ArtworkCandidate[]
-  backdrops: ArtworkCandidate[]
-  /** Web-search hits, kept apart because they carry no declared kind. */
-  web: ArtworkCandidate[]
-  sources: ArtworkSource[]
-}
-
-/** The source entry for a channel, or null when the server said nothing about it. */
-export function artworkSource(
-  options: ArtworkOptions | undefined,
-  name: 'tmdb' | 'web',
-): ArtworkSource | null {
-  return options?.sources.find((source) => source.name === name) ?? null
-}
-
-/** Read-only: listing candidates neither downloads nor commits anything. */
-export function listArtwork(seriesId: string): Promise<ArtworkOptions> {
-  return api.get<ArtworkOptions>(`/library/series/${seriesId}/artwork`)
-}
 
 /** What was stored, and the address to render immediately. */
 export interface ArtworkApplied {
@@ -1509,9 +1262,6 @@ export const adminKeys = {
   users: () => [...adminKeys.all, 'users'] as const,
   invites: () => [...adminKeys.all, 'invites'] as const,
   settings: () => [...adminKeys.all, 'settings'] as const,
-  /* Discovery, not configuration: the engine list belongs to the instance, so it is cached
-   * apart from the settings it ends up writing into. */
-  searchEngines: () => [...adminKeys.all, 'search-engines'] as const,
   /* Effectively static — it changes only when the server does — so the editor caches it hard
    * rather than refetching a constant on every visit to a series. */
   vocabulary: () => [...adminKeys.all, 'vocabulary'] as const,
@@ -1532,15 +1282,6 @@ export const adminKeys = {
    * is a different plan, and each one stays cached so flipping back is instant. */
   importPlans: () => [...adminKeys.all, 'import-plan'] as const,
   importPlan: (request: ImportPlanRequest) => [...adminKeys.importPlans(), request] as const,
-  tmdbSearch: (q: string, year: number | null, language: string) =>
-    [...adminKeys.all, 'tmdb-search', q, year, language] as const,
-  tmdbLookup: (tmdbId: number | null, imdbId: string) =>
-    [...adminKeys.all, 'tmdb-lookup', tmdbId, imdbId] as const,
-  artwork: (seriesId: string) => [...adminKeys.series(), 'artwork', seriesId] as const,
-  /* Keyed by the series as well as the query: the endpoint is per-series, and a hit's ids are
-   * only actionable against the series they were searched for. */
-  discover: (seriesId: string, q: string, platforms = false) =>
-    [...adminKeys.series(), 'discover', seriesId, q, platforms] as const,
   /* Read fresh every time it is opened: it is a statement about what is on disk right
    * now, and a cached one would invite approving a plan the filesystem has moved past. */
   renamePlan: (seriesId: string) => [...adminKeys.series(), 'rename-plan', seriesId] as const,

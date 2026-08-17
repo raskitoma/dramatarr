@@ -1,7 +1,8 @@
 """Runtime-mutable settings, backed by the `settings` table with a process-local cache.
 
 Boot config (paths, secret key, RP id) lives in `app.config`. Everything an admin can change
-from the UI lives here, so changing the TMDB key or SMTP host never requires a restart.
+from the UI lives here, so changing the indexer's address or the SMTP host never requires a
+restart.
 """
 
 from __future__ import annotations
@@ -33,14 +34,12 @@ SECRET_KEYS: frozenset[str] = frozenset(
 
 DEFAULTS: dict[str, Any] = {
     #: DramaDex — the household's own indexer of DramaBox and ReelShort, and the only source
-    #: that catalogues this library's genre. Everything above it (TMDB, OMDb, the SearXNG
-    #: discovery search) predates it and exists because it did not. Empty means "not connected
-    #: yet": every caller treats that as a feature nobody has switched on, never as an error.
+    #: that catalogues this library's genre. TMDB, OMDb and the SearXNG discovery search all
+    #: predated it, all existed because it did not, and all are gone. Empty means "not
+    #: connected yet": every caller treats that as a feature nobody has switched on, never as
+    #: an error.
     "dramadex.base_url": "",
     "dramadex.api_key": "",
-    #: OMDb, a public API over IMDb's data. The **fallback** for an IMDb id TMDB does not
-    #: carry — which for this library's vertical short drama is most of them. Empty disables
-    #: the feature entirely; nothing else changes.
     "smtp.host": "",
     "smtp.port": 587,
     "smtp.username": "",
@@ -64,31 +63,6 @@ DEFAULTS: dict[str, Any] = {
     #: Whether a Google sign-in may *accept* an invitation addressed to the same verified
     #: address. It can never create an account any other way — dramatarr stays invite-only.
     "oauth.google.allow_invites": True,
-    # Web image search for the artwork picker. Off by default: TMDB's own gallery is the
-    # primary source and needs no configuration, so this is the fallback for the show TMDB has
-    # one bad poster for, not a requirement. `""` means disabled.
-    #
-    # Two providers. `"searxng"` is the recommended one — the household's own SearXNG, no
-    # third-party key, no quota, and the query never leaves the network; it needs
-    # `base_url` and nothing else. `"google_cse"` needs `api_key` + `cse_id`.
-    #
-    # The keys below `provider` are deliberately provider-neutral, because "which engines,
-    # how safe, what language, how long to wait" are questions any search backend can answer;
-    # only `cse_id` is specific to Google.
-    #: Optional for SearXNG (some instances sit behind a proxy that wants a token), required
-    #: for Google. Secret either way — see SECRET_KEYS.
-    #: SearXNG only. The instance's origin, e.g. `http://10.0.50.30:8080`. A private address
-    #: here is normal and is *not* filtered by the artwork download guard — see the SSRF note
-    #: in `app.services.images`.
-    #: SearXNG only. Comma-separated engine names, e.g. `bing images,duckduckgo images`.
-    #: Empty means "whatever the instance has enabled for the images category".
-    #: SearXNG's own scale: 0 off, 1 moderate, 2 strict. The settings screen writes the *name*
-    #: (`off` / `moderate` / `strict`) because a row that reads `moderate` says what it does;
-    #: `images.parse_safe_search` accepts either spelling, and both end up as the number
-    #: SearXNG's API takes.
-    #: BCP-47 or a SearXNG language tag; `""` uses the instance's default.
-    #: Seconds. A SearXNG query fans out to several engines, so it is slower than a plain API.
-    #: Google Custom Search only: the search-engine id.
 }
 
 

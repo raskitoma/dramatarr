@@ -15,7 +15,6 @@ from collections.abc import AsyncGenerator, Iterable
 from pathlib import Path
 from typing import Annotated, Any, cast
 
-import httpx
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import CursorResult, delete, func, select
@@ -52,13 +51,9 @@ from app.schemas.admin import (
     JobOut,
     JobReorderIn,
     QueueStateOut,
-    SearchEngineOut,
-    SearchEnginesOut,
-    SearchTestOut,
     SettingsUpdateIn,
     StatsOut,
     TestResultOut,
-    TmdbTestIn,
     UserOut,
     UserPatchIn,
     VocabularyOut,
@@ -75,10 +70,9 @@ from app.schemas.requests import (
 from app.services import audit
 from app.services import oauth as oauth_service
 from app.services import requests as requests_service
-from app.services.images import diagnose_search, list_search_engines
 from app.services.mail import send_mail
 from app.services import dramadex
-from app.services.settings import REDACTED, SettingsService
+from app.services.settings import SettingsService
 from app.services.vocab import CONTENT_RATINGS, PROVIDERS
 from app.utils.ids import new_token
 from app.utils.time import in_minutes, is_expired, utcnow
@@ -103,7 +97,6 @@ TERMINAL_STATUSES: tuple[str, ...] = (
     JobStatus.CANCELED,
 )
 HEARTBEAT_SECONDS = 25.0
-TMDB_BASE = "https://api.themoviedb.org/3"
 
 
 # --- Shared helpers -------------------------------------------------------------------------
@@ -736,35 +729,6 @@ async def get_admin_settings(session: SessionDep) -> dict[str, Any]:
     return _with_derived(await SettingsService(session).all(redact=True))
 
 
-async def _forget_stale_search_key(
-    service: SettingsService, values: dict[str, Any]
-) -> dict[str, Any]:
-    """Drop a stored image-search secret when the provider it was typed for is being replaced.
-
-    `images.search.api_key` is **one slot serving two providers** — Google's required API key,
-    and the optional token a SearXNG behind an authenticating proxy wants. That is harmless
-    while the provider stays put and wrong the instant it changes: the key an admin pasted for
-    `googleapis.com` would otherwise go out as `Authorization: Bearer …` to their own SearXNG
-    instance, which is a live Google credential handed to a different host that never needed it.
-
-    So a provider change forgets the key, unless the same save supplies a new one — `REDACTED`
-    does not count, since that means "keep what is stored" and what is stored belongs to the
-    old provider. The other provider's *non-secret* fields (`cse_id`, `base_url`, engines) are
-    deliberately left alone: switching back should not mean typing everything in again, and
-    those are not credentials.
-    """
-    incoming = values.get("images.search.provider")
-    if incoming is None:
-        return values
-    stored = (await service.get_str("images.search.provider")).strip().lower()
-    if str(incoming).strip().lower() == stored:
-        return values
-    supplied = values.get("images.search.api_key")
-    if isinstance(supplied, str) and supplied not in {"", REDACTED}:
-        return values
-    return values | {"images.search.api_key": ""}
-
-
 @router.put("/settings", response_model=dict[str, Any])
 async def update_admin_settings(
     payload: SettingsUpdateIn,
@@ -772,7 +736,7 @@ async def update_admin_settings(
     admin: AdminUser,
 ) -> dict[str, Any]:
     service = SettingsService(session)
-    values = await _forget_stale_search_key(service, payload.root)
+    values = payload.root
     await service.update_many(values, user_id=admin.id)
     await audit.record(
         session, admin.id, "settings.update", "settings", None, audit.scrub(values)
@@ -801,106 +765,6 @@ async def test_smtp(session: SessionDep, admin: AdminUser) -> TestResultOut:
             "SMTP_SEND_FAILED", f"SMTP send failed: {exc}", status.HTTP_502_BAD_GATEWAY
         ) from exc
     return TestResultOut(ok=True, detail=admin.email)
-
-
-@router.post("/settings/test-tmdb", response_model=TestResultOut)
-async def test_tmdb(
-    session: SessionDep,
-    admin: AdminUser,
-    payload: TmdbTestIn | None = None,
-) -> TestResultOut:
-    service = SettingsService(session)
-    candidate = (payload.api_key if payload else None) or ""
-    # An unchanged form field arrives redacted; fall back to what is stored.
-    if not candidate or candidate == REDACTED:
-        candidate = await service.get_str("tmdb.api_key")
-    if not candidate:
-        raise AppError("TMDB_KEY_MISSING", "No TMDB API key configured")
-
-    detail = await _probe_tmdb(candidate)
-    return TestResultOut(ok=True, detail=detail)
-
-
-async def _probe_tmdb(api_key: str) -> str:
-    """Accepts either a v3 key (query param) or a v4 read token (bearer)."""
-    headers: dict[str, str] = {}
-    params: dict[str, str] = {}
-    if api_key.count(".") == 2:
-        headers["Authorization"] = f"Bearer {api_key}"
-    else:
-        params["api_key"] = api_key
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{TMDB_BASE}/configuration", params=params, headers=headers
-            )
-    except httpx.HTTPError as exc:
-        raise AppError(
-            "TMDB_UNREACHABLE", f"Could not reach TMDB: {exc}", status.HTTP_502_BAD_GATEWAY
-        ) from exc
-
-    if response.status_code in (401, 403):
-        raise AppError("TMDB_INVALID_KEY", "TMDB rejected the API key")
-    if response.status_code >= 400:
-        raise AppError(
-            "TMDB_ERROR",
-            f"TMDB returned HTTP {response.status_code}",
-            status.HTTP_502_BAD_GATEWAY,
-        )
-
-    try:
-        base_url = str(response.json().get("images", {}).get("secure_base_url", ""))
-    except ValueError:
-        base_url = ""
-    return base_url or "ok"
-
-
-# --- Image search diagnostics ------------------------------------------------------------------
-#
-# Two routes, and between them they are the difference between a five-minute setup and an
-# afternoon. SearXNG ships with its JSON API **disabled**, so the very first thing a new
-# configuration does is fail — and it fails as HTML, or as a bare 403, which a naive client
-# reports as "the provider returned an error". `test-search` names that case exactly and says
-# which line of settings.yml to change. `search/engines` then hands over the instance's real
-# image-engine list, because every instance has a different set and a mistyped engine name is
-# a silent no-op rather than an error.
-
-
-@router.post("/settings/test-search", response_model=SearchTestOut)
-async def test_search(session: SessionDep, admin: AdminUser) -> SearchTestOut:
-    """Reach the configured image-search provider and report what came back.
-
-    Failures are raised, not flattened into `ok: false`: `SEARXNG_JSON_DISABLED`,
-    `SEARXNG_UNREACHABLE`, `SEARXNG_BAD_RESPONSE` and `SEARCH_NOT_CONFIGURED` mean four
-    different repairs, and a single "test failed" would make the admin guess which.
-    """
-    result = await diagnose_search(session)
-    return SearchTestOut(
-        ok=True,
-        detail=result.base_url or result.provider,
-        provider=result.provider,
-        base_url=result.base_url,
-        version=result.version,
-        image_engine_count=result.image_engine_count,
-        sample_query=result.sample_query,
-        sample_result_count=result.sample_result_count,
-    )
-
-
-@router.get("/search/engines", response_model=SearchEnginesOut)
-async def search_engines(session: SessionDep) -> SearchEnginesOut:
-    """The instance's own image engines, so the settings form offers a list to pick from."""
-    listing = await list_search_engines(session)
-    return SearchEnginesOut(
-        provider="searxng",
-        base_url=listing.base_url,
-        version=listing.version,
-        engines=[
-            SearchEngineOut(name=engine.name, enabled=engine.enabled, shortcut=engine.shortcut)
-            for engine in listing.engines
-        ],
-    )
 
 
 # --- Vocabulary -----------------------------------------------------------------------------

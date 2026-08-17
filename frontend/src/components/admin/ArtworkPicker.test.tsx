@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
 /**
- * The two things the poster picker must not get wrong.
+ * What the poster picker must not get wrong, now that it is a manual override and only that.
  *
- * An unconfigured web image search is not a failure — it is the shipped state — so it has to
- * read as a sentence with a way to fix it, never as an empty grid the admin is left to
- * interpret and never as a red error box for something nobody broke.
- *
- * And a pasted URL is checked here rather than by the browser: a `type="url"` input would let
+ * A pasted URL is checked here rather than by the browser: a `type="url"` input would let
  * native constraint validation block the submit and answer in its own words, so the field would
  * have two different error languages depending on which check happened to fire.
+ *
+ * Nothing is committed from a URL until the admin has *seen* it. The whole point of the preview
+ * is that a link to a 404 page or to the wrong show should be visible here, not after it is the
+ * series' face.
+ *
+ * And a file is screened before it is offered — wrong type or oversized is answered in the
+ * field, without a round trip, because the server would answer the same thing more slowly.
  *
  * Real translations are loaded rather than a `t: key => key` stub — the assertions are about
  * sentences reaching the screen, not about keys being looked up.
@@ -16,87 +19,25 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ToastProvider } from '@/components/Toast'
 import { setupI18n } from '@/i18n'
 
-const listArtwork = vi.fn()
 const selectArtwork = vi.fn()
-
-vi.mock('wouter', () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="/admin/settings">{children}</a>,
-}))
+const uploadArtwork = vi.fn()
 
 vi.mock('@/api/admin', async () => {
   const actual = await vi.importActual<typeof import('@/api/admin')>('@/api/admin')
   return {
     ...actual,
-    listArtwork: (...args: unknown[]) => listArtwork(...args),
     selectArtwork: (...args: unknown[]) => selectArtwork(...args),
-    uploadArtwork: vi.fn(),
+    uploadArtwork: (...args: unknown[]) => uploadArtwork(...args),
   }
 })
 
 const { ArtworkPicker } = await import('./ArtworkPicker')
-
-type Reason = 'NOT_LINKED' | 'NOT_CONFIGURED' | 'PROVIDER_ERROR'
-
-function candidate(overrides: Record<string, unknown> = {}) {
-  return {
-    source: 'tmdb',
-    kind: 'poster',
-    url: 'https://img.example/a.jpg',
-    thumbnailUrl: 'https://img.example/a-thumb.jpg',
-    width: 1000,
-    height: 1500,
-    language: 'ko',
-    voteAverage: 5.42,
-    voteCount: 12,
-    title: '',
-    contextUrl: null,
-    ...overrides,
-  }
-}
-
-/**
- * An `ArtworkCandidates` payload. `tmdb` / `web` take either the candidates that source
- * returned or the reason it returned none — which is exactly the shape of the decision the
- * picker has to make about each section.
- */
-function options(input: {
-  posters?: ReturnType<typeof candidate>[]
-  backdrops?: ReturnType<typeof candidate>[]
-  webResults?: ReturnType<typeof candidate>[]
-  tmdb?: Reason
-  web?: Reason
-}) {
-  const posters = input.posters ?? []
-  const backdrops = input.backdrops ?? []
-  const web = input.webResults ?? []
-  return {
-    seriesId: 's1',
-    tmdbId: 4242,
-    posters,
-    backdrops,
-    web,
-    sources: [
-      input.tmdb
-        ? { name: 'tmdb', provider: 'tmdb', available: false, reason: input.tmdb, count: 0 }
-        : {
-            name: 'tmdb',
-            provider: 'tmdb',
-            available: true,
-            reason: '',
-            count: posters.length + backdrops.length,
-          },
-      input.web
-        ? { name: 'web', provider: '', available: false, reason: input.web, count: 0 }
-        : { name: 'web', provider: 'google_cse', available: true, reason: '', count: web.length },
-    ],
-  }
-}
 
 function renderIn(ui: ReactElement) {
   const client = new QueryClient({
@@ -110,6 +51,11 @@ function renderIn(ui: ReactElement) {
 }
 
 beforeAll(async () => {
+  // jsdom has no blob URLs, and the file preview is built on one.
+  if (typeof URL.createObjectURL !== 'function') {
+    URL.createObjectURL = () => 'blob:preview'
+    URL.revokeObjectURL = () => {}
+  }
   // jsdom ships <dialog> without the modal methods the Dialog component relies on.
   if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
     HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
@@ -130,37 +76,21 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ArtworkPicker', () => {
-  it('shows dimensions, rating and language on each candidate', async () => {
-    listArtwork.mockResolvedValue(
-      options({
-        posters: [
-          candidate({ url: 'https://img.example/a.jpg', width: 2000, height: 3000 }),
-        ],
-      }),
-    )
-
+  it('offers only the two paths that still exist, and says what choosing costs', async () => {
     renderIn(<ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" />)
 
-    // The whole basis for choosing between two thumbnails that look identical at this size.
-    await waitFor(() => expect(screen.getByText('2000×3000')).toBeTruthy())
-    expect(screen.getByText('★ 5.4')).toBeTruthy()
-    // Once in the language filter, once on the card itself.
-    expect(screen.getAllByText('coreano').length).toBe(2)
+    await waitFor(() => expect(document.getElementById('artwork-url')).toBeTruthy())
+    expect(document.getElementById('artwork-file')).toBeTruthy()
+
     // Choosing artwork locks the series' metadata, and that is said before any choice is made.
     expect(screen.getByText(/queda bloqueada/i)).toBeTruthy()
-  })
 
-  it('answers an unconfigured web search with a note, not an empty grid', async () => {
-    listArtwork.mockResolvedValue(options({ web: 'NOT_CONFIGURED' }))
-    renderIn(<ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" />)
-
-    await waitFor(() => expect(screen.getByText(/no está configurada/i)).toBeTruthy())
-    // …and it points at the screen that fixes it.
-    expect(screen.getByRole('link', { name: /preferencias/i })).toBeTruthy()
+    // No gallery is fetched, offered, or explained away: the sources that fed one are gone.
+    expect(screen.queryByText(/TMDB/i)).toBeNull()
+    expect(document.getElementById('artwork-language')).toBeNull()
   })
 
   it('previews a pasted URL before committing it, and refuses one that is not a URL', async () => {
-    listArtwork.mockResolvedValue(options({}))
     renderIn(<ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" />)
     await waitFor(() => expect(document.getElementById('artwork-url')).toBeTruthy())
 
@@ -181,5 +111,36 @@ describe('ArtworkPicker', () => {
     await waitFor(() =>
       expect(selectArtwork).toHaveBeenCalledWith('s1', 'poster', 'https://img.example/poster.jpg'),
     )
+  })
+
+  it('commits an uploaded file against the slot that is selected, not always the poster', async () => {
+    renderIn(<ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" />)
+    await waitFor(() => expect(document.getElementById('artwork-file')).toBeTruthy())
+
+    fireEvent.change(document.getElementById('artwork-kind') as HTMLSelectElement, {
+      target: { value: 'backdrop' },
+    })
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'art.png', { type: 'image/png' })
+    fireEvent.change(document.getElementById('artwork-file') as HTMLInputElement, {
+      target: { files: [file] },
+    })
+
+    const use = await screen.findByRole('button', { name: /usar/i })
+    fireEvent.click(use)
+    await waitFor(() => expect(uploadArtwork).toHaveBeenCalledWith('s1', 'backdrop', file))
+  })
+
+  it('refuses a file of the wrong type in the field, without a round trip', async () => {
+    renderIn(<ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" />)
+    await waitFor(() => expect(document.getElementById('artwork-file')).toBeTruthy())
+
+    const file = new File(['nope'], 'notes.txt', { type: 'text/plain' })
+    fireEvent.change(document.getElementById('artwork-file') as HTMLInputElement, {
+      target: { files: [file] },
+    })
+
+    expect(screen.getByText(/ese formato no se puede usar/i)).toBeTruthy()
+    expect(uploadArtwork).not.toHaveBeenCalled()
   })
 })

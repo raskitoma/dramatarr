@@ -11,23 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  IMAGE_SEARCH_PROVIDERS,
-  SAFE_SEARCH_LEVELS,
-  adminKeys,
-  apiErrorKeys,
-  formatEngineList,
-  getSettings,
-  imageEngines,
-  imageSearchProviderKey,
-  isJsonFormatDisabled,
-  listSearchEngines,
-  parseEngineList,
-  testSearch,
-  testSmtp,
-  testTmdb,
-  updateSettings,
-} from '@/api/admin'
+import { adminKeys, getSettings, testSmtp, updateSettings } from '@/api/admin'
 import { SECRET_SENTINEL, type SystemSettings } from '@/api/types'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -50,7 +34,6 @@ const SECTIONS: readonly TocSection[] = [
   { id: 'settings-site', labelKey: 'admin.settings.site' },
   { id: 'settings-library', labelKey: 'admin.settings.librarySection' },
   { id: 'settings-dramadex', labelKey: 'admin.settings.dramadexSection' },
-  { id: 'settings-metadata', labelKey: 'admin.settings.metadata' },
   { id: 'settings-email', labelKey: 'admin.settings.email' },
   { id: 'settings-security', labelKey: 'admin.settings.security' },
   { id: 'settings-signin', labelKey: 'admin.settings.signIn' },
@@ -60,7 +43,6 @@ type SectionId =
   | 'site'
   | 'library'
   | 'dramadex'
-  | 'metadata'
   | 'email'
   | 'security'
   | 'signin'
@@ -70,22 +52,8 @@ interface FormState {
   defaultLocale: string
   scanCron: string
   sourceBaseUrl: string
-  tmdbKey: string
   dramadexUrl: string
   dramadexKey: string
-  omdbKey: string
-  tmdbLanguage: string
-  imageSearchProvider: string
-  imageSearchKey: string
-  imageSearchCseId: string
-  searxngBaseUrl: string
-  searxngSafeSearch: string
-  searxngLanguage: string
-  searxngTimeout: string
-  /** The chosen engine names, canonical. Empty means the instance's own defaults. */
-  searchEngines: string[]
-  /** The same list as text, for the field shown when the instance could not be asked. */
-  searchEnginesText: string
   smtpHost: string
   smtpPort: string
   smtpUsername: string
@@ -103,38 +71,6 @@ interface FormState {
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-/** Neither too permissive to be worth checking nor stricter than what the server accepts. */
-const MAX_SEARCH_TIMEOUT_SECONDS = 120
-
-/**
- * What a SearXNG instance needs adding to its `settings.yml`, shown verbatim.
- *
- * Not translated and not paraphrased: it is YAML the admin pastes into a file, and the failure
- * mode of describing it in prose is an admin who indents it wrong.
- */
-const SEARXNG_JSON_SNIPPET = `search:
-  formats:
-    - html
-    - json`
-
-/** The i18n key for a safe-search level. A level this build has no name for shows its own. */
-function safeSearchLabelKey(level: string): string {
-  if (level === 'off') return 'admin.settings.searxngSafeOff'
-  if (level === 'moderate') return 'admin.settings.searxngSafeModerate'
-  if (level === 'strict') return 'admin.settings.searxngSafeStrict'
-  return level
-}
-
-/** `http(s)` only, which is all the server will talk to either. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value.trim())
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
 
 // --- Cron ------------------------------------------------------------------------------------
 
@@ -272,56 +208,14 @@ function readBool(
   return typeof value === 'boolean' ? value : fallback
 }
 
-/** Moderate rather than off: this searches the open web for a picture of a television show. */
-const DEFAULT_SAFE_SEARCH = 'moderate'
-
-/**
- * The stored safe-search level, by name.
- *
- * SearXNG itself speaks 0/1/2 and a settings row edited by hand may well say `1`, so both are
- * accepted; anything else falls back to the default rather than silently searching wider than
- * the admin asked for. Reading and defaulting live in one place so `toForm` and the patch
- * comparison can never disagree about what "unset" means and mark the section dirty on load.
- */
-function readSafeSearch(settings: Partial<SystemSettings>): string {
-  const raw: unknown = settings['images.search.safe_search']
-  if (typeof raw === 'number') return SAFE_SEARCH_LEVELS[raw] ?? DEFAULT_SAFE_SEARCH
-  const text = String(raw ?? '')
-    .trim()
-    .toLowerCase()
-  if (text === '') return DEFAULT_SAFE_SEARCH
-  if (SAFE_SEARCH_LEVELS.includes(text)) return text
-  const level = Number(text)
-  if (Number.isInteger(level)) return SAFE_SEARCH_LEVELS[level] ?? DEFAULT_SAFE_SEARCH
-  return DEFAULT_SAFE_SEARCH
-}
-
-/** The chosen engines, from whichever shape the server stores them in. */
-function readEngines(settings: Partial<SystemSettings>): string[] {
-  return parseEngineList(settings['images.search.engines'])
-}
-
 function toForm(settings: Partial<SystemSettings>): FormState {
-  const engines = readEngines(settings)
   return {
     siteName: readString(settings, 'site.name'),
     defaultLocale: readString(settings, 'site.default_locale') || 'es',
     scanCron: readString(settings, 'library.scan_cron'),
     sourceBaseUrl: readString(settings, 'library.source_base_url'),
-    tmdbKey: '',
     dramadexUrl: readString(settings, 'dramadex.base_url'),
     dramadexKey: '',
-    omdbKey: '',
-    tmdbLanguage: readString(settings, 'tmdb.language'),
-    imageSearchProvider: readString(settings, 'images.search.provider'),
-    imageSearchKey: '',
-    imageSearchCseId: readString(settings, 'images.search.cse_id'),
-    searxngBaseUrl: readString(settings, 'images.search.base_url'),
-    searxngSafeSearch: readSafeSearch(settings),
-    searxngLanguage: readString(settings, 'images.search.language'),
-    searxngTimeout: readString(settings, 'images.search.timeout'),
-    searchEngines: engines,
-    searchEnginesText: formatEngineList(engines),
     smtpHost: readString(settings, 'smtp.host'),
     smtpPort: readString(settings, 'smtp.port'),
     smtpUsername: readString(settings, 'smtp.username'),
@@ -386,9 +280,6 @@ export function AdminSettingsPage() {
   const [form, setForm] = useState<FormState>(() => toForm({}))
   const [editingDramadexKey, setEditingDramadexKey] = useState(false)
   const [seeded, setSeeded] = useState(false)
-  const [editingTmdbKey, setEditingTmdbKey] = useState(false)
-  const [editingOmdbKey, setEditingOmdbKey] = useState(false)
-  const [editingImageSearchKey, setEditingImageSearchKey] = useState(false)
   const [editingSmtpPassword, setEditingSmtpPassword] = useState(false)
   const [editingGoogleSecret, setEditingGoogleSecret] = useState(false)
   const [savedSection, setSavedSection] = useState<SectionId | null>(null)
@@ -410,8 +301,6 @@ export function AdminSettingsPage() {
       updateSettings(input.patch),
     onSuccess: (result, input) => {
       setForm(toForm(result))
-      setEditingTmdbKey(false)
-      setEditingImageSearchKey(false)
       setEditingSmtpPassword(false)
       setEditingGoogleSecret(false)
       setSavedSection(input.section)
@@ -419,23 +308,12 @@ export function AdminSettingsPage() {
     },
   })
 
-  const tmdbTest = useMutation({
-    mutationFn: () => testTmdb(tmdbKeyEditable && form.tmdbKey ? form.tmdbKey : undefined),
-  })
-
   const smtpTest = useMutation({
     mutationFn: () => testSmtp(),
   })
 
-  const searchTest = useMutation({
-    mutationFn: () => testSearch(),
-  })
-
-  const tmdbConfigured = settings['tmdb.api_key'] === SECRET_SENTINEL
   const dramadexConfigured = settings['dramadex.api_key'] === SECRET_SENTINEL
   const dramadexKeyEditable = !dramadexConfigured || editingDramadexKey
-  const omdbConfigured = settings['omdb.api_key'] === SECRET_SENTINEL
-  const imageSearchKeyConfigured = settings['images.search.api_key'] === SECRET_SENTINEL
   const smtpPasswordConfigured = settings['smtp.password'] === SECRET_SENTINEL
   const googleSecretConfigured = settings['oauth.google.client_secret'] === SECRET_SENTINEL
 
@@ -444,56 +322,8 @@ export function AdminSettingsPage() {
   // there is a stored value to replace. Gating on the flag alone made a first-time key
   // impossible to save *or* test — it was silently dropped from the patch and the test probed
   // the empty stored value instead.
-  const tmdbKeyEditable = !tmdbConfigured || editingTmdbKey
-  const omdbKeyEditable = !omdbConfigured || editingOmdbKey
-  const imageSearchKeyEditable = !imageSearchKeyConfigured || editingImageSearchKey
   const smtpPasswordEditable = !smtpPasswordConfigured || editingSmtpPassword
   const googleSecretEditable = !googleSecretConfigured || editingGoogleSecret
-
-  // A stored provider this build does not know still gets an option of its own, so saving an
-  // unrelated field cannot quietly turn the image search off.
-  const providerOptions = IMAGE_SEARCH_PROVIDERS.includes(form.imageSearchProvider)
-    ? IMAGE_SEARCH_PROVIDERS
-    : [...IMAGE_SEARCH_PROVIDERS, form.imageSearchProvider]
-
-  // Which provider is selected decides which fields exist at all: a Google engine id sitting
-  // under a SearXNG URL is not a harmless extra field, it is a question the admin has to work
-  // out the answer to ("do I need this one?") every time they open the screen.
-  const searxngSelected = form.imageSearchProvider === 'searxng'
-  const googleSelected = form.imageSearchProvider === 'google_cse'
-
-  /**
-   * The instance's engine list, asked for only once it has answered a test.
-   *
-   * Discovery is a convenience, never a gate: the free-text field below covers a failed call,
-   * an instance that does not expose the route, and the admin who already knows the names.
-   */
-  const enginesQuery = useQuery({
-    queryKey: adminKeys.searchEngines(),
-    queryFn: listSearchEngines,
-    enabled: searxngSelected && searchTest.isSuccess,
-    staleTime: 5 * 60_000,
-    retry: false,
-  })
-
-  const discoveredEngines = enginesQuery.data ? imageEngines(enginesQuery.data) : []
-  // A configured engine the instance did not list keeps its checkbox — an engine disabled for
-  // an afternoon must not disappear from the configuration on the next save.
-  const engineChoices: string[] = enginesQuery.isSuccess
-    ? [
-        ...discoveredEngines.map((engine) => engine.name),
-        ...form.searchEngines.filter(
-          (name) => !discoveredEngines.some((engine) => engine.name === name),
-        ),
-      ]
-    : []
-
-  const toggleEngine = (name: string) => {
-    const next = form.searchEngines.includes(name)
-      ? form.searchEngines.filter((entry) => entry !== name)
-      : [...form.searchEngines, name]
-    setField({ searchEngines: next, searchEnginesText: formatEngineList(next) })
-  }
 
   // --- Validation ---------------------------------------------------------------------------
   const cronValid = isValidCron(form.scanCron)
@@ -512,25 +342,6 @@ export function AdminSettingsPage() {
   const ttlNumber = form.inviteTtlHours === '' ? null : Number(form.inviteTtlHours)
   const ttlValid = ttlNumber !== null && Number.isInteger(ttlNumber) && ttlNumber > 0
   const ttlError = ttlValid ? undefined : t('admin.settings.invalidNumber')
-
-  // An empty SearXNG URL is not an error: it is the half-configured state a provider sits in
-  // between choosing it and pasting the address, and the server treats that as "off" exactly
-  // like a Google setup missing its engine id. A *malformed* one is worth stopping.
-  const searxngUrl = form.searxngBaseUrl.trim()
-  const searxngUrlValid = !searxngSelected || searxngUrl === '' || isHttpUrl(searxngUrl)
-  const searxngUrlError = searxngUrlValid ? undefined : t('admin.settings.searxngUrlInvalid')
-
-  const timeoutRaw = form.searxngTimeout.trim()
-  const timeoutNumber = timeoutRaw === '' ? null : Number(timeoutRaw)
-  const timeoutValid =
-    !searxngSelected ||
-    timeoutNumber === null ||
-    (Number.isFinite(timeoutNumber) &&
-      timeoutNumber > 0 &&
-      timeoutNumber <= MAX_SEARCH_TIMEOUT_SECONDS)
-  const timeoutError = timeoutValid ? undefined : t('admin.settings.invalidNumber')
-
-  const metadataValid = searxngUrlValid && timeoutValid
 
   // These two have to be exactly what the *server* will send Google, which it builds from
   // DRAMATARR_PUBLIC_URL — so it reports them rather than the browser guessing. The origin the
@@ -573,63 +384,6 @@ export function AdminSettingsPage() {
       }
       if (form.sourceBaseUrl.trim() !== readString(settings, 'library.source_base_url')) {
         patch['library.source_base_url'] = form.sourceBaseUrl.trim()
-      }
-    }
-
-    if (section === 'metadata') {
-      // Only a freshly typed key travels; the sentinel is never echoed back as if it were one.
-      if (omdbKeyEditable && form.omdbKey.trim() !== '') {
-        patch['omdb.api_key'] = form.omdbKey.trim()
-      }
-      if (tmdbKeyEditable && form.tmdbKey.trim() !== '') {
-        patch['tmdb.api_key'] = form.tmdbKey.trim()
-      }
-      if (form.tmdbLanguage.trim() !== readString(settings, 'tmdb.language')) {
-        patch['tmdb.language'] = form.tmdbLanguage.trim()
-      }
-      if (form.imageSearchProvider !== readString(settings, 'images.search.provider')) {
-        patch['images.search.provider'] = form.imageSearchProvider
-      }
-      // Exactly the TMDB key's rule, and for exactly the same reason: a secret that has never
-      // been set is being edited from the first render, so gating on the "Edit" flag alone
-      // would make a first-time key typeable but unsavable. It is one slot for both providers
-      // — Google's API key, or the token a locked-down SearXNG asks for.
-      if (imageSearchKeyEditable && form.imageSearchKey.trim() !== '') {
-        patch['images.search.api_key'] = form.imageSearchKey.trim()
-      }
-      // Each provider sends only its own fields. The other's stay stored rather than being
-      // cleared, so switching back does not mean typing everything in again — and an edit made
-      // before switching providers cannot ride along on a save it no longer belongs to.
-      const storedCseId = readString(settings, 'images.search.cse_id')
-      if (googleSelected && form.imageSearchCseId.trim() !== storedCseId) {
-        patch['images.search.cse_id'] = form.imageSearchCseId.trim()
-      }
-      if (searxngSelected) {
-        if (searxngUrl !== readString(settings, 'images.search.base_url')) {
-          patch['images.search.base_url'] = searxngUrl
-        }
-        if (form.searxngSafeSearch !== readSafeSearch(settings)) {
-          patch['images.search.safe_search'] = form.searxngSafeSearch
-        }
-        if (form.searxngLanguage.trim() !== readString(settings, 'images.search.language')) {
-          patch['images.search.language'] = form.searxngLanguage.trim()
-        }
-        if (
-          timeoutRaw !== readString(settings, 'images.search.timeout') &&
-          timeoutNumber !== null &&
-          timeoutValid
-        ) {
-          patch['images.search.timeout'] = timeoutNumber
-        }
-        const storedEngines = readEngines(settings)
-        if (formatEngineList(form.searchEngines) !== formatEngineList(storedEngines)) {
-          // Written back in the shape the server sent, so neither a list-valued setting nor a
-          // comma-separated one changes type behind the server's back.
-          const stored: unknown = settings['images.search.engines']
-          patch['images.search.engines'] = Array.isArray(stored)
-            ? [...form.searchEngines]
-            : formatEngineList(form.searchEngines)
-        }
       }
     }
 
@@ -711,31 +465,6 @@ export function AdminSettingsPage() {
   }
 
   const emailDirty = Object.keys(buildPatch('email')).length > 0
-  // The search test, like the SMTP one, exercises what is *stored*. An unsaved URL would be
-  // tested against the old configuration and fail in a way that reads as "SearXNG is broken".
-  const searchDirty = Object.keys(buildPatch('metadata')).some((key) =>
-    key.startsWith('images.search.'),
-  )
-
-  const searchJsonDisabled = isJsonFormatDisabled(searchTest.error)
-
-  // What a successful probe is worth saying: how many engines can actually return an image —
-  // an instance answering happily with none of them is a working URL and a dead search — and
-  // the version, when it reports one, since that is what a bug report needs.
-  const searchResult = searchTest.data ?? null
-  const searchTestSummary =
-    searchResult === null
-      ? ''
-      : [
-          searchResult.imageEngineCount === null
-            ? t('admin.settings.searchTestOkNoCount')
-            : t('admin.settings.searchTestOk', { count: searchResult.imageEngineCount }),
-          searchResult.version
-            ? t('admin.settings.searchTestVersion', { version: searchResult.version })
-            : '',
-        ]
-          .filter((part) => part !== '')
-          .join(' ')
 
   const sectionFooter = (section: SectionId, valid: boolean): ReactNode => {
     const changed = Object.keys(buildPatch(section)).length > 0
@@ -866,411 +595,6 @@ export function AdminSettingsPage() {
           }
         />
         {sectionFooter('dramadex', true)}
-      </form>
-
-      {/* Metadata ----------------------------------------------------------------------- */}
-      <form
-        className={styles.card}
-        id="settings-metadata"
-        onSubmit={submit('metadata', metadataValid)}
-      >
-        <h2 className={styles.sectionTitle}>{t('admin.settings.metadata')}</h2>
-        <div className={styles.grid}>
-          {/* OMDb — the fallback for an IMDb id TMDB does not carry, which for vertical short
-              drama is most of them. Optional: with no key the "use this metadata" button
-              simply falls back to what it did before. */}
-          <div className={styles.spanAll}>
-            <Field
-              label={t('admin.settings.omdbKey')}
-              htmlFor="omdb-key"
-              hint={
-                omdbConfigured && !editingOmdbKey
-                  ? t('admin.settings.secretKeep')
-                  : t('admin.settings.omdbKeyHint')
-              }
-            >
-              {omdbConfigured && !editingOmdbKey ? (
-                <div className={styles.secretRow}>
-                  <Badge tone="success">{t('admin.settings.secretSet')}</Badge>
-                  <Button
-                    id="omdb-key"
-                    type="button"
-                    size="sm"
-                    onClick={() => setEditingOmdbKey(true)}
-                  >
-                    {t('common.edit')}
-                  </Button>
-                </div>
-              ) : (
-                <div className={styles.secretRow}>
-                  <Input
-                    id="omdb-key"
-                    type="password"
-                    autoComplete="off"
-                    value={form.omdbKey}
-                    onChange={(event) => setField({ omdbKey: event.target.value })}
-                  />
-                </div>
-              )}
-            </Field>
-          </div>
-
-          <div className={styles.spanAll}>
-            <Field
-              label={t('admin.settings.tmdbKey')}
-              htmlFor="tmdb-key"
-              hint={
-                tmdbConfigured && !editingTmdbKey
-                  ? t('admin.settings.secretKeep')
-                  : t('admin.settings.tmdbKeyHint')
-              }
-            >
-              {tmdbConfigured && !editingTmdbKey ? (
-                <div className={styles.secretRow}>
-                  <Badge tone="success">{t('admin.settings.secretSet')}</Badge>
-                  <Button
-                    id="tmdb-key"
-                    type="button"
-                    size="sm"
-                    onClick={() => setEditingTmdbKey(true)}
-                  >
-                    {t('common.edit')}
-                  </Button>
-                </div>
-              ) : (
-                <div className={styles.secretRow}>
-                  <Input
-                    id="tmdb-key"
-                    type="password"
-                    autoComplete="off"
-                    value={form.tmdbKey}
-                    onChange={(event) => setField({ tmdbKey: event.target.value })}
-                  />
-                  {tmdbConfigured ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditingTmdbKey(false)
-                        setField({ tmdbKey: '' })
-                      }}
-                    >
-                      {t('common.cancel')}
-                    </Button>
-                  ) : (
-                    <Badge tone="neutral">{t('admin.settings.secretUnset')}</Badge>
-                  )}
-                </div>
-              )}
-            </Field>
-          </div>
-
-          <Field label={t('admin.settings.tmdbLanguage')} htmlFor="tmdb-language">
-            <Input
-              id="tmdb-language"
-              value={form.tmdbLanguage}
-              spellCheck={false}
-              onChange={(event) => setField({ tmdbLanguage: event.target.value })}
-            />
-          </Field>
-
-          <div className={styles.testCell}>
-            <Button
-              type="button"
-              loading={tmdbTest.isPending}
-              onClick={() => tmdbTest.mutate()}
-            >
-              {t('admin.settings.tmdbTest')}
-            </Button>
-            <p className={styles.testResult} role="status">
-              {tmdbTest.isSuccess ? t('admin.settings.tmdbValid') : ''}
-              {tmdbTest.isError ? t('admin.settings.tmdbInvalid') : ''}
-            </p>
-          </div>
-
-          {/* Image search — optional, and only the artwork picker uses it. */}
-          <div className={styles.spanAll}>
-            <h3 className={styles.subsectionTitle}>{t('admin.settings.imageSearch')}</h3>
-            <p className={styles.subsectionHint}>{t('admin.settings.imageSearchHint')}</p>
-          </div>
-
-          <Field
-            label={t('admin.settings.imageSearchProvider')}
-            htmlFor="image-search-provider"
-            hint={searxngSelected ? t('admin.settings.imageSearchSearxngHint') : undefined}
-          >
-            <Select
-              id="image-search-provider"
-              value={form.imageSearchProvider}
-              onChange={(event) => {
-                // A success belongs to the provider that produced it; carrying it across would
-                // show a green SearXNG result next to a Google configuration nobody tested.
-                searchTest.reset()
-                setField({ imageSearchProvider: event.target.value })
-              }}
-            >
-              {providerOptions.map((provider) => (
-                <option key={provider || 'off'} value={provider}>
-                  {imageSearchProviderKey(provider) === ''
-                    ? provider
-                    : t(imageSearchProviderKey(provider))}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          {/* --- SearXNG ------------------------------------------------------------------ */}
-          {searxngSelected ? (
-            <>
-              <div className={styles.spanAll}>
-                <Field
-                  label={t('admin.settings.searxngUrl')}
-                  htmlFor="searxng-base-url"
-                  hint={t('admin.settings.searxngUrlHint')}
-                  error={searxngUrlError}
-                >
-                  <Input
-                    id="searxng-base-url"
-                    // Not `type="url"`: native constraint validation would answer in the
-                    // browser's own words, so the field would have two error languages.
-                    inputMode="url"
-                    value={form.searxngBaseUrl}
-                    invalid={!searxngUrlValid}
-                    spellCheck={false}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    autoComplete="off"
-                    onChange={(event) => setField({ searxngBaseUrl: event.target.value })}
-                  />
-                </Field>
-              </div>
-
-              <Field
-                label={t('admin.settings.searxngSafeSearch')}
-                htmlFor="searxng-safe-search"
-                hint={t('admin.settings.searxngSafeSearchHint')}
-              >
-                <Select
-                  id="searxng-safe-search"
-                  value={form.searxngSafeSearch}
-                  onChange={(event) => setField({ searxngSafeSearch: event.target.value })}
-                >
-                  {SAFE_SEARCH_LEVELS.map((level) => (
-                    <option key={level} value={level}>
-                      {t(safeSearchLabelKey(level))}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-
-              <Field
-                label={t('admin.settings.searxngLanguage')}
-                htmlFor="searxng-language"
-                hint={t('admin.settings.searxngLanguageHint')}
-              >
-                <Input
-                  id="searxng-language"
-                  value={form.searxngLanguage}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  onChange={(event) => setField({ searxngLanguage: event.target.value })}
-                />
-              </Field>
-
-              <Field
-                label={t('admin.settings.searxngTimeout')}
-                htmlFor="searxng-timeout"
-                hint={t('admin.settings.searxngTimeoutHint')}
-                error={timeoutError}
-              >
-                <Input
-                  id="searxng-timeout"
-                  inputMode="numeric"
-                  value={form.searxngTimeout}
-                  invalid={!timeoutValid}
-                  onChange={(event) => setField({ searxngTimeout: event.target.value })}
-                />
-              </Field>
-            </>
-          ) : null}
-
-          {/* --- Google Custom Search ----------------------------------------------------- */}
-          {googleSelected ? (
-            <Field
-              label={t('admin.settings.imageSearchCseId')}
-              htmlFor="image-search-cse"
-              hint={t('admin.settings.imageSearchCseIdHint')}
-            >
-              <Input
-                id="image-search-cse"
-                value={form.imageSearchCseId}
-                spellCheck={false}
-                autoCapitalize="none"
-                autoCorrect="off"
-                autoComplete="off"
-                onChange={(event) => setField({ imageSearchCseId: event.target.value })}
-              />
-            </Field>
-          ) : null}
-
-          {/* One secret slot, serving whichever provider is selected. Google demands its API
-              key; a SearXNG instance usually asks for nothing, so it is offered as optional. */}
-          {form.imageSearchProvider === '' ? null : (
-            <div className={styles.spanAll}>
-              <Field
-                label={t(
-                  searxngSelected
-                    ? 'admin.settings.searxngToken'
-                    : 'admin.settings.imageSearchKey',
-                )}
-                htmlFor="image-search-key"
-                hint={
-                  imageSearchKeyConfigured && !editingImageSearchKey
-                    ? t('admin.settings.secretKeep')
-                    : t(
-                        searxngSelected
-                          ? 'admin.settings.searxngTokenHint'
-                          : 'admin.settings.imageSearchKeyHint',
-                      )
-                }
-              >
-                {imageSearchKeyConfigured && !editingImageSearchKey ? (
-                  <div className={styles.secretRow}>
-                    <Badge tone="success">{t('admin.settings.secretSet')}</Badge>
-                    <Button
-                      id="image-search-key"
-                      type="button"
-                      size="sm"
-                      onClick={() => setEditingImageSearchKey(true)}
-                    >
-                      {t('common.edit')}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className={styles.secretRow}>
-                    <Input
-                      id="image-search-key"
-                      type="password"
-                      autoComplete="off"
-                      value={form.imageSearchKey}
-                      onChange={(event) => setField({ imageSearchKey: event.target.value })}
-                    />
-                    {imageSearchKeyConfigured ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingImageSearchKey(false)
-                          setField({ imageSearchKey: '' })
-                        }}
-                      >
-                        {t('common.cancel')}
-                      </Button>
-                    ) : (
-                      <Badge tone="neutral">{t('admin.settings.secretUnset')}</Badge>
-                    )}
-                  </div>
-                )}
-              </Field>
-            </div>
-          )}
-
-          {/* --- Test connection ---------------------------------------------------------- */}
-          {form.imageSearchProvider === '' ? null : (
-            <div className={styles.spanAll}>
-              <div className={styles.testRow}>
-                <Button
-                  id="search-test"
-                  type="button"
-                  loading={searchTest.isPending}
-                  disabled={searchDirty || !metadataValid}
-                  onClick={() => searchTest.mutate()}
-                >
-                  {t('admin.settings.searchTest')}
-                </Button>
-                <p className={styles.testResult} role="status">
-                  {searchDirty ? t('admin.settings.searchTestNeedsSave') : ''}
-                  {!searchDirty && searchTest.isSuccess ? searchTestSummary : ''}
-                  {!searchDirty && searchTest.isError && !searchJsonDisabled
-                    ? t(apiErrorKeys(searchTest.error))
-                    : ''}
-                </p>
-              </div>
-
-              {/* The single most likely thing to be wrong on a fresh SearXNG: it answers in
-                  HTML only until `json` is listed in `search.formats`. Nothing about that is
-                  discoverable from "the search failed", so the fix is on screen instead. */}
-              {searchJsonDisabled ? (
-                <div className={styles.fixNote} role="alert">
-                  <p className={styles.fixTitle}>{t('admin.settings.searchJsonDisabled')}</p>
-                  <p>{t('admin.settings.searchJsonDisabledFix')}</p>
-                  <pre className={styles.fixCode}>{SEARXNG_JSON_SNIPPET}</pre>
-                  <p>{t('admin.settings.searchJsonDisabledRestart')}</p>
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {/* --- Engines ------------------------------------------------------------------ */}
-          {searxngSelected ? (
-            <div className={styles.spanAll}>
-              {engineChoices.length > 0 ? (
-                <fieldset className={styles.engines}>
-                  <legend className={styles.engineLegend}>
-                    {t('admin.settings.searchEngines')}
-                  </legend>
-                  <p className={styles.subsectionHint}>{t('admin.settings.searchEnginesHint')}</p>
-                  <div className={styles.engineGrid}>
-                    {engineChoices.map((name) => (
-                      <label key={name} className={styles.engineOption}>
-                        <input
-                          type="checkbox"
-                          checked={form.searchEngines.includes(name)}
-                          onChange={() => toggleEngine(name)}
-                        />
-                        {/* The instance's own name for the engine, not ours to translate. */}
-                        <span>{name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              ) : (
-                <Field
-                  label={t('admin.settings.searchEngines')}
-                  htmlFor="search-engines"
-                  hint={
-                    enginesQuery.isError
-                      ? t('admin.settings.searchEnginesFallback')
-                      : t('admin.settings.searchEnginesManual')
-                  }
-                >
-                  <Input
-                    id="search-engines"
-                    value={form.searchEnginesText}
-                    spellCheck={false}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    autoComplete="off"
-                    onChange={(event) =>
-                      setField({
-                        searchEnginesText: event.target.value,
-                        searchEngines: parseEngineList(event.target.value),
-                      })
-                    }
-                  />
-                </Field>
-              )}
-              {form.searchEngines.length === 0 ? (
-                <p className={styles.engineNote}>{t('admin.settings.searchEnginesDefault')}</p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-        {sectionFooter('metadata', metadataValid)}
       </form>
 
       {/* Email -------------------------------------------------------------------------- */}

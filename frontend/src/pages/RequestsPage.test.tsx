@@ -91,18 +91,12 @@ const MY_REQUEST: SeriesRequest = {
 }
 
 /** Routes the GETs the page makes to whatever this test wants them to answer. */
-function serve(
-  search: RequestSearchResults,
-  mine: SeriesRequest[] = [],
-  poster: string | null = null,
-): void {
+function serve(search: RequestSearchResults, mine: SeriesRequest[] = []): void {
   get.mockImplementation((path: string) => {
     if (path === '/requests/search') return Promise.resolve(search)
     if (path === '/requests') return Promise.resolve(mine)
-    // Every card without a poster in the search response asks for one. Answered explicitly
-    // rather than left to the reject branch, so a test failing here means the page asked for
-    // something unexpected rather than that a thumbnail happened to error out.
-    if (path === '/requests/poster') return Promise.resolve({ url: poster })
+    // Anything else is a bug rather than a missing stub: the page makes exactly these two
+    // calls now that every hit arrives from the indexer with its own poster address.
     return Promise.reject(new Error(`unexpected GET ${path}`))
   })
 }
@@ -184,17 +178,18 @@ describe('RequestsPage', () => {
     expect(screen.queryByRole('button', { name: /^pedir$/i })).toBeNull()
   })
 
-  it('illustrates a card the search could not, and asks with that poster', async () => {
-    // The bug this fixes: TMDB has no entry for most of this library, so the search response
-    // carries no image and every card rendered blank.
-    serve(results([candidate()]), [], '/api/stream/images/requests/abc.webp')
+  it('illustrates a card from the hit itself, and asks with that poster', async () => {
+    // There used to be a second request per illustrationless card, because results were web
+    // pages. They are records now: the poster address comes back with the hit, so a card that
+    // renders blank means the indexer has no art — never that a lookup is still in flight.
+    serve(results([candidate({ posterUrl: '/api/library/dramadex/titles/77/poster' })]))
     renderPage(<RequestsPage />)
     await search('ruta')
 
     await cardHeading('Ruta de Cristal')
     await waitFor(() => {
       const image = screen.getByRole('img', { name: 'Ruta de Cristal' }) as HTMLImageElement
-      expect(image.src).toContain('/api/stream/images/requests/abc.webp')
+      expect(image.src).toContain('/api/library/dramadex/titles/77/poster')
     })
 
     fireEvent.click(screen.getByRole('button', { name: /^pedir$/i }))
@@ -202,7 +197,7 @@ describe('RequestsPage', () => {
     const [, body] = post.mock.calls[0] as [string, Record<string, unknown>]
     // The poster the card actually resolved travels with the request, so the admin's queue
     // shows the same picture the member was looking at when they chose.
-    expect(body.posterUrl).toBe('/api/stream/images/requests/abc.webp')
+    expect(body.posterUrl).toBe('/api/library/dramadex/titles/77/poster')
   })
 
   it('sends the whole card — ids and all — when one is chosen', async () => {

@@ -14,18 +14,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiRequestError } from '@/api/client'
-
 const getSettings = vi.fn()
 const updateSettings = vi.fn()
 const testSmtp = vi.fn()
-const testTmdb = vi.fn()
-const testSearch = vi.fn()
-const listSearchEngines = vi.fn()
 
-// Only the calls that would hit the network are replaced; the module's pure parts (query keys,
-// the provider vocabulary, the engine-list parsing) are the real ones, so a test cannot pass
-// against a stub of the logic the page depends on.
+// Only the calls that would hit the network are replaced; the module's pure parts (the query
+// keys) are the real ones, so a test cannot pass against a stub of the logic the page depends
+// on.
 vi.mock('@/api/admin', async () => {
   const actual = await vi.importActual<typeof import('@/api/admin')>('@/api/admin')
   return {
@@ -33,9 +28,6 @@ vi.mock('@/api/admin', async () => {
     getSettings: (...args: unknown[]) => getSettings(...args),
     updateSettings: (...args: unknown[]) => updateSettings(...args),
     testSmtp: (...args: unknown[]) => testSmtp(...args),
-    testTmdb: (...args: unknown[]) => testTmdb(...args),
-    testSearch: (...args: unknown[]) => testSearch(...args),
-    listSearchEngines: (...args: unknown[]) => listSearchEngines(...args),
   }
 })
 
@@ -58,11 +50,6 @@ const DEFAULT_SETTINGS = {
   'site.default_locale': 'es',
   'library.scan_cron': '0 4 * * *',
   'library.source_base_url': '',
-  'tmdb.api_key': '',
-  'tmdb.language': 'es-ES',
-  'images.search.provider': '',
-  'images.search.api_key': '',
-  'images.search.cse_id': '',
   'smtp.host': '',
   'smtp.port': 587,
   'smtp.username': '',
@@ -82,17 +69,6 @@ const DEFAULT_SETTINGS = {
   // below, and it is the situation of every install reached through a proxy or a LAN address.
   'derived.google.redirect_uri': 'https://dramatarr.casa.example/api/auth/google/callback',
   'derived.google.js_origin': 'https://dramatarr.casa.example',
-}
-
-/** A household that already runs SearXNG and has saved the address. Nothing is dirty. */
-const SEARXNG_SETTINGS = {
-  ...DEFAULT_SETTINGS,
-  'images.search.provider': 'searxng',
-  'images.search.base_url': 'http://searx.casa.lan:8080',
-  'images.search.safe_search': 'moderate',
-  'images.search.language': '',
-  'images.search.timeout': 8,
-  'images.search.engines': '',
 }
 
 function renderPage(ui: ReactElement) {
@@ -164,38 +140,6 @@ describe('AdminSettingsPage — SMTP section', () => {
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
-  it('saves a first-time TMDB key, which was silently dropped before', async () => {
-    // The bug: the key only travelled when `editingTmdbKey` was true, and that flag is only
-    // set by an "Edit" button that exists solely once a key is already stored. On a fresh
-    // install the field was therefore a dead end — typeable, but never saved.
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('tmdb-key')).toBeTruthy())
-
-    typeInto('tmdb-key', 'abcdef0123456789abcdef0123456789')
-
-    const save = screen
-      .getAllByRole('button', { name: /common\.save/i })
-      .find((b) => b.closest('form')?.contains(document.getElementById('tmdb-key')))
-    expect((save as HTMLButtonElement).disabled).toBe(false)
-    fireEvent.click(save as HTMLButtonElement)
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    expect(updateSettings.mock.calls[0]?.[0]).toMatchObject({
-      'tmdb.api_key': 'abcdef0123456789abcdef0123456789',
-    })
-  })
-
-  it('tests the typed TMDB key rather than the empty stored one', async () => {
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('tmdb-key')).toBeTruthy())
-
-    typeInto('tmdb-key', 'abcdef0123456789abcdef0123456789')
-    fireEvent.click(screen.getByRole('button', { name: /admin\.settings\.tmdbTest/i }))
-
-    await waitFor(() => expect(testTmdb).toHaveBeenCalled())
-    expect(testTmdb).toHaveBeenCalledWith('abcdef0123456789abcdef0123456789')
-  })
-
   it('saves a first-time SMTP password', async () => {
     renderPage(<AdminSettingsPage />)
     await waitFor(() => expect(document.getElementById('smtp-password')).toBeTruthy())
@@ -222,266 +166,6 @@ describe('AdminSettingsPage — SMTP section', () => {
 
     await waitFor(() => expect(updateSettings).toHaveBeenCalled())
     expect(updateSettings.mock.calls[0]?.[0]).not.toHaveProperty('smtp.port')
-  })
-})
-
-describe('AdminSettingsPage — Image search subsection', () => {
-  /** The save button belonging to whichever section owns `id`. */
-  function saveButtonFor(id: string): HTMLButtonElement {
-    const button = screen
-      .getAllByRole('button', { name: /common\.save/i })
-      .find((b) => b.closest('form')?.contains(document.getElementById(id)))
-    expect(button, `the section holding #${id} should have a save button`).toBeTruthy()
-    return button as HTMLButtonElement
-  }
-
-  it('saves a first-time image-search API key', async () => {
-    // The third instance of the same trap as the TMDB key and the Google client secret: the
-    // input is on screen from the first render on a fresh install, and the "Edit" button that
-    // would flip an `editing` flag only exists once a value is already stored. Gating the patch
-    // on that flag makes the field typeable but unsavable, and the artwork picker's web search
-    // would never come on — with nothing on screen to explain why.
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('image-search-provider')).toBeTruthy())
-
-    const provider = document.getElementById('image-search-provider') as HTMLSelectElement
-    fireEvent.change(provider, { target: { value: 'google_cse' } })
-    typeInto('image-search-cse', 'a1b2c3d4e5f6g7h8i')
-    typeInto('image-search-key', 'AIzaSyNotARealKey0123456789')
-
-    const save = saveButtonFor('image-search-key')
-    expect(save.disabled, 'save must be enabled after typing a key').toBe(false)
-    fireEvent.click(save)
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    expect(updateSettings.mock.calls[0]?.[0]).toMatchObject({
-      'images.search.provider': 'google_cse',
-      'images.search.cse_id': 'a1b2c3d4e5f6g7h8i',
-      'images.search.api_key': 'AIzaSyNotARealKey0123456789',
-    })
-  })
-
-  it('never echoes a stored image-search key back as if it were a new one', async () => {
-    getSettings.mockResolvedValue({
-      ...DEFAULT_SETTINGS,
-      // A provider has to be selected for its fields to exist at all — an engine id under no
-      // provider is a question with no answer.
-      'images.search.provider': 'google_cse',
-      'images.search.api_key': '__SET__',
-    })
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('image-search-cse')).toBeTruthy())
-
-    // Stored secret: the input is replaced by a badge and an Edit button, so there is nothing
-    // to type into and nothing about the key may travel with an unrelated change.
-    expect(document.getElementById('image-search-key')?.tagName).toBe('BUTTON')
-
-    typeInto('image-search-cse', 'new-engine-id')
-    fireEvent.click(saveButtonFor('image-search-cse'))
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    expect(updateSettings.mock.calls[0]?.[0]).toEqual({ 'images.search.cse_id': 'new-engine-id' })
-  })
-
-  it('leaves the image-search keys out of the patch when they were not touched', async () => {
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('tmdb-key')).toBeTruthy())
-
-    // The subsection shares the metadata section's save button, so an untouched image search
-    // must not ride along with a TMDB edit.
-    typeInto('tmdb-key', 'abcdef0123456789abcdef0123456789')
-    fireEvent.click(saveButtonFor('tmdb-key'))
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    const patch = updateSettings.mock.calls[0]?.[0] as Record<string, unknown>
-    expect(patch).not.toHaveProperty('images.search.api_key')
-    expect(patch).not.toHaveProperty('images.search.provider')
-    expect(patch).not.toHaveProperty('images.search.cse_id')
-  })
-
-  it('swaps which fields render when the provider changes', async () => {
-    // The two providers are configured by entirely different things, and a field belonging to
-    // the other one is not harmless clutter: it is a question ("do I need a cx here?") the
-    // admin has to work out the answer to every time they open this screen.
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('image-search-provider')).toBeTruthy())
-    const provider = document.getElementById('image-search-provider') as HTMLSelectElement
-
-    // Off is the shipped state: no provider's fields, and nothing to test.
-    expect(document.getElementById('searxng-base-url')).toBeNull()
-    expect(document.getElementById('image-search-cse')).toBeNull()
-    expect(document.getElementById('search-test')).toBeNull()
-
-    fireEvent.change(provider, { target: { value: 'searxng' } })
-    expect(document.getElementById('searxng-base-url')).toBeTruthy()
-    expect(document.getElementById('searxng-safe-search')).toBeTruthy()
-    expect(document.getElementById('searxng-language')).toBeTruthy()
-    expect(document.getElementById('searxng-timeout')).toBeTruthy()
-    expect(document.getElementById('search-test')).toBeTruthy()
-    expect(document.getElementById('image-search-cse'), 'no Google cx under SearXNG').toBeNull()
-
-    fireEvent.change(provider, { target: { value: 'google_cse' } })
-    expect(document.getElementById('image-search-cse')).toBeTruthy()
-    expect(document.getElementById('searxng-base-url'), 'no SearXNG URL under Google').toBeNull()
-    expect(document.getElementById('searxng-safe-search')).toBeNull()
-
-    // The one field both providers share, so it survives the switch either way.
-    expect(document.getElementById('image-search-key')).toBeTruthy()
-  })
-})
-
-describe('AdminSettingsPage — SearXNG', () => {
-  function saveButtonFor(id: string): HTMLButtonElement {
-    const button = screen
-      .getAllByRole('button', { name: /common\.save/i })
-      .find((b) => b.closest('form')?.contains(document.getElementById(id)))
-    expect(button, `the section holding #${id} should have a save button`).toBeTruthy()
-    return button as HTMLButtonElement
-  }
-
-  it('saves a first-time SearXNG API token', async () => {
-    // The same trap as the TMDB key, the SMTP password and the Google client secret: the input
-    // is on screen from the first render on a fresh install, and the "Edit" button that flips
-    // the `editing` flag only exists once something is stored. Gating the patch on that flag
-    // makes a first-time token typeable but unsavable — and an instance that requires a token
-    // would then answer every artwork search with a 403 nobody can explain.
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('image-search-provider')).toBeTruthy())
-
-    fireEvent.change(document.getElementById('image-search-provider') as HTMLSelectElement, {
-      target: { value: 'searxng' },
-    })
-    typeInto('searxng-base-url', 'http://searx.casa.lan:8080')
-    typeInto('image-search-key', 'searxng-token-abc123')
-
-    const save = saveButtonFor('image-search-key')
-    expect(save.disabled, 'save must be enabled after typing a token').toBe(false)
-    fireEvent.click(save)
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    expect(updateSettings.mock.calls[0]?.[0]).toMatchObject({
-      'images.search.provider': 'searxng',
-      'images.search.base_url': 'http://searx.casa.lan:8080',
-      'images.search.api_key': 'searxng-token-abc123',
-    })
-  })
-
-  it('refuses a base URL that is not an http(s) address', async () => {
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('image-search-provider')).toBeTruthy())
-
-    fireEvent.change(document.getElementById('image-search-provider') as HTMLSelectElement, {
-      target: { value: 'searxng' },
-    })
-    typeInto('searxng-base-url', 'searx.casa.lan')
-
-    expect(saveButtonFor('searxng-base-url').disabled).toBe(true)
-    expect(screen.getByText('admin.settings.searxngUrlInvalid')).toBeTruthy()
-  })
-
-  it('makes the admin save before testing, as the test uses stored settings', async () => {
-    getSettings.mockResolvedValue({ ...SEARXNG_SETTINGS })
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('searxng-base-url')).toBeTruthy())
-
-    const test = document.getElementById('search-test') as HTMLButtonElement
-    expect(test.disabled, 'nothing is dirty, so the stored config is what is on screen').toBe(false)
-
-    typeInto('searxng-base-url', 'http://searx.other.lan')
-    expect(test.disabled, 'an unsaved URL would be tested against the old one').toBe(true)
-    expect(testSearch).not.toHaveBeenCalled()
-  })
-
-  it('lists the instance engines after a successful test and saves the ticked ones', async () => {
-    getSettings.mockResolvedValue({ ...SEARXNG_SETTINGS })
-    testSearch.mockResolvedValue({
-      ok: true,
-      detail: null,
-      provider: 'searxng',
-      version: '2024.9.1',
-      imageEngineCount: 2,
-    })
-    listSearchEngines.mockResolvedValue([
-      { name: 'bing images', categories: ['images'], enabled: true, shortcut: 'bii' },
-      { name: 'duckduckgo images', categories: ['images'], enabled: true, shortcut: 'ddi' },
-      // Not an image engine: it must not be offered as one.
-      { name: 'wikipedia', categories: ['general'], enabled: true, shortcut: 'wp' },
-    ])
-
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('search-test')).toBeTruthy())
-
-    // Before the test there is nothing to discover from, so the free-text field carries the
-    // admin who already knows the names rather than blocking them behind a probe.
-    expect(document.getElementById('search-engines')).toBeTruthy()
-
-    fireEvent.click(document.getElementById('search-test') as HTMLButtonElement)
-    await waitFor(() => expect(listSearchEngines).toHaveBeenCalled())
-
-    const bing = await screen.findByRole('checkbox', { name: 'bing images' })
-    expect(screen.getByRole('checkbox', { name: 'duckduckgo images' })).toBeTruthy()
-    expect(screen.queryByRole('checkbox', { name: 'wikipedia' })).toBeNull()
-
-    fireEvent.click(bing)
-    fireEvent.click(saveButtonFor('search-test'))
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    expect(updateSettings.mock.calls[0]?.[0]).toEqual({ 'images.search.engines': 'bing images' })
-  })
-
-  it('falls back to a free-text engine field when the instance cannot be listed', async () => {
-    getSettings.mockResolvedValue({ ...SEARXNG_SETTINGS })
-    testSearch.mockResolvedValue({
-      ok: true,
-      detail: null,
-      provider: 'searxng',
-      version: null,
-      imageEngineCount: null,
-    })
-    listSearchEngines.mockRejectedValue(new Error('no such route'))
-
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('search-test')).toBeTruthy())
-    fireEvent.click(document.getElementById('search-test') as HTMLButtonElement)
-
-    await waitFor(() => expect(listSearchEngines).toHaveBeenCalled())
-    // Discovery is a convenience, never a gate.
-    await waitFor(() =>
-      expect(screen.getByText('admin.settings.searchEnginesFallback')).toBeTruthy(),
-    )
-
-    typeInto('search-engines', 'bing images, google images')
-    fireEvent.click(saveButtonFor('search-engines'))
-
-    await waitFor(() => expect(updateSettings).toHaveBeenCalled())
-    expect(updateSettings.mock.calls[0]?.[0]).toEqual({
-      'images.search.engines': 'bing images, google images',
-    })
-  })
-
-  it('answers SEARXNG_JSON_DISABLED with the settings.yml fix, not a generic failure', async () => {
-    // The single most likely thing to be wrong on a fresh instance: SearXNG answers in HTML
-    // only until `json` is listed under search.formats. "The search failed" would send an
-    // admin looking at their URL, their network and their token — none of which are the cause.
-    getSettings.mockResolvedValue({ ...SEARXNG_SETTINGS })
-    testSearch.mockRejectedValue(
-      new ApiRequestError(502, {
-        code: 'SEARXNG_JSON_DISABLED',
-        message: 'The instance does not serve JSON',
-        details: {},
-      }),
-    )
-
-    renderPage(<AdminSettingsPage />)
-    await waitFor(() => expect(document.getElementById('search-test')).toBeTruthy())
-    fireEvent.click(document.getElementById('search-test') as HTMLButtonElement)
-
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-    expect(screen.getByText('admin.settings.searchJsonDisabledFix')).toBeTruthy()
-    // The YAML itself is shown verbatim: describing an indented block in prose is how an admin
-    // ends up pasting something that does not parse.
-    expect(screen.getByText(/search:\s+formats:/)).toBeTruthy()
-    expect(screen.getByText('admin.settings.searchJsonDisabledRestart')).toBeTruthy()
   })
 })
 

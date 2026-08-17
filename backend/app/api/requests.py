@@ -26,7 +26,6 @@ from app.api.deps import CurrentUser, SessionDep
 from app.schemas.common import Ok
 from app.schemas.requests import (
     RequestCreateIn,
-    RequestPosterOut,
     RequestSearchResults,
     SeriesRequestOut,
 )
@@ -60,31 +59,6 @@ async def search_requests(
     exactly the noise this mode removes.
     """
     return await requests_service.search(session, user, q, limit=limit, short_drama=short_drama)
-
-
-@router.get("/poster", response_model=RequestPosterOut)
-async def find_poster(
-    session: SessionDep,
-    user: CurrentUser,
-    q: Annotated[str, Query(min_length=1, max_length=200)],
-    year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
-) -> RequestPosterOut:
-    """A poster for a card that came back without one.
-
-    Separate from `/search`, and fetched per card, because the alternative is worse in both
-    directions: folding it into the search would make the whole result list wait on the
-    slowest of a dozen image queries, and one engine having a bad moment would empty the list
-    instead of one thumbnail.
-
-    The URL that comes back is **this server's**. The bytes were fetched through the guarded
-    path (public hosts only, redirects re-checked, size capped) and re-encoded by ffmpeg, so
-    nothing a member's browser loads here comes from a third party — which matters because a
-    request card is rendered by everyone in the house, including from outside it.
-
-    `{"url": null}` is an ordinary answer, not an error: most of this library has no poster
-    anywhere, and a card without a picture is still a card.
-    """
-    return RequestPosterOut(url=await requests_service.find_poster(session, q, year))
 
 
 @router.get("", response_model=list[SeriesRequestOut])

@@ -36,10 +36,7 @@ from app.models import Episode, JobType, MediaFile, Series, SeriesTitle
 from app.schemas.common import Ok, Page
 from app.schemas.library import (
     ArtworkApplied,
-    ArtworkCandidate,
-    ArtworkCandidates,
     ArtworkSelectIn,
-    ArtworkSourceOut,
     AssignIn,
     CleanupIn,
     CleanupResult,
@@ -71,7 +68,6 @@ from app.schemas.library import (
     SeriesTitleIn,
     SeriesTitleOut,
     SeriesUnlinked,
-    TmdbMatch,
     UnmatchedFileOut,
     UnmatchedGroupOut,
 )
@@ -384,68 +380,16 @@ async def unlink_series(session: SessionDep, admin: AdminUser, series_id: str) -
 
 # --- Artwork ----------------------------------------------------------------------------------
 #
-# The metadata jobs pick whichever poster TMDB lists first, and for a drama with six regional
-# posters that is a coin toss. These three routes are the admin overruling it: see everything
-# available, choose one, and have the choice stick.
+# A metadata fill brings whatever poster the source has, and sometimes that is the wrong one or
+# none at all. These two routes are the admin overruling it: supply an image, and have the
+# choice stick.
 #
-# "Stick" is `metadata_locked`. Without it the next scheduled refresh would put the coin-toss
+# "Stick" is `metadata_locked`. Without it the next scheduled refresh would put the automatic
 # poster back, and an admin who has to re-pick their poster every night stops using the feature.
-
-
-def _artwork_candidates(
-    rows: list[dict[str, Any]], kind: ArtworkKind
-) -> list[ArtworkCandidate]:
-    """TMDB image rows → candidates, best first.
-
-    TMDB's own order is by vote and then by language; it is re-sorted here so that a textless
-    image with no votes does not sink below a low-resolution one that happens to have two.
-    """
-    out: list[ArtworkCandidate] = []
-    for row in rows:
-        path = row.get("file_path")
-        if not isinstance(path, str) or not path:
-            continue
-        out.append(
-            ArtworkCandidate(
-                source="tmdb",
-                kind=kind,
-                url=f"{IMAGE_BASE}/{ARTWORK_PICK_SIZE}{path}",
-                thumbnail_url=f"{IMAGE_BASE}/{ARTWORK_THUMB_SIZE}{path}",
-                width=row.get("width"),
-                height=row.get("height"),
-                # TMDB writes `null` (the JSON one) for textless artwork; keep that meaning.
-                language=row.get("iso_639_1") or None,
-                vote_average=row.get("vote_average"),
-                vote_count=row.get("vote_count"),
-            )
-        )
-    out.sort(key=lambda item: (item.vote_average or 0.0, item.width or 0), reverse=True)
-    return out
-
-
-@router.get("/series/{series_id}/artwork", response_model=ArtworkCandidates)
-async def series_artwork(
-    session: SessionDep,
-    admin: AdminUser,
-    series_id: str,
-    q: Annotated[str | None, Query(max_length=200)] = None,
-    limit: Annotated[int, Query(ge=1, le=10)] = 10,
-) -> ArtworkCandidates:
-    """What there is to choose between, which is now nothing but your own upload.
-
-    Two galleries fed this: TMDB's artwork endpoint and a web image search. Both went with
-    the sources they belonged to. DramaDex supplies a poster, but it arrives with the metadata
-    fill rather than as a menu — there is exactly one per title, so there is nothing to pick.
-
-    Still answers rather than 404s, and still says *why* it is empty. The picker was already
-    built for an empty response with a reason — that was the fresh-install case — so the one
-    path that survived, uploading your own image, keeps working unchanged.
-    """
-    series = await library_service.get_series_or_404(session, series_id)
-    return ArtworkCandidates(
-        series_id=series.id,
-        sources=[ArtworkSourceOut(name="upload", provider="upload", reason="NO_GALLERY")],
-    )
+#
+# There used to be a third route listing candidates to choose *between* — TMDB's gallery and a
+# web image search. Both left with the sources they belonged to, and DramaDex has exactly one
+# poster per title, so there is no menu left to render.
 
 
 async def _apply_artwork(

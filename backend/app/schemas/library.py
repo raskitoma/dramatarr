@@ -485,92 +485,12 @@ class CleanupResult(APIModel):
     dry_run: bool = False
 
 
-class TmdbMatch(APIModel):
-    """One candidate in the match dialog.
-
-    Everything here exists so an admin can pick the right row *without leaving the dialog*.
-    `originalName` and `originalLanguage` are what separate a Korean drama from its three
-    remakes; `popularity` and `voteCount` are what separate the real show from the fan-made
-    entry with the same name and no votes.
-    """
-
-    tmdb_id: int
-    name: str
-    original_name: str | None = None
-    original_language: str | None = None
-    overview: str | None = None
-    first_air_date: str | None = None
-    year: int | None = None
-    poster_path: str | None = None
-    poster_url: str | None = None
-    backdrop_path: str | None = None
-    popularity: float | None = None
-    vote_average: float | None = None
-    vote_count: int | None = None
-
-
 # --- Artwork ----------------------------------------------------------------------------------
 #
 # The metadata jobs pick a poster on their own and are usually right. These shapes are for when
 # they are not: TMDB's whole gallery, plus an optional web search, laid out so an admin can look
 # at the candidates and choose one. Choosing sets `metadata_locked` — the choice would be
 # pointless if the next refresh silently replaced it.
-
-
-class ArtworkCandidate(APIModel):
-    """One image an admin could choose. `url` is what `POST .../artwork` takes back."""
-
-    #: `tmdb` or the image-search provider's name.
-    source: str
-    #: `poster` or `backdrop` for TMDB candidates; `""` for a web result, which carries no
-    #: shape the provider vouches for — the admin says which slot it fills.
-    kind: str = ""
-    url: str
-    #: Smaller rendition for the picker grid. Falls back to `url` when the source has none.
-    thumbnail_url: str | None = None
-    width: int | None = None
-    height: int | None = None
-    #: ISO-639-1, or null for textless artwork — usually the most useful kind, and the reason
-    #: `include_image_language` asks TMDB for `null` explicitly.
-    language: str | None = None
-    vote_average: float | None = None
-    vote_count: int | None = None
-    #: Web results only: the page the image was found on, so the admin can check the source.
-    title: str = ""
-    context_url: str | None = None
-    #: Web results only, and only when the provider says: which back-end engine produced the
-    #: hit. SearXNG reports it per result, and it is what tells an admin which of their engines
-    #: is worth keeping in `images.search.engines`.
-    engine: str = ""
-
-
-class ArtworkSourceOut(APIModel):
-    """Whether a source contributed, and why not when it did not.
-
-    An unavailable source is **not** an error. A fresh install has no web search configured and
-    a series may not be linked to TMDB yet; both are ordinary states, and a 503 for either
-    would make the picker unusable exactly when the admin is trying to fix the situation.
-    """
-
-    #: The channel: `tmdb` or `web`.
-    name: str
-    #: Which implementation answered for that channel — `searxng`, `google_cse`, or `""` for
-    #: none.
-    provider: str = ""
-    available: bool = False
-    #: Stable code the UI localizes: `NOT_LINKED`, `NOT_CONFIGURED`, `PROVIDER_ERROR`, or `""`.
-    reason: str = ""
-    count: int = 0
-
-
-class ArtworkCandidates(APIModel):
-    series_id: str
-    tmdb_id: int | None = None
-    posters: list[ArtworkCandidate] = Field(default_factory=list)
-    backdrops: list[ArtworkCandidate] = Field(default_factory=list)
-    #: Web-search hits, kept apart from the two above because they carry no declared kind.
-    web: list[ArtworkCandidate] = Field(default_factory=list)
-    sources: list[ArtworkSourceOut] = Field(default_factory=list)
 
 
 class ArtworkSelectIn(APIModel):
@@ -881,10 +801,7 @@ class ImportApplyIn(APIModel):
 
 __all__ = [
     "ArtworkApplied",
-    "ArtworkCandidate",
-    "ArtworkCandidates",
     "ArtworkSelectIn",
-    "ArtworkSourceOut",
     "AssignIn",
     "AudioTrackOut",
     "CleanupIn",
@@ -930,7 +847,6 @@ __all__ = [
     "SeriesTitleOut",
     "SeriesUnlinked",
     "SubtitleTrackOut",
-    "TmdbMatch",
     "UnmatchedFileOut",
     "UnmatchedGroupOut",
     "WatchProgressOut",

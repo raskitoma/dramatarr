@@ -184,38 +184,9 @@ export function useRequestSearch(query: string, shortDrama = false) {
         shortDrama: shortDrama || undefined,
       }),
     enabled: trimmed.length >= MIN_QUERY_LENGTH,
-    // Two network providers answer this; re-running it because a component remounted would
-    // cost a member a second wait for an answer that has not changed.
+    // The indexer answers this over the network; re-running it because a component remounted
+    // would cost a member a second wait for an answer that has not changed.
     staleTime: 60_000,
-  })
-}
-
-/**
- * A poster for a card the search could not illustrate.
- *
- * Per card rather than folded into the search, and that is a deliberate trade. Most of this
- * library has no TMDB entry, so most cards arrive without a picture and the poster has to come
- * from the household's image search — a network call each. Doing that inside `/search` would
- * make the entire result list wait on the slowest of a dozen of them, and one engine having a
- * bad moment would empty the list rather than blank one thumbnail.
- *
- * The URL that comes back is always same-origin: the server fetched and re-encoded the bytes.
- * `null` is an ordinary answer and is cached like any other, so a title with no poster
- * anywhere is asked about once.
- */
-export function useCandidatePoster(title: string, year: number | null, enabled: boolean) {
-  const trimmed = title.trim()
-  return useQuery({
-    queryKey: [...requestKeys.all, 'poster', trimmed, year] as const,
-    queryFn: () =>
-      api.get<{ url: string | null }>('/requests/poster', {
-        q: trimmed,
-        year: year ?? undefined,
-      }),
-    enabled: enabled && trimmed.length > 0,
-    // The answer is a file on the server's disk; it does not change while the page is open.
-    staleTime: Infinity,
-    retry: false,
   })
 }
 

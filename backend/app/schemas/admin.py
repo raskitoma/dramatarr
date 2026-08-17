@@ -149,54 +149,9 @@ class SettingsUpdateIn(RootModel[dict[str, Any]]):
     root: dict[str, Any] = Field(default_factory=dict)
 
 
-class TmdbTestIn(APIModel):
-    api_key: str | None = None
-
-
 class TestResultOut(APIModel):
     ok: bool = True
     detail: str | None = None
-
-
-class SearchTestOut(TestResultOut):
-    """What `POST /settings/test-search` reports when the provider answers.
-
-    Every failure is an error code instead (`SEARXNG_JSON_DISABLED`, `SEARXNG_UNREACHABLE`,
-    `SEARXNG_BAD_RESPONSE`, `SEARCH_NOT_CONFIGURED`), so anything shaped like this means the
-    round trip worked. The counters are here because "it connected" is not the useful answer:
-    an instance with zero image engines, or one that returns zero results for a plain word,
-    is reachable and still useless, and the admin should see that on the same screen.
-    """
-
-    provider: str = ""
-    #: Empty for providers that have no instance of their own, i.e. Google.
-    base_url: str = ""
-    #: Only when the instance offers one — `/config` is not guaranteed to be reachable.
-    version: str | None = None
-    image_engine_count: int = 0
-    #: The fixed, harmless query the sample count was measured with.
-    sample_query: str = ""
-    sample_result_count: int = 0
-
-
-class SearchEngineOut(APIModel):
-    """One image engine the configured instance knows about."""
-
-    name: str
-    #: Whether the *instance* has it switched on. A disabled engine named in
-    #: `images.search.engines` silently returns nothing, so the picker shows the flag.
-    enabled: bool = True
-    #: SearXNG's `!bang` abbreviation for the engine, when it has one.
-    shortcut: str = ""
-
-
-class SearchEnginesOut(APIModel):
-    """The real engine list, so an admin picks names instead of guessing them."""
-
-    provider: str = ""
-    base_url: str = ""
-    version: str | None = None
-    engines: list[SearchEngineOut] = Field(default_factory=list)
 
 
 # --- Stats ----------------------------------------------------------------------------------
@@ -288,13 +243,9 @@ __all__ = [
     "JobOut",
     "JobReorderIn",
     "QueueStateOut",
-    "SearchEngineOut",
-    "SearchEnginesOut",
-    "SearchTestOut",
     "SettingsUpdateIn",
     "StatsOut",
     "TestResultOut",
-    "TmdbTestIn",
     "UserOut",
     "UserPatchIn",
     "VocabularyOut",

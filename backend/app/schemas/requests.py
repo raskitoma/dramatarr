@@ -62,15 +62,6 @@ class RequestCandidate(APIModel):
     request_status: RequestStatusName | None = None
 
 
-class RequestPosterOut(APIModel):
-    """The answer from `GET /requests/poster`.
-
-    Always this server's own path or null. Never a third-party URL — see the route.
-    """
-
-    url: str | None = None
-
-
 class RequestSearchResults(APIModel):
     query: str = ""
     #: Which sources actually answered: `tmdb`, `searxng`, or both. Empty means neither is
@@ -206,7 +197,6 @@ __all__ = [
     "RequestFolderOut",
     "RequestIdsIn",
     "RequestPatchIn",
-    "RequestPosterOut",
     "RequestRequester",
     "RequestSearchResults",
     "RequestSeriesRef",

@@ -396,17 +396,9 @@ export interface AdminStats {
 export const SECRET_SENTINEL = '__SET__'
 
 export interface SystemSettings {
-  'tmdb.api_key': string
-  /**
-   * OMDb, a public API over IMDb's data. The fallback for an IMDb id TMDB does not carry —
-   * which for vertical short drama is most of them. Empty disables the feature.
-   */
-  /** DramaDex — the household's indexer, and the primary metadata source. */
+  /** DramaDex — the household's indexer, and the only metadata source. */
   'dramadex.base_url': string
   'dramadex.api_key': string
-  'omdb.api_key': string
-  'tmdb.language': string
-  'tmdb.enabled': boolean
   'smtp.host': string
   'smtp.port': number
   'smtp.username': string
@@ -417,51 +409,8 @@ export interface SystemSettings {
   'smtp.use_ssl': boolean
   'site.name': string
   'site.default_locale': string
-  /**
-   * Optional web image search, used only by the artwork picker.
-   *
-   * `""` means not configured, which is the shipped state and stays that way unless the chosen
-   * provider is fully filled in: TMDB's own gallery is the primary source and needs nothing, so
-   * this is the fallback for the show TMDB has one bad poster for.
-   *
-   * Two providers: `searxng` talks to an instance the household already runs — no third-party
-   * key, no quota, and the query never leaves their network — and `google_cse` is the original
-   * hosted option. Which keys below matter depends entirely on this value; the others are kept
-   * rather than cleared, so switching back does not mean typing everything again.
-   */
-  'images.search.provider': string
-  /**
-   * Secret: reads back as `SECRET_SENTINEL` once stored, never as the value itself.
-   *
-   * One slot serving whichever provider is selected — Google's API key, or the token a SearXNG
-   * instance asks for when its owner has locked its API down (most have not).
-   */
-  'images.search.api_key': string
-  /** Google Programmable Search engine id (`cx`). */
-  'images.search.cse_id': string
-  /** SearXNG only: the instance's origin, e.g. `https://searx.casa.lan`. */
-  'images.search.base_url': string
-  /** SearXNG only: `off` | `moderate` | `strict`, mapped to the instance's `safesearch` 0/1/2. */
-  'images.search.safe_search': string
-  /** SearXNG only: the language to search in. Empty means the instance's own default. */
-  'images.search.language': string
-  /** SearXNG only: how long to wait for the instance, in seconds. */
-  'images.search.timeout': number
-  /**
-   * SearXNG only: which of the instance's image engines to query. Empty means its defaults.
-   *
-   * Comma-separated, which is the shape every other settings value has — but a server that
-   * stores it as a list is read just as well, and a save writes back whichever shape it sent.
-   * Engine names are the instance's own (`bing images`, `duckduckgo images`), not ours.
-   */
-  'images.search.engines': string | string[]
   'library.scan_cron': string
   'library.source_base_url': string
-  /**
-   * The household's vertical-drama platforms. `domain` may be empty — it is only used to
-   * narrow a web search, and a guessed one would silently return nothing.
-   */
-  'library.providers': { name: string; domain: string }[]
   'queue.paused': boolean
   'auth.magic_link_enabled': boolean
   'auth.invite_ttl_hours': number

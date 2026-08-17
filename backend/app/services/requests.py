@@ -53,14 +53,7 @@ from app.schemas.requests import (
     RequestSeriesRef,
     SeriesRequestOut,
 )
-from app.services.images import (
-    SearxngConfig,
-    _configured_searxng,
-    avatar_url,
-    cache_request_poster,
-    get_image_search,
-    is_request_poster,
-)
+from app.services.images import avatar_url, is_request_poster
 from app.services.renamer import sanitize_filename
 from app.services.scanner.scan import safe_media_path
 from app.services.search.normalize import normalize
@@ -75,10 +68,6 @@ from app.services.vocab import (
 from app.utils.time import utcnow
 
 log = logging.getLogger(__name__)
-
-#: Poster rendition for a request card. Small — these are thumbnails in a grid, and the file
-#: is fetched by every member's browser rather than cached here.
-POSTER_SIZE = "w342"
 
 #: The only host a request's `poster_url` may point at.
 #:
@@ -199,136 +188,7 @@ def safe_poster_url(value: str | None) -> str | None:
     return text if text.startswith(_POSTER_PREFIX) else None
 
 
-# --- Poster lookup ------------------------------------------------------------------------------
-#
-# The reason this exists: for the drama this library is made of, TMDB has no entry, so a card
-# assembled purely from web results has no picture at all — which is exactly what the household
-# saw. The household's own image search does find these posters, and it is already configured
-# for the artwork picker, so it is the natural source.
-#
-# It is a **separate endpoint, fetched per card**, rather than part of the search response. Two
-# reasons, both about how the screen feels: an image search per candidate would make the whole
-# result list wait on the slowest of a dozen network calls, and one engine having a bad moment
-# would take out the entire list instead of one thumbnail.
-
-#: Memo of query → served poster path (or None). Bounded and process-local; the durable cache
-#: is the file on disk, this only saves asking SearXNG the same question twice in a session.
-_POSTER_MEMO: dict[str, str | None] = {}
-_POSTER_MEMO_MAX = 512
-
-
-def _poster_query(title: str, year: int | None) -> str:
-    """What actually goes to the image engine.
-
-    The word "poster" is appended because without it an image search for a drama's title
-    returns stills, cast photographs and thumbnails from the very sites this app does not deal
-    with. It is the one term that biases the result toward artwork.
-    """
-    text = " ".join((title or "").split())
-    if not text:
-        return ""
-    stamp = str(year) if year else ""
-    parts = [text, stamp, "poster"] if stamp and stamp not in text.split() else [text, "poster"]
-    return " ".join(part for part in parts if part)
-
-
-async def find_poster(session: AsyncSession, title: str, year: int | None = None) -> str | None:
-    """A poster for a title that has none, served from this origin. None when there is none.
-
-    Every failure is None rather than an error. A missing picture is the ordinary case for
-    this library, and it must never be the reason a member cannot ask for something.
-    """
-    query = _poster_query(title, year)
-    if not query:
-        return None
-    if query in _POSTER_MEMO:
-        return _POSTER_MEMO[query]
-
-    result: str | None = None
-    try:
-        provider = await get_image_search(session)
-        if provider is not None:
-            hits = await provider.search(query, limit=4)
-            for hit in hits:
-                # `hit.url` is the full-size image on the open web; the guarded fetch inside
-                # `cache_request_poster` is what makes downloading it safe, and it is the same
-                # guard an admin-supplied artwork URL goes through.
-                cached = await cache_request_poster(hit.url)
-                if cached is not None:
-                    result = cached
-                    break
-    except AppError as exc:
-        log.info("poster lookup failed (%s) for %r", exc.code, query[:80])
-    except Exception:  # pragma: no cover - a thumbnail must never break the screen
-        log.warning("poster lookup failed unexpectedly for %r", query[:80], exc_info=True)
-
-    if len(_POSTER_MEMO) >= _POSTER_MEMO_MAX:
-        _POSTER_MEMO.clear()
-    _POSTER_MEMO[query] = result
-    return result
-
-
 # --- Searching ---------------------------------------------------------------------------------
-
-
-
-
-def _tmdb_candidate(row: dict[str, Any]) -> RequestCandidate | None:
-    """One TMDB row as a card, or None when it carries no id or title to show."""
-    tmdb_id = row.get("id")
-    if not isinstance(tmdb_id, int):
-        return None
-    title, year, poster, kind = _tmdb_row_facts(row)
-    if not title:
-        return None
-
-    ids = DiscoveredIds(tmdb_id=tmdb_id, tmdb_kind=kind)  # type: ignore[arg-type]
-    return RequestCandidate(
-        key=dedupe_key(ids, title, year),
-        title=title,
-        year=year,
-        poster_url=f"{IMAGE_BASE}/{POSTER_SIZE}{poster}" if poster else None,
-        # The canonical page for the record, built rather than crawled. It is what the admin
-        # opens, and TMDB is the one source whose URL shape this app already knows.
-        source_url=f"https://www.themoviedb.org/{kind}/{tmdb_id}",
-        provider="themoviedb.org",
-        snippet=str(row.get("overview") or "").strip()[:400],
-        ids=ids,
-    )
-
-
-def _discovery_candidate(
-    result: Any, platforms: Sequence[Provider] = ()
-) -> RequestCandidate:
-    """One web result as a card. Keeps its own words: the headline is all it has.
-
-    `provider` prefers the *platform's* name over the bare host when the domain is one the
-    household configured, so a card reads `ReelShort` rather than `reelshort.com`. That is the
-    one piece of provenance a member has to judge two similar hits by.
-    """
-    ids = result.ids
-    title = (result.title or "").strip() or result.source_domain
-    platform = provider_for_domain(result.source_domain, platforms)
-    return RequestCandidate(
-        key=dedupe_key(ids, title),
-        title=title,
-        year=None,
-        poster_url=None,
-        source_url=result.url,
-        provider=platform or result.source_domain,
-        snippet=result.snippet,
-        ids=ids,
-    )
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -887,7 +747,6 @@ __all__ = [
     "dedupe_key",
     "delete_any",
     "delete_own",
-    "find_poster",
     "folder_name_for",
     "get_or_404",
     "list_all",

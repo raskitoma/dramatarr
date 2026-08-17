@@ -25,7 +25,6 @@ import {
   requestFromCandidate,
   requestStatusKey,
   useCancelRequest,
-  useCandidatePoster,
   useCreateRequest,
   useMyRequests,
   useRequestSearch,
@@ -290,12 +289,11 @@ function CandidateCard({ candidate, busy, onAsk }: CandidateCardProps) {
   const { t } = useTranslation()
   const year = candidate.year ? String(candidate.year) : null
 
-  /* Only the cards the search could not illustrate ask for a poster, which for this library is
-     most of them: TMDB has no entry for a lot of vertical drama, so the picture has to come
-     from the household's own image search. A card with no picture is still a usable card, so
-     nothing here waits on the answer. */
-  const lookup = useCandidatePoster(candidate.title, candidate.year, candidate.posterUrl === null)
-  const poster = candidate.posterUrl ?? lookup.data?.url ?? null
+  /* Every hit carries its own poster address now, because every hit comes from the indexer and
+     the indexer keys artwork by title id. There used to be a second request per illustrationless
+     card, back when results were web pages rather than records; nothing left can answer it.
+     A title the indexer has no art for still renders — `Poster` has its own placeholder. */
+  const poster = candidate.posterUrl
 
   return (
     <article className={styles.card}>
