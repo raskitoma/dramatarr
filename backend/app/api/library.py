@@ -85,7 +85,6 @@ from app.services.images import (
     ArtworkKind,
     cache_dramadex_poster,
     fetch_remote_image,
-    get_image_search,
     read_capped,
     store_series_artwork,
 )
@@ -432,83 +431,21 @@ async def series_artwork(
     q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=10)] = 10,
 ) -> ArtworkCandidates:
-    """Every poster and backdrop worth choosing between, from every source that can answer.
+    """What there is to choose between, which is now nothing but your own upload.
 
-    Both sources are optional and **neither failing is an error**. TMDB needs the series to be
-    linked; the web search needs configuration a fresh install does not have. The response says
-    which sources answered and why the others did not, and an admin opening this on an unlinked
-    series with no search key gets an empty picker and a reason — not a 503 on the one screen
-    they would use to fix it.
+    Two galleries fed this: TMDB's artwork endpoint and a web image search. Both went with
+    the sources they belonged to. DramaDex supplies a poster, but it arrives with the metadata
+    fill rather than as a menu — there is exactly one per title, so there is nothing to pick.
+
+    Still answers rather than 404s, and still says *why* it is empty. The picker was already
+    built for an empty response with a reason — that was the fresh-install case — so the one
+    path that survived, uploading your own image, keeps working unchanged.
     """
     series = await library_service.get_series_or_404(session, series_id)
-    out = ArtworkCandidates(series_id=series.id, tmdb_id=series.tmdb_id)
-
-    client = await try_tmdb_client(session)
-    if client is None:
-        out.sources.append(
-            ArtworkSourceOut(name="tmdb", provider="tmdb", reason="NOT_CONFIGURED")
-        )
-    elif series.tmdb_id is None:
-        out.sources.append(ArtworkSourceOut(name="tmdb", provider="tmdb", reason="NOT_LINKED"))
-    else:
-        try:
-            gallery = await client.get_tv_images(series.tmdb_id)
-        except AppError as exc:
-            log.warning("TMDB image gallery failed for series %s: %s", series.id, exc.code)
-            out.sources.append(
-                ArtworkSourceOut(name="tmdb", provider="tmdb", reason="PROVIDER_ERROR")
-            )
-        else:
-            out.posters = _artwork_candidates(gallery.get("posters", []), "poster")
-            out.backdrops = _artwork_candidates(gallery.get("backdrops", []), "backdrop")
-            out.sources.append(
-                ArtworkSourceOut(
-                    name="tmdb",
-                    provider="tmdb",
-                    available=True,
-                    count=len(out.posters) + len(out.backdrops),
-                )
-            )
-
-    provider = await get_image_search(session)
-    if provider is None:
-        out.sources.append(ArtworkSourceOut(name="web", reason="NOT_CONFIGURED"))
-        return out
-
-    query = (q or "").strip() or " ".join(
-        part for part in (series.title, str(series.year) if series.year else "", "poster") if part
+    return ArtworkCandidates(
+        series_id=series.id,
+        sources=[ArtworkSourceOut(name="upload", provider="upload", reason="NO_GALLERY")],
     )
-    try:
-        results = await provider.search(query, limit=limit)
-    except AppError as exc:
-        log.warning("Image search (%s) failed: %s", provider.name, exc.code)
-        out.sources.append(
-            ArtworkSourceOut(name="web", provider=provider.name, reason="PROVIDER_ERROR")
-        )
-        return out
-
-    # These are candidates, not downloads. Every `url` here came from the open internet by way
-    # of a search engine and is trusted by nobody; it becomes bytes on disk only through
-    # `POST .../artwork` below, which puts it through the same address guard a pasted URL gets.
-    out.web = [
-        ArtworkCandidate(
-            source=provider.name,
-            url=item.url,
-            thumbnail_url=item.thumbnail_url or item.url,
-            width=item.width,
-            height=item.height,
-            title=item.title,
-            context_url=item.context_url,
-            engine=item.engine,
-        )
-        for item in results
-    ]
-    out.sources.append(
-        ArtworkSourceOut(
-            name="web", provider=provider.name, available=True, count=len(out.web)
-        )
-    )
-    return out
 
 
 async def _apply_artwork(

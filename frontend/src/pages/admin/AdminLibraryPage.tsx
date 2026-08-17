@@ -376,7 +376,7 @@ function SeriesTab() {
                 <th scope="col">{t('admin.library.titleValue')}</th>
                 <th scope="col">{t('series.year')}</th>
                 <th scope="col">{t('series.episodes')}</th>
-                <th scope="col">{t('admin.library.tmdbColumn')}</th>
+                <th scope="col">{t('admin.library.dramadexColumn')}</th>
                 <th scope="col" className={styles.actionsCell}>
                   {t('common.actions')}
                 </th>
@@ -443,13 +443,13 @@ function SeriesTab() {
                       </>
                     )}
                   </Cell>
-                  <Cell label={t('admin.library.tmdbColumn')}>
-                    {row.tmdbId === undefined ? (
+                  <Cell label={t('admin.library.dramadexColumn')}>
+                    {row.dramadexId === undefined ? (
                       <span className={styles.muted}>{t('common.unknown')}</span>
-                    ) : row.tmdbId === null ? (
-                      <Badge tone="neutral">{t('admin.library.tmdbNotLinked')}</Badge>
+                    ) : row.dramadexId === null ? (
+                      <Badge tone="neutral">{t('admin.library.dramadexNotLinked')}</Badge>
                     ) : (
-                      <Badge tone="success">{t('admin.library.tmdbLinked')}</Badge>
+                      <Badge tone="success">{t('admin.library.dramadexLinked')}</Badge>
                     )}
                   </Cell>
                   <Cell label={t('common.actions')} className={styles.actionsCell}>
