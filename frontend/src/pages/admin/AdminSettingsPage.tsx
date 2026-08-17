@@ -41,7 +41,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@/i18n'
 
 import DramadexSection from '@/components/admin/DramadexSection'
-import ProvidersSection from '@/components/admin/ProvidersSection'
 import SettingsToc, { type TocSection } from '@/components/admin/SettingsToc'
 
 import styles from './AdminSettingsPage.module.css'
@@ -50,7 +49,6 @@ import styles from './AdminSettingsPage.module.css'
 const SECTIONS: readonly TocSection[] = [
   { id: 'settings-site', labelKey: 'admin.settings.site' },
   { id: 'settings-library', labelKey: 'admin.settings.librarySection' },
-  { id: 'settings-providers', labelKey: 'admin.settings.providersSection' },
   { id: 'settings-dramadex', labelKey: 'admin.settings.dramadexSection' },
   { id: 'settings-metadata', labelKey: 'admin.settings.metadata' },
   { id: 'settings-email', labelKey: 'admin.settings.email' },
@@ -800,7 +798,6 @@ export function AdminSettingsPage() {
         {sectionFooter('site', true)}
       </form>
 
-      <ProvidersSection />
 
       {/* Library ------------------------------------------------------------------------ */}
       <form className={styles.card} id="settings-library" onSubmit={submit('library', cronValid)}>
