@@ -43,7 +43,6 @@ import { IconButton } from '@/components/IconButton'
 import { Input } from '@/components/Input'
 import { Poster } from '@/components/Poster'
 import { Spinner } from '@/components/Spinner'
-import { Switch } from '@/components/Switch'
 import { useToast } from '@/components/Toast'
 import {
   BanIcon,
@@ -98,14 +97,13 @@ export function RequestsPage() {
   const [note, setNote] = useState('')
   /* On by default. This household's library is entirely vertical drama, and the mode exists
      because the general catalogues answer those queries with ordinary television. */
-  const [shortDrama, setShortDrama] = useState(true)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(input.trim()), DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [input])
 
-  const search = useRequestSearch(query, shortDrama)
+  const search = useRequestSearch(query, true)
   const mine = useMyRequests()
   const create = useCreateRequest()
   const cancel = useCancelRequest()
@@ -175,16 +173,6 @@ export function RequestsPage() {
             />
           </span>
         </Field>
-        {/* `Switch` is already a real checkbox inside its own `<label>`, so it takes the
-            label and hint as props — wrapping it in a second label would nest two of them and
-            give the control a doubled accessible name. */}
-        <Switch
-          className={styles.modeToggle}
-          checked={shortDrama}
-          onChange={setShortDrama}
-          label={t('requests.shortDramaMode')}
-          hint={t('requests.shortDramaHint')}
-        />
       </form>
 
       {search.data && !search.data.configured && active ? (

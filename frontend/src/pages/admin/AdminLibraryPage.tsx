@@ -36,7 +36,6 @@ import { libraryKeys } from '@/api/library'
 import type { SeriesStatus, UnmatchedFile } from '@/api/types'
 import BulkEditBar from '@/components/admin/BulkEditBar'
 import DeleteSeriesDialog from '@/components/admin/DeleteSeriesDialog'
-import TmdbMatchDialog from '@/components/admin/TmdbMatchDialog'
 import UnmatchedTable from '@/components/admin/UnmatchedTable'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -52,7 +51,7 @@ import Select from '@/components/Select'
 import Spinner from '@/components/Spinner'
 import { useToast } from '@/components/Toast'
 import { cx } from '@/components/cx'
-import { EditIcon, LinkIcon, RefreshIcon, SearchIcon, TrashIcon } from '@/components/icons'
+import { EditIcon, RefreshIcon, SearchIcon, TrashIcon } from '@/components/icons'
 import { declaredIsPlausible } from '@/lib/format'
 
 import styles from './AdminLibraryPage.module.css'
@@ -210,7 +209,6 @@ function SeriesTab() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<SeriesStatus | ''>('')
   const [page, setPage] = useState(1)
-  const [matchTarget, setMatchTarget] = useState<AdminSeriesRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminSeriesRow | null>(null)
   /* Ids rather than rows, and a Set rather than an array: a selection has to survive the list
      refetching underneath it — which it does on every bulk apply — and rows are new objects
@@ -478,13 +476,6 @@ function SeriesTab() {
                         <RefreshIcon />
                       </IconButton>
                       <IconButton
-                        variant="secondary"
-                        label={t('admin.library.matchTmdbFor', { title: row.title })}
-                        onClick={() => setMatchTarget(row)}
-                      >
-                        <LinkIcon />
-                      </IconButton>
-                      <IconButton
                         variant="danger"
                         label={t('admin.library.deleteFor', { title: row.title })}
                         onClick={() => setDeleteTarget(row)}
@@ -504,20 +495,6 @@ function SeriesTab() {
         <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPage={setPage} />
       ) : null}
 
-      {matchTarget ? (
-        <TmdbMatchDialog
-          open
-          onClose={() => setMatchTarget(null)}
-          seriesId={matchTarget.id}
-          seriesTitle={matchTarget.title}
-          initialQuery={matchTarget.title}
-          initialYear={matchTarget.year}
-          // The table already knows whether this row is linked; without it the dialog's
-          // unlink tab would claim an unlinked series on a row the same table marks linked.
-          currentTmdbId={matchTarget.tmdbId ?? null}
-          onMatched={() => void seriesQuery.refetch()}
-        />
-      ) : null}
 
       {deleteTarget ? (
         <DeleteSeriesDialog

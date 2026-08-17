@@ -132,7 +132,7 @@ describe('TmdbMatchDialog', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /por id/i }))
     fireEvent.click(screen.getByRole('button', { name: /buscar por id/i }))
-    expect(screen.getByText(/escribí uno de los dos/i)).toBeTruthy()
+    expect(screen.getByText(/uno de los dos ID/i)).toBeTruthy()
 
     fireEvent.change(document.getElementById('imdb-id') as HTMLInputElement, {
       target: { value: 'nope' },

@@ -2418,9 +2418,19 @@ async def apply_dramadex_title(
         filled.append("cast")
 
     await session.execute(sql_delete(SeriesLink).where(SeriesLink.series_id == series.id))
+    # One row per platform, and the first wins.
+    #
+    # A platform can list the same show twice: GoodShort carries "Found A Homeless Genius To
+    # Save My Company" under two ids, and once DramaDex merged them into one title it returned
+    # both links. Storing both violates the one-link-per-studio constraint, and it would put
+    # two identical "Watch on GoodShort" buttons on the page even if it did not — a reader
+    # cannot choose between two links to the same platform, so offering the choice is worse
+    # than picking for them.
+    seen_studios: set[str] = set()
     for link in found.studios:
-        if not link.is_watchable:
+        if not link.is_watchable or link.key in seen_studios:
             continue
+        seen_studios.add(link.key)
         session.add(
             SeriesLink(
                 series_id=series.id,

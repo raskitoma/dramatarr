@@ -25,6 +25,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { Poster } from '@/components/Poster'
 import { Spinner } from '@/components/Spinner'
 import { ExternalLinkIcon } from '@/components/icons'
+import { initialsOf } from '@/lib/format'
 
 import styles from './PersonPage.module.css'
 
@@ -61,6 +62,9 @@ export function PersonPage() {
   return (
     <article className={styles.page}>
       <header className={styles.header}>
+        <div className={styles.face} aria-hidden="true" data-tint={person.id % 6}>
+          {initialsOf(person.name, '?')}
+        </div>
         <h1 className={styles.name}>{person.name}</h1>
         <p className={styles.count}>
           {t('person.creditCount', { count: person.credits.length })}

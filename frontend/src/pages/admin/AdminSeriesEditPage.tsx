@@ -35,8 +35,6 @@ import type {
 import ArtworkPicker from '@/components/admin/ArtworkPicker'
 import RenamePanel from '@/components/admin/RenamePanel'
 import DramadexPanel from '@/components/admin/DramadexPanel'
-import SynopsisFinder from '@/components/admin/SynopsisFinder'
-import TmdbMatchDialog from '@/components/admin/TmdbMatchDialog'
 import { TocLayout } from '@/components/admin/TocLayout'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -282,7 +280,6 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
   const [form, setForm] = useState<SeriesForm>(EMPTY_FORM)
   const [baseline, setBaseline] = useState<SeriesForm>(EMPTY_FORM)
   const [genreDraft, setGenreDraft] = useState('')
-  const [showTmdb, setShowTmdb] = useState(false)
   const [showArtwork, setShowArtwork] = useState(false)
   const [zoomOpen, setZoomOpen] = useState(false)
   const [leaveTo, setLeaveTo] = useState<string | null>(null)
@@ -455,7 +452,6 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
           <Button onClick={() => refresh.mutate()} loading={refresh.isPending}>
             {t('admin.library.refreshMetadata')}
           </Button>
-          <Button onClick={() => setShowTmdb(true)}>{t('admin.library.matchTmdb')}</Button>
           <Button onClick={() => setShowArtwork(true)}>{t('admin.library.artworkAction')}</Button>
         </div>
       </header>
@@ -517,22 +513,17 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
                 onChange={(event) => setForm({ ...form, overview: event.target.value })}
               />
             </Field>
-            {/* DramaDex first: it returns a record, where the panel below returns a link.
-                The old one stays for the titles the indexer's sync has not reached yet. */}
+            {/* The only finder on this screen. The web-search panel that used to sit beneath
+                it, and the TMDB match dialog above, are gone from the UI: DramaDex now
+                resolves all 17 series in this library where between them they resolved two,
+                and offering three finders invites picking the wrong one. The code behind them
+                is still in the repository — this is a removal from the interface, not a
+                deletion — so the settings that configure them stay meaningful for anyone who
+                needs to go back. */}
             <DramadexPanel
               seriesId={detail.id}
               seriesTitle={detail.title}
               onApplied={() => setSeed(null)}
-            />
-            <SynopsisFinder
-              seriesId={detail.id}
-              seriesTitle={detail.title}
-              // Binding enqueues a metadata refresh, so the filled-in fields arrive a moment
-              // later. Re-seeding the form is what puts them on screen without a reload.
-              onApplied={() => setSeed(null)}
-              // Into the form, not into the database. It lands in the picker below, marked
-              // unsaved like any other edit, and goes out with the next save.
-              onNetwork={(network) => setForm((current) => ({ ...current, network }))}
             />
           </div>
 
@@ -645,19 +636,6 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
       <RenamePanel seriesId={detail.id} />
       </TocLayout>
 
-      {showTmdb ? (
-        <TmdbMatchDialog
-          open
-          onClose={() => setShowTmdb(false)}
-          seriesId={detail.id}
-          seriesTitle={detail.title}
-          initialQuery={detail.title}
-          initialYear={detail.year}
-          currentTmdbId={detail.tmdbId}
-          currentImdbId={detail.imdbId}
-          onMatched={() => void detailQuery.refetch()}
-        />
-      ) : null}
 
       {showArtwork ? (
         <ArtworkPicker

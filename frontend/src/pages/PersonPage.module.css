@@ -110,3 +110,41 @@
 .watch:hover {
   color: var(--accent);
 }
+
+/* The actor's face, which is never a face.
+ *
+ * DramaDex has no person images — its `PersonDetail` is id, name, bio, external_ids and
+ * titles, and there is no route serving a portrait, because the platforms it scrapes publish
+ * none. So this is not a placeholder standing in for a picture that will arrive later; it is
+ * the finished treatment, exactly as it is for a household member who never uploaded an
+ * avatar. Six tints keyed off the person id so one actor keeps one colour across the app.
+ */
+.face {
+  display: grid;
+  place-items: center;
+  inline-size: 4rem;
+  block-size: 4rem;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--surface);
+  background: var(--accent);
+}
+
+.face[data-tint='1'] { background: #6c8cff; }
+.face[data-tint='2'] { background: #b06cff; }
+.face[data-tint='3'] { background: #2f9e78; }
+.face[data-tint='4'] { background: #d1743c; }
+.face[data-tint='5'] { background: #4aa3c7; }
+
+/* The header stops being a plain column once it carries a face. */
+.header {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.header > :not(.face) {
+  flex-basis: 100%;
+}

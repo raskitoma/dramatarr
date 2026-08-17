@@ -402,3 +402,41 @@ async def test_a_declared_count_below_the_files_is_still_refused(db: AsyncSessio
     await library_service.apply_dramadex_title(db, series, parsed())  # claims 51
 
     assert series.declared_episode_count is None
+
+
+async def test_a_platform_listing_a_show_twice_yields_one_link(db: AsyncSession) -> None:
+    """Found by running against the live index, not by imagining it.
+
+    GoodShort carries "Found A Homeless Genius To Save My Company" under two ids, and once
+    DramaDex merged those into one title it returned both. Two rows for one studio violates
+    the unique constraint — and even without it, two identical "Watch on GoodShort" buttons
+    is a choice a reader cannot make.
+    """
+    series = await make_series(db)
+    payload = title_payload(
+        studios=[
+            {
+                "key": "goodshort",
+                "name": "GoodShort",
+                "external_id": "31001349156",
+                "watch_url": "https://www.goodshort.com/drama/a-31001349156",
+            },
+            {
+                "key": "goodshort",
+                "name": "GoodShort",
+                "external_id": "31001662876",
+                "watch_url": "https://www.goodshort.com/drama/a-31001662876",
+            },
+        ]
+    )
+    found = dramadex._title(payload)
+    assert found is not None
+
+    await library_service.apply_dramadex_title(db, series, found)
+
+    links = (
+        await db.execute(select(SeriesLink).where(SeriesLink.series_id == series.id))
+    ).scalars().all()
+    assert [link.studio_key for link in links] == ["goodshort"]
+    # The first one wins, deterministically.
+    assert links[0].external_id == "31001349156"
