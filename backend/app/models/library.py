@@ -47,6 +47,15 @@ class OverviewSource(enum.StrEnum):
     TMDB = "tmdb"
     WIKIPEDIA = "wikipedia"
     MANUAL = "manual"
+    #: DramaDex's own synopsis.
+    #:
+    #: It needs a value of its own, and the absence of one was a real defect: the indexer's text
+    #: was being stored as MANUAL, which is precisely the label that means "a person wrote this,
+    #: never overwrite it". So a refresh could not replace a synopsis DramaDex itself had
+    #: written, "Actualizar metadata" reported no changes forever, and nothing could tell the
+    #: two apart afterwards. Rows written before this value existed still say `manual` and are
+    #: treated as a person's, because that is the safe direction to be wrong in.
+    DRAMADEX = "dramadex"
 
 
 class Series(Base):

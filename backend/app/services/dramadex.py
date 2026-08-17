@@ -479,6 +479,25 @@ def hit_from(found: DramadexTitle, *, wanted: str = "", in_library: bool = False
 # --- The refresh job ------------------------------------------------------------------------
 
 
+def _needs_poster(series: Any) -> bool:
+    """True when the series has no poster a browser could actually load.
+
+    Checked against the filesystem rather than against the column, because those two disagree
+    in a way that shows up on screen: `poster_path` survives a wiped image cache, a restore
+    that missed `DATA_PATH`, or a failed write, and every one of those leaves a row pointing at
+    nothing. A remote path is taken on trust — there is nothing local to stat — which is right,
+    since re-fetching a working remote poster on every refresh would be the worse mistake.
+    """
+    from app.services.images import cached_file, is_cached_path
+
+    path = series.poster_path or ""
+    if not path:
+        return True
+    if not is_cached_path(path):
+        return False
+    return cached_file(path) is None
+
+
 async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:
     """Re-read a bound series from the indexer and write what changed.
 
@@ -516,10 +535,21 @@ async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = No
 
     if ctx is not None:
         await ctx.progress(70.0, "Writing metadata")
-    filled = await apply_dramadex_title(session, series, found)
+    # `overwrite=True` because this is somebody pressing "Refresh": re-reading the one index
+    # that catalogues this library is the whole point, and a blanks-only pass over a row that
+    # is already full does nothing and says so, which is exactly how this button came to look
+    # broken. A synopsis a person wrote is still protected — by its provenance, inside
+    # `apply_dramadex_title`, not by this flag.
+    filled = await apply_dramadex_title(session, series, found, overwrite=True)
 
     # Artwork last, and never fatally.
-    if not series.poster_path:
+    #
+    # The condition is "no usable poster", not "no poster path". A row can carry a path whose
+    # file is not on disk — the image cache is derived data and the database is not — and the
+    # earlier `if not series.poster_path` made that state permanent: the series rendered a
+    # broken image, and the one control that could have repaired it skipped the fetch every
+    # time precisely because the broken path was set.
+    if _needs_poster(series):
         fetched = await client.poster_bytes(found.id)
         if fetched is not None:
             from app.services.images import cache_dramadex_poster

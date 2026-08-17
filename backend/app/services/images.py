@@ -203,6 +203,17 @@ def _resolve_local(relative: str) -> Path | None:
         return None
 
 
+def cached_file(relative: str) -> Path | None:
+    """Public name for `_resolve_local`: the file a cached path points at, or None.
+
+    Exposed because "the column says there is a poster" and "a browser can load that poster"
+    are different questions, and callers outside this module have to be able to ask the second
+    one. `dramadex.refresh_series` is the first: it used to skip the artwork fetch whenever the
+    path was non-empty, which made a row pointing at a deleted file permanently broken.
+    """
+    return _resolve_local(relative)
+
+
 def _write_atomic(dest: Path, data: bytes) -> None:
     """Write via a scratch name so a killed process cannot leave a truncated file in place.
 
@@ -1106,6 +1117,7 @@ __all__ = [
     "MAX_REQUEST_POSTER_BYTES",
     "REQUEST_POSTER_KIND",
     "cache_request_poster",
+    "cached_file",
     "is_request_poster",
     "request_poster_url",
     "store_series_artwork",

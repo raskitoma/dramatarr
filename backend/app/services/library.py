@@ -2395,13 +2395,19 @@ async def apply_dramadex_title(
     and, on a good day, an English plot; DramaDex knows the platform, the cast, sixteen
     namespaces of tags and the link to watch it — for a genre neither of the others catalogued.
 
-    **Blanks only unless `overwrite`**: this household writes its synopses in Spanish, and
-    coming back for the cast must not cost the paragraph somebody wrote.
+    **Blanks only unless `overwrite`**, and a deliberate refresh passes `overwrite=True`
+    because re-reading the one authoritative index is the entire point of the button. What
+    `overwrite` does *not* do is take a synopsis away from the person who wrote it: the
+    overview is protected by its provenance rather than by the flag, so text stamped
+    `OverviewSource.MANUAL` survives every refresh while DramaDex's own text is replaced.
 
-    Cast and links are the exception, and deliberately so. They are a *cache* of DramaDex's
-    answer rather than something an admin curates here, so they are replaced wholesale — a
-    merge would leave an actor behind after the indexer corrected a bad scrape, and there is
-    no local edit to protect.
+    That distinction did not exist until now, and its absence is what made "Actualizar
+    metadata" look broken: the indexer's synopsis was stored as MANUAL, so it was
+    indistinguishable from a human paragraph and no refresh could ever touch it.
+
+    Cast and links are replaced wholesale in either mode. They are a *cache* of DramaDex's
+    answer rather than something an admin curates here — a merge would leave an actor behind
+    after the indexer corrected a bad scrape, and there is no local edit to protect.
 
     `declared_episode_count` goes through the same guard as every other writer: a count below
     what is already on the NAS is refused, because the file count is the number that is a
@@ -2414,21 +2420,35 @@ async def apply_dramadex_title(
             return
         if not overwrite and getattr(series, field_name, None):
             return
+        if getattr(series, field_name, None) == value:
+            # Nothing changed. Reporting it as "filled" is what made a refresh claim to have
+            # rewritten nine fields it had left exactly as they were.
+            return
         setattr(series, field_name, value)
         filled.append(field_name)
 
-    put("overview", found.synopsis)
-    put("year", found.year)
-    put("genres", normalize_genres(found.genres()))
-    put("network", found.studio_name)
-    put("content_rating", canonical_content_rating(found.audience_rating))
-
-    if found.synopsis and "overview" in filled:
-        series.overview_source = OverviewSource.MANUAL
+    # The synopsis answers to provenance, not to the flag. A person's paragraph is theirs even
+    # under `overwrite`; anything the indexer wrote is the indexer's to correct.
+    overview_is_ours = series.overview_source in (
+        None,
+        OverviewSource.DRAMADEX,
+        OverviewSource.TMDB,
+        OverviewSource.WIKIPEDIA,
+    )
+    if found.synopsis and (not series.overview or (overwrite and overview_is_ours)):
+        if series.overview != found.synopsis:
+            series.overview = found.synopsis
+            filled.append("overview")
+        series.overview_source = OverviewSource.DRAMADEX
         series.overview_source_lang = "en"
         watch = next((s.watch_url for s in found.studios if s.is_watchable), None)
         if watch:
             series.overview_source_url = watch[:1000]
+
+    put("year", found.year)
+    put("genres", normalize_genres(found.genres()))
+    put("network", found.studio_name)
+    put("content_rating", canonical_content_rating(found.audience_rating))
 
     files_on_disk = int(
         (
@@ -2510,11 +2530,19 @@ async def apply_dramadex_title(
             )
         )
 
-    series.dramadex_id = found.id
-    if "dramadex_id" not in filled:
-        filled.append("dramadex_id")
+    if series.dramadex_id != found.id:
+        series.dramadex_id = found.id
+        if "dramadex_id" not in filled:
+            filled.append("dramadex_id")
 
-    series.metadata_locked = True
+    # Deliberately does **not** set `metadata_locked`.
+    #
+    # It used to, and that was wrong twice over. The flag means "a person edited this row, so
+    # leave it alone" — the series page says so in as many words ("Editaste esta serie a mano")
+    # — and an automatic fill setting it made the application assert something false about
+    # every series it touched. It also switched the scheduled refresh off across the whole
+    # library, one series at a time, which is the opposite of what connecting an indexer is
+    # for. A human edit still locks the row; that happens in `apply_series_patch`.
     series.updated_at = utcnow()
     await session.flush()
     await reindex_series(session, series.id)

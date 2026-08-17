@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError
 from app.models import Episode, MediaFile, MediaStatus, Series, SeriesCast, SeriesLink, SeriesTitle
+from app.models.library import OverviewSource
 from app.services import dramadex
 from app.services import library as library_service
 
@@ -332,8 +333,13 @@ async def test_applying_fills_a_bare_series(db: AsyncSession) -> None:
     assert series.genres == ["Drama", "Family Drama", "Modern"]
     assert series.network == "ReelShort"
     assert series.dramadex_id == 4242
-    assert series.metadata_locked is True
     assert "cast" in filled and "links" in filled
+    # An automatic fill is **not** a human edit, and it used to claim to be one. The lock says
+    # "somebody edited this by hand, leave it alone"; setting it here made the series page tell
+    # every admin they had edited a row they had never opened, and switched the scheduled
+    # refresh off across the whole library one series at a time.
+    assert series.metadata_locked is False
+    assert series.overview_source == OverviewSource.DRAMADEX
 
 
 async def test_applying_does_not_destroy_a_synopsis_somebody_wrote(db: AsyncSession) -> None:
@@ -493,3 +499,141 @@ async def test_a_blank_query_asks_nobody_anything(db: AsyncSession) -> None:
 
     assert found.query == ""
     assert found.results == []
+
+
+async def test_a_refresh_replaces_what_the_indexer_owns(db: AsyncSession) -> None:
+    """The complaint that started this: "Actualizar metadata" appeared to do nothing.
+
+    It ran, and it filled blanks only — so on a series that was already complete it changed
+    nothing and said so. Re-reading the one index that catalogues this library is the entire
+    point of the button, so a refresh overwrites the fields that index owns.
+    """
+    series = await make_series(db)
+    await library_service.apply_dramadex_title(db, series, parsed())
+
+    # Something drifted: a stale year, a genre list from an older scrape.
+    series.year = 1999
+    series.genres = ["Wrong"]
+    await db.flush()
+
+    filled = await library_service.apply_dramadex_title(db, series, parsed(), overwrite=True)
+
+    assert series.year == 2025
+    assert series.genres == ["Drama", "Family Drama", "Modern"]
+    assert "year" in filled and "genres" in filled
+
+
+async def test_a_refresh_that_changes_nothing_reports_nothing(db: AsyncSession) -> None:
+    """`filled` is what the job reports to the admin, so it has to mean something.
+
+    Before the equality check every overwrite listed every field it had written, including the
+    ones it had rewritten with the value already there — so a refresh that genuinely changed
+    nothing announced nine changes.
+    """
+    series = await make_series(db)
+    await library_service.apply_dramadex_title(db, series, parsed())
+
+    filled = await library_service.apply_dramadex_title(db, series, parsed(), overwrite=True)
+
+    scalar = [name for name in filled if name not in {"cast", "links"}]
+    assert scalar == [], f"a no-op refresh reported {scalar}"
+
+
+async def test_a_refresh_keeps_a_synopsis_a_person_wrote(db: AsyncSession) -> None:
+    """`overwrite` must not mean "take the admin's paragraph away".
+
+    The overview answers to provenance rather than to the flag: MANUAL is a person's and
+    survives, and that is the whole reason DRAMADEX had to become a value of its own.
+    """
+    series = await make_series(db, overview="Una sinopsis que escribí yo.")
+    series.overview_source = OverviewSource.MANUAL
+    await db.flush()
+
+    await library_service.apply_dramadex_title(db, series, parsed(), overwrite=True)
+
+    assert series.overview == "Una sinopsis que escribí yo."
+    assert series.overview_source == OverviewSource.MANUAL
+
+
+async def test_a_refresh_replaces_a_synopsis_the_indexer_wrote(db: AsyncSession) -> None:
+    """The other half, and the one that was impossible before.
+
+    DramaDex's own synopsis was stored as MANUAL — the label meaning "never overwrite" — so the
+    indexer could not correct its own text and the refresh had nothing to say about it, ever.
+    """
+    series = await make_series(db)
+    await library_service.apply_dramadex_title(db, series, parsed())
+    assert series.overview_source == OverviewSource.DRAMADEX
+
+    series.overview = "Un resumen viejo que trajo el indexador."
+    await db.flush()
+
+    filled = await library_service.apply_dramadex_title(db, series, parsed(), overwrite=True)
+
+    assert series.overview == "After Dr. Adrian Marksman is dismissed, he..."
+    assert "overview" in filled
+
+
+async def test_rows_written_before_the_dramadex_provenance_are_treated_as_a_persons(
+    db: AsyncSession,
+) -> None:
+    """Every series in the live library carries `manual` from the old behaviour.
+
+    There is no way to tell those apart from a paragraph somebody typed, so they are protected.
+    Being wrong in this direction costs a stale synopsis; being wrong the other way destroys
+    writing nobody can recover.
+    """
+    series = await make_series(db, overview="Texto viejo, procedencia ambigua.")
+    series.overview_source = OverviewSource.MANUAL
+    await db.flush()
+
+    await library_service.apply_dramadex_title(db, series, parsed(), overwrite=True)
+
+    assert series.overview == "Texto viejo, procedencia ambigua."
+
+
+async def test_a_poster_whose_file_is_gone_is_refetched(db: AsyncSession, tmp_env) -> None:
+    """The broken image the owner reported, and why it could never heal.
+
+    `refresh_series` skipped the artwork fetch whenever `poster_path` was non-empty. The image
+    cache is derived data and the database is not, so a wiped cache, a restore that missed
+    `DATA_PATH`, or one failed write leaves a row pointing at nothing — and the only control
+    that could have repaired it declined to, precisely *because* the broken path was set.
+    """
+    series = await make_series(db)
+    series.poster_path = "series/abc/poster.webp"  # a cached-shaped path with no file behind it
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is True
+
+
+async def test_a_poster_that_is_actually_there_is_left_alone(db: AsyncSession, tmp_env) -> None:
+    """The other side: re-downloading a working poster on every refresh is the worse bug."""
+    from app.config import get_settings
+
+    series = await make_series(db)
+    relative = "series/abc/poster.webp"
+    target = get_settings().data_dir / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"not really a webp, but non-empty and on disk")
+    series.poster_path = relative
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is False
+
+
+async def test_a_remote_poster_is_taken_on_trust(db: AsyncSession, tmp_env) -> None:
+    """There is nothing local to stat, so a URL cannot be checked and is not second-guessed."""
+    series = await make_series(db)
+    series.poster_path = "https://images.example/poster.jpg"
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is False
+
+
+async def test_no_poster_at_all_is_the_obvious_case(db: AsyncSession, tmp_env) -> None:
+    series = await make_series(db)
+    series.poster_path = None
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is True

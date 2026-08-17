@@ -371,3 +371,32 @@
   block-size: auto;
   border-radius: var(--radius-md);
 }
+
+/* --- Cast -------------------------------------------------------------------------------- */
+
+.castList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.castItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+
+.castLink {
+  font-weight: var(--weight-medium);
+}
+
+.castRole {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}

@@ -9,7 +9,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useParams } from 'wouter'
+import { Link, useLocation, useParams } from 'wouter'
 
 import { useGenres } from '@/api/library'
 
@@ -174,6 +174,7 @@ function ContentRatingField({
 const EDIT_SECTIONS = [
   { id: 'series-metadata', labelKey: 'admin.library.editSeries' },
   { id: 'series-titles', labelKey: 'admin.library.titles' },
+  { id: 'series-cast', labelKey: 'series.cast' },
   { id: 'series-episodes', labelKey: 'series.episodes' },
   { id: 'series-rename', labelKey: 'admin.library.renameTitle' },
 ] as const
@@ -631,6 +632,8 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
 
       <TitlesSection seriesId={detail.id} titles={detail.titles} />
 
+      <CastSection detail={detail} />
+
       <EpisodesSection detail={detail} />
 
       <RenamePanel seriesId={detail.id} />
@@ -697,6 +700,52 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
 interface TitlesSectionProps {
   seriesId: string
   titles: SeriesTitleOut[]
+}
+
+/**
+ * Who is in it, on the screen where an admin is asking that question.
+ *
+ * The cast was rendering on the public series page and nowhere in the editor, so an admin
+ * looking at the metadata of a series with four credited actors saw none of them and quite
+ * reasonably concluded there were none. The data was there the whole time.
+ *
+ * Read-only on purpose. This is a cache of the indexer's answer — `apply_dramadex_title`
+ * replaces it wholesale on every refresh — so an edit here would be silently discarded the
+ * next time somebody pressed the button above. The section says where it comes from instead,
+ * and each name links to everything else that person is in.
+ */
+function CastSection({ detail }: { detail: SeriesDetail }) {
+  const { t } = useTranslation()
+  const cast = detail.cast ?? []
+
+  return (
+    <section className={styles.card} id="series-cast">
+      <h2 className={styles.sectionTitle}>{t('series.cast')}</h2>
+      <p className={styles.sectionHint}>{t('admin.library.castHint')}</p>
+
+      {cast.length === 0 ? (
+        /* Not an error, and worth saying which of the two it is: the series is bound and the
+           indexer simply has no credits for it. Six of this library's titles are in that state
+           and no amount of pressing refresh will change it. */
+        <p className={styles.sectionHint}>
+          {detail.dramadexId === null || detail.dramadexId === undefined
+            ? t('admin.library.castNotLinked')
+            : t('admin.library.castNone')}
+        </p>
+      ) : (
+        <ul className={styles.castList}>
+          {cast.map((member) => (
+            <li key={member.dramadexPersonId} className={styles.castItem}>
+              <Link href={`/people/${member.dramadexPersonId}`} className={styles.castLink}>
+                {member.name}
+              </Link>
+              {member.role ? <span className={styles.castRole}>{member.role}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
 }
 
 function TitlesSection({ seriesId, titles }: TitlesSectionProps) {
