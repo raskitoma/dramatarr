@@ -48,15 +48,20 @@ from app.config import get_settings
 from app.errors import AppError, NotFound
 from app.models import Episode, Series
 from app.services.settings import SettingsService
-from app.services.tmdb import IMAGE_BASE
 from app.utils.ids import new_id
+
+#: TMDB's image CDN. TMDB itself is gone from this application, but `poster_path` rows
+#: written while it was here still hold `/abc.jpg` source paths, and an image that stops
+#: rendering because a *source* was removed is a regression the reader cannot explain. The
+#: constant stays so those keep resolving; nothing new is ever written in this shape.
+LEGACY_IMAGE_BASE = "https://image.tmdb.org/t/p"
 
 log = logging.getLogger(__name__)
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 #: The only host this module will download from.
-_IMAGE_HOST = (urlsplit(IMAGE_BASE).hostname or "").lower()
+_IMAGE_HOST = (urlsplit(LEGACY_IMAGE_BASE).hostname or "").lower()
 
 POSTER_SIZE = "w500"
 BACKDROP_SIZE = "w1280"
@@ -153,10 +158,10 @@ def _remote_url(value: str, size: str) -> str | None:
     """
     if value.startswith(("http://", "https://")):
         host = urlsplit(value).hostname or ""
-        if value.startswith(f"{IMAGE_BASE}/") or host.lower() == _IMAGE_HOST:
+        if value.startswith(f"{LEGACY_IMAGE_BASE}/") or host.lower() == _IMAGE_HOST:
             return value
         return None
-    return f"{IMAGE_BASE}/{size}{value}"
+    return f"{LEGACY_IMAGE_BASE}/{size}{value}"
 
 
 def _extension(value: str) -> str:

@@ -102,11 +102,16 @@ from app.services.scanner.parse import file_extension, parse_season_folder, pars
 from app.services.scanner.scan import safe_media_path
 from app.services.search.index import reindex_series
 from app.services.search.normalize import normalize
-from app.services.tmdb import IMAGE_BASE
 from app.services.vocab import canonical_content_rating, canonical_network, normalize_genres
 from app.services.watch import get_progress, progress_for_episodes, resume_position
 from app.utils.ids import new_id, slugify
 from app.utils.time import as_aware, utcnow
+
+#: TMDB's image CDN. TMDB itself is gone from this application, but `poster_path` rows
+#: written while it was here still hold `/abc.jpg` source paths, and an image that stops
+#: rendering because a *source* was removed is a regression the reader cannot explain. The
+#: constant stays so those keep resolving; nothing new is ever written in this shape.
+LEGACY_IMAGE_BASE = "https://image.tmdb.org/t/p"
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +130,7 @@ _IMAGES_ROUTE = f"{_STREAM_ROUTE}/images"
 _THUMBNAILS_NAME = "thumbnails.vtt"
 
 #: The one host an `<img src>` we emit may point at.
-_TMDB_IMAGE_HOST = (urlsplit(IMAGE_BASE).hostname or "").lower()
+_TMDB_IMAGE_HOST = (urlsplit(LEGACY_IMAGE_BASE).hostname or "").lower()
 
 
 @dataclass(slots=True)
@@ -230,7 +235,7 @@ def image_url(stored: str | None, size: str) -> str | None:
     if stored.startswith(("http://", "https://")):
         host = (urlsplit(stored).hostname or "").lower()
         return stored if host == _TMDB_IMAGE_HOST else None
-    return f"{IMAGE_BASE}/{size}{stored}"
+    return f"{LEGACY_IMAGE_BASE}/{size}{stored}"
 
 
 def stream_url(episode_id: str) -> str:

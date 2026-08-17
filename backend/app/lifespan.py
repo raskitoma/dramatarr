@@ -22,7 +22,6 @@ from app.config import get_settings
 from app.db import dispose_engine, get_sessionmaker
 from app.services.images import close_image_client
 from app.services.search.index import ensure_index
-from app.services.tmdb import close_tmdb_client
 from app.workers.queue import start_worker, stop_worker
 from app.workers.scheduler import start_scheduler, stop_scheduler
 
@@ -73,7 +72,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_scheduler(app)
         await stop_worker(app)
         # The three outbound pools, closed after the worker that uses them has stopped.
-        await close_tmdb_client()
         await close_image_client()
         await dispose_engine()
         log.info("dramatarr stopped")

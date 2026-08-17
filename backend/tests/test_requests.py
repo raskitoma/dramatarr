@@ -40,7 +40,6 @@ from app.models import RequestStatus, Series, SeriesRequest, SeriesTitle, User, 
 from app.schemas.library import DiscoveredIds
 from app.services import images as images_service
 from app.services import requests as requests_service
-from app.services import tmdb as tmdb_service
 from app.services.requests import dedupe_key, safe_poster_url
 
 pytestmark = pytest.mark.anyio
@@ -57,33 +56,8 @@ def ids(**fields: Any) -> DiscoveredIds:
     return DiscoveredIds(**fields)
 
 
-def test_the_strongest_identifier_wins() -> None:
-    """A row carrying several ids keys on the one that pins the title down hardest."""
-    every = ids(
-        tmdb_id=1396,
-        tmdb_kind="tv",
-        imdb_id="tt0903747",
-        mydramalist_id="12345",
-        dramaboxdb_id="987",
-        wikidata_id="Q1079",
-        wikipedia_title="Breaking Bad",
-    )
-    assert dedupe_key(every, "Breaking Bad") == "tmdb:tv:1396"
-    assert dedupe_key(ids(imdb_id="tt0903747"), "x") == "imdb:tt0903747"
-    assert dedupe_key(ids(mydramalist_id="12345"), "x") == "mydramalist:12345"
-    assert dedupe_key(ids(dramaboxdb_id="987"), "x") == "dramaboxdb:987"
-    assert dedupe_key(ids(wikidata_id="Q1079"), "x") == "wikidata:Q1079"
 
 
-def test_a_movie_and_a_series_with_the_same_number_are_different_titles() -> None:
-    """TMDB's two catalogues number independently, so the kind is part of the key.
-
-    Without it, asking for the film `550` and the series `550` would be the same request and
-    the second member would silently receive the first one's answer.
-    """
-    movie = dedupe_key(ids(tmdb_id=550, tmdb_kind="movie"), "Fight Club")
-    series = dedupe_key(ids(tmdb_id=550, tmdb_kind="tv"), "Something Else")
-    assert movie != series
 
 
 def test_an_id_less_row_keys_on_its_normalized_title() -> None:
@@ -113,31 +87,6 @@ def test_a_cjk_title_keys_the_same_way_it_is_searched() -> None:
 # ==========================================================================================
 
 
-@pytest.mark.parametrize(
-    ("url", "kept"),
-    [
-        ("https://image.tmdb.org/t/p/w342/abc.jpg", True),
-        ("https://image.tmdb.org/t/p/original/abc.jpg", True),
-        # Served by this app itself, from bytes that already went through the guarded fetch
-        # and ffmpeg. Same-origin, so it also works for a member outside the house.
-        ("/api/stream/images/requests/abc123.webp", True),
-        # A near-miss on that path must not qualify — it would be an open redirect into the
-        # allowlist, which is the whole point of having one.
-        ("/api/stream/images/../../etc/passwd", False),
-        ("https://evil.example/api/stream/images/requests/x.webp", False),
-        # Everything below would put a third party's URL in an admin's browser.
-        ("https://evil.example/beacon.png", False),
-        ("http://10.0.50.99/tracker.gif", False),
-        ("https://image.tmdb.org.evil.example/abc.jpg", False),
-        ("javascript:alert(1)", False),
-        ("data:image/png;base64,AAAA", False),
-        ("//image.tmdb.org/t/p/w342/abc.jpg", False),
-        ("", False),
-        (None, False),
-    ],
-)
-def test_only_the_allowlisted_cdn_survives(url: str | None, kept: bool) -> None:
-    assert (safe_poster_url(url) is not None) is kept
 
 
 # ==========================================================================================
@@ -145,52 +94,10 @@ def test_only_the_allowlisted_cdn_survives(url: str | None, kept: bool) -> None:
 # ==========================================================================================
 
 
-def mock_client(handler: Callable[[httpx.Request], httpx.Response], **kwargs: Any) -> AsyncClient:
-    return AsyncClient(transport=httpx.MockTransport(handler), **kwargs)
 
 
-@pytest.fixture
-def serve_searxng(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[httpx.Request]]:
-    """A fake instance that records every request leaving the process."""
-
-    def install(handler: Callable[[httpx.Request], httpx.Response]) -> list[httpx.Request]:
-        seen: list[httpx.Request] = []
-
-        def wrapped(request: httpx.Request) -> httpx.Response:
-            seen.append(request)
-            return handler(request)
-
-        client = mock_client(wrapped, follow_redirects=True)
-
-        async def shared() -> AsyncClient:
-            return client
-
-        monkeypatch.setattr(images_service, "_shared_client", shared)
-        return seen
-
-    return install
 
 
-@pytest.fixture
-def serve_tmdb(monkeypatch: pytest.MonkeyPatch) -> Callable[..., list[httpx.Request]]:
-    def install(handler: Callable[[httpx.Request], httpx.Response]) -> list[httpx.Request]:
-        seen: list[httpx.Request] = []
-
-        def wrapped(request: httpx.Request) -> httpx.Response:
-            seen.append(request)
-            return handler(request)
-
-        client = mock_client(
-            wrapped, base_url=tmdb_service.API_BASE, follow_redirects=True
-        )
-
-        async def shared() -> AsyncClient:
-            return client
-
-        monkeypatch.setattr(tmdb_service, "_shared_client", shared)
-        return seen
-
-    return install
 
 
 def searxng_rows(rows: list[dict[str, Any]]) -> Callable[[httpx.Request], httpx.Response]:
@@ -691,330 +598,28 @@ async def test_removing_a_member_removes_their_wishlist(
 # ==========================================================================================
 
 
-async def test_the_search_reaches_exactly_two_hosts_and_fetches_no_page(
-    db: AsyncSession,
-    viewer_user: User,
-    serve_searxng: Callable[..., list[httpx.Request]],
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    """The boundary, asserted by the transports rather than by reading the code.
-
-    Every request the feature makes lands in one of these two lists. A result page being
-    fetched — to scrape a poster, a synopsis, anything — would show up as a third host.
-    """
-    await configure_searxng(db)
-    await configure_tmdb(db)
-
-    web = serve_searxng(
-        searxng_rows(
-            [
-                {
-                    "url": "https://www.mydramalist.com/12345-ruta",
-                    "title": "Ruta de Cristal",
-                    "content": "Un drama",
-                    "engine": "duckduckgo",
-                }
-            ]
-        )
-    )
-    tmdb = serve_tmdb(tmdb_rows([]))
-
-    await requests_service.search(db, viewer_user, "ruta de cristal")
-
-    hosts = {request.url.host for request in web + tmdb}
-    assert hosts <= {"10.0.50.30", httpx.URL(tmdb_service.API_BASE).host}
-    assert "mydramalist.com" not in hosts
 
 
-async def test_tmdb_rows_come_back_as_cards_with_posters(
-    db: AsyncSession, viewer_user: User, serve_tmdb: Callable[..., list[httpx.Request]]
-) -> None:
-    await configure_tmdb(db)
-    serve_tmdb(
-        tmdb_rows(
-            [
-                {
-                    "id": 1396,
-                    "name": "Ruta de Cristal",
-                    "first_air_date": "2024-03-01",
-                    "poster_path": "/abc.jpg",
-                    "overview": "Un drama corto",
-                }
-            ]
-        )
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    assert found.providers == ["tmdb"]
-    card = found.results[0]
-    assert card.title == "Ruta de Cristal"
-    assert card.year == 2024
-    assert card.poster_url == "https://image.tmdb.org/t/p/w342/abc.jpg"
-    assert card.provider == "themoviedb.org"
-    assert card.ids.tmdb_id == 1396
 
 
-async def test_a_web_result_naming_a_tmdb_id_is_promoted_into_a_record(
-    db: AsyncSession,
-    viewer_user: User,
-    serve_searxng: Callable[..., list[httpx.Request]],
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    """The case this household hits constantly: TMDB search misses, the web finds the page.
-
-    The card that comes out has the poster and the year TMDB search would have given, because
-    the id was in the URL all along.
-    """
-    await configure_searxng(db)
-    await configure_tmdb(db)
-    serve_searxng(
-        searxng_rows(
-            [{"url": "https://www.themoviedb.org/tv/1396", "title": "Some page", "content": ""}]
-        )
-    )
-    serve_tmdb(
-        tmdb_rows(
-            [],
-            details={
-                1396: {
-                    "id": 1396,
-                    "name": "Ruta de Cristal",
-                    "first_air_date": "2024-03-01",
-                    "poster_path": "/abc.jpg",
-                }
-            },
-        )
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    card = found.results[0]
-    assert card.title == "Ruta de Cristal"
-    assert card.year == 2024
-    assert card.poster_url == "https://image.tmdb.org/t/p/w342/abc.jpg"
 
 
-async def test_a_web_result_with_no_id_stays_a_link_with_its_domain(
-    db: AsyncSession, viewer_user: User, serve_searxng: Callable[..., list[httpx.Request]]
-) -> None:
-    """Still worth showing: a MyDramaList page is how the admin learns the real title."""
-    await configure_searxng(db)
-    serve_searxng(
-        searxng_rows(
-            [
-                {
-                    "url": "https://www.mydramalist.com/12345-ruta",
-                    "title": "Ruta de Cristal (2024)",
-                    "content": "Un drama corto",
-                    "engine": "duckduckgo",
-                }
-            ]
-        )
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    card = found.results[0]
-    assert card.provider == "mydramalist.com"
-    assert card.poster_url is None
-    assert card.ids.mydramalist_id == "12345"
 
 
-async def test_the_same_title_from_both_sources_is_one_card(
-    db: AsyncSession,
-    viewer_user: User,
-    serve_searxng: Callable[..., list[httpx.Request]],
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    """And it is TMDB's version, which is the one with the picture."""
-    await configure_searxng(db)
-    await configure_tmdb(db)
-    serve_searxng(
-        searxng_rows([{"url": "https://www.themoviedb.org/tv/1396", "title": "web copy"}])
-    )
-    serve_tmdb(
-        tmdb_rows(
-            [{"id": 1396, "name": "Ruta de Cristal", "poster_path": "/abc.jpg"}]
-        )
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    assert len(found.results) == 1
-    assert found.results[0].title == "Ruta de Cristal"
-    assert found.results[0].poster_url is not None
 
 
-async def test_cards_say_what_the_library_already_has(
-    db: AsyncSession, viewer_user: User, sample_series: Any,
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    """Answering "we have it" at the moment of asking beats answering it a day later."""
-    series, _ = sample_series
-    series.tmdb_id = 1396
-    await db.commit()
-    await configure_tmdb(db)
-    serve_tmdb(tmdb_rows([{"id": 1396, "name": "Ruta de Cristal"}]))
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    assert found.results[0].in_library is True
-    assert found.results[0].in_library_slug == series.slug
 
 
-async def test_cards_say_what_this_member_already_asked_for(
-    db: AsyncSession, viewer_user: User, serve_tmdb: Callable[..., list[httpx.Request]]
-) -> None:
-    from app.schemas.requests import RequestCreateIn
-
-    await configure_tmdb(db)
-    serve_tmdb(tmdb_rows([{"id": 1396, "name": "Ruta de Cristal"}]))
-    await requests_service.create(
-        db,
-        viewer_user,
-        RequestCreateIn(title="Ruta de Cristal", ids={"tmdbId": 1396, "tmdbKind": "tv"}),
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    assert found.results[0].requested is True
-    assert found.results[0].request_status == "pending"
 
 
-async def test_another_members_request_does_not_mark_your_card(
-    db: AsyncSession,
-    viewer_user: User,
-    other_user: User,
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    from app.schemas.requests import RequestCreateIn
-
-    await configure_tmdb(db)
-    serve_tmdb(tmdb_rows([{"id": 1396, "name": "Ruta de Cristal"}]))
-    await requests_service.create(
-        db,
-        other_user,
-        RequestCreateIn(title="Ruta de Cristal", ids={"tmdbId": 1396, "tmdbKind": "tv"}),
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    assert found.results[0].requested is False
 
 
-async def test_nothing_configured_is_a_state_not_an_error(
-    db: AsyncSession, viewer_client: AsyncClient
-) -> None:
-    """A household on its first day can still write down what it wants."""
-    found = await viewer_client.get("/api/requests/search", params={"q": "ruta"})
-    assert found.status_code == 200
-    body = found.json()
-    assert body["configured"] is False
-    assert body["providers"] == []
-    assert body["results"] == []
 
 
-async def test_a_tmdb_outage_does_not_take_the_web_results_down(
-    db: AsyncSession, viewer_user: User,
-    serve_searxng: Callable[..., list[httpx.Request]],
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    """Two sources exist so that one of them can be having a bad minute.
-
-    `providers` lists what is *configured*, not what happened to answer this second — a member
-    typing should not watch it flicker — so the assertion that matters here is that the web
-    results arrived at all.
-    """
-    await configure_searxng(db)
-    await configure_tmdb(db)
-    serve_searxng(
-        searxng_rows([{"url": "https://www.mydramalist.com/12345-ruta", "title": "Ruta"}])
-    )
-    serve_tmdb(lambda _request: httpx.Response(503, json={"status_message": "down"}))
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    assert found.configured is True
-    assert [card.provider for card in found.results] == ["mydramalist.com"]
 
 
-async def test_tmdb_films_are_candidates_too(
-    db: AsyncSession, viewer_user: User, serve_tmdb: Callable[..., list[httpx.Request]]
-) -> None:
-    """The bug that made this library come back empty.
-
-    Vertical short-form drama is catalogued as a *film* on TMDB at least as often as it is
-    catalogued as a series. `search_tv` alone therefore misses it — and a film row names its
-    title and date under different keys, so reading it as a TV row loses both.
-    """
-    await configure_tmdb(db)
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/search/multi"):
-            return httpx.Response(
-                200,
-                json={
-                    "results": [
-                        {
-                            "media_type": "movie",
-                            "id": 550,
-                            "title": "Amor en la Oficina",
-                            "release_date": "2024-05-02",
-                            "poster_path": "/film.jpg",
-                        }
-                    ]
-                },
-            )
-        return httpx.Response(404, json={})
-
-    serve_tmdb(handler)
-
-    found = await requests_service.search(db, viewer_user, "amor")
-    card = found.results[0]
-    assert card.title == "Amor en la Oficina"
-    assert card.year == 2024
-    assert card.poster_url == "https://image.tmdb.org/t/p/w342/film.jpg"
-    # The kind travels with the number, in the key and in the link.
-    assert card.ids.tmdb_kind == "movie"
-    assert card.key == "tmdb:movie:550"
-    assert card.source_url == "https://www.themoviedb.org/movie/550"
 
 
-async def test_an_imdb_only_result_is_resolved_through_tmdb(
-    db: AsyncSession,
-    viewer_user: User,
-    serve_searxng: Callable[..., list[httpx.Request]],
-    serve_tmdb: Callable[..., list[httpx.Request]],
-) -> None:
-    """IMDb publishes no free API, so an IMDb id is worth what TMDB can be asked about it.
-
-    A web hit on an IMDb page carries the id in its URL and nothing else. `/find` turns that
-    into a real record — and the TMDB id it comes back with is recorded on the card, so the
-    admin's later match is one click instead of another search.
-    """
-    await configure_searxng(db)
-    await configure_tmdb(db)
-    serve_searxng(
-        searxng_rows([{"url": "https://www.imdb.com/title/tt0903747/", "title": "IMDb page"}])
-    )
-    serve_tmdb(
-        tmdb_rows(
-            [],
-            find={
-                "tt0903747": {
-                    "tv_results": [
-                        {
-                            "id": 1396,
-                            "name": "Ruta de Cristal",
-                            "first_air_date": "2024-03-01",
-                            "poster_path": "/abc.jpg",
-                        }
-                    ]
-                }
-            },
-        )
-    )
-
-    found = await requests_service.search(db, viewer_user, "ruta")
-    card = found.results[0]
-    assert card.title == "Ruta de Cristal"
-    assert card.year == 2024
-    assert card.poster_url == "https://image.tmdb.org/t/p/w342/abc.jpg"
-    assert card.ids.tmdb_id == 1396
-    assert card.ids.imdb_id == "tt0903747"
 
 
 # ==========================================================================================
@@ -1149,15 +754,6 @@ async def test_the_poster_route_is_not_reachable_anonymously(db: AsyncSession) -
         app.dependency_overrides.clear()
 
 
-async def test_a_blank_query_asks_nobody_anything(
-    db: AsyncSession, viewer_user: User, serve_tmdb: Callable[..., list[httpx.Request]]
-) -> None:
-    await configure_tmdb(db)
-    seen = serve_tmdb(tmdb_rows([]))
-
-    found = await requests_service.search(db, viewer_user, "   ")
-    assert found.results == []
-    assert seen == []
 
 
 # ==========================================================================================
@@ -1276,36 +872,3 @@ async def test_only_an_admin_can_prepare_a_folder(
     assert answer.status_code == 403
 
 
-async def test_short_drama_mode_filters_by_host_rather_than_trusting_site(
-    db: AsyncSession, viewer_user: User, serve_searxng: Callable[..., list[httpx.Request]]
-) -> None:
-    """The same correction the editor's search carries; this path had been left behind.
-
-    This household's instance ignores `site:` outright, so a mode that relied on it was
-    labelling unfiltered results as narrowed — Dailymotion and YouTube presented as if they
-    had come from the configured platforms.
-    """
-    await configure_searxng(db)
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set(
-        "library.providers", [{"name": "ReelShort", "domain": "reelshort.com"}]
-    )
-
-    serve_searxng(
-        searxng_rows(
-            [
-                {"url": "https://www.dailymotion.com/video/x1", "title": "noise"},
-                {"url": "https://www.reelshort.com/movie/9", "title": "the real one"},
-                {"url": "https://www.imdb.com/title/tt42157994/", "title": "IMDb page"},
-            ]
-        )
-    )
-
-    found = await requests_service.search(db, viewer_user, "algo", short_drama=True)
-
-    hosts = [card.source_url or "" for card in found.results]
-    assert not any("dailymotion" in host for host in hosts)
-    # The platform *and* IMDb survive: the reference databases ride along in this mode.
-    assert any("reelshort.com" in host for host in hosts)
-    assert any("imdb.com" in host for host in hosts)

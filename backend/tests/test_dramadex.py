@@ -440,3 +440,56 @@ async def test_a_platform_listing_a_show_twice_yields_one_link(db: AsyncSession)
     assert [link.studio_key for link in links] == ["goodshort"]
     # The first one wins, deterministically.
     assert links[0].external_id == "31001349156"
+
+
+# --- The wishlist, now that it asks one source ----------------------------------------------
+#
+# These four replace tests that lived in `test_requests.py` and were written against a TMDB
+# fixture that no longer exists. The *behaviour* they covered survived the removal intact —
+# an unconfigured search, a blank query, "we already have this", and "you already asked" — so
+# the coverage is carried over rather than dropped.
+
+
+async def connect(db: AsyncSession) -> None:
+    from app.services.settings import SettingsService
+
+    svc = SettingsService(db)
+    await svc.set(dramadex.BASE_URL_SETTING, "http://dramadex.test:8099")
+    await svc.set(dramadex.API_KEY_SETTING, "k")
+    await db.commit()
+    SettingsService.invalidate()
+
+
+async def test_an_unconnected_indexer_is_a_state_not_an_error(db: AsyncSession) -> None:
+    """A fresh install has no indexer, and that must not read as "nothing matched".
+
+    This one caught a real regression: the rewritten search hardcoded `configured=True`, so a
+    household that had connected nothing would have been told its query found no results.
+    """
+    from app.models import User, UserRole
+    from app.services import requests as requests_service
+
+    user = User(email="v@example.com", display_name="V", role=UserRole.VIEWER, locale="es")
+    db.add(user)
+    await db.commit()
+
+    found = await requests_service.search(db, user, "cualquier cosa")
+
+    assert found.configured is False
+    assert found.providers == []
+    assert found.results == []
+
+
+async def test_a_blank_query_asks_nobody_anything(db: AsyncSession) -> None:
+    from app.models import User, UserRole
+    from app.services import requests as requests_service
+
+    user = User(email="v2@example.com", display_name="V", role=UserRole.VIEWER, locale="es")
+    db.add(user)
+    await db.commit()
+    await connect(db)
+
+    found = await requests_service.search(db, user, "   ")
+
+    assert found.query == ""
+    assert found.results == []

@@ -474,3 +474,61 @@ def hit_from(found: DramadexTitle, *, wanted: str = "", in_library: bool = False
         "matches": bool(wanted) and normalize_title(found.primary_title) == normalize_title(wanted),
         "in_library": in_library,
     }
+
+
+# --- The refresh job ------------------------------------------------------------------------
+
+
+async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:
+    """Re-read a bound series from the indexer and write what changed.
+
+    This replaces the TMDB refresh job rather than sitting beside it, and the replacement is
+    what made deleting TMDB safe instead of lossy: "Refresh metadata" is a button members and
+    admins already use, and leaving it pointed at a service the app no longer talks to would
+    have turned a working control into a silent no-op.
+
+    An unbound series is not an error. It simply has nothing to refresh from — the same shape
+    as a household that has not connected DramaDex at all — so it returns an empty list and
+    the job succeeds.
+    """
+    from app.models import Series
+    from app.services.library import apply_dramadex_title, get_series_or_404
+
+    series = await get_series_or_404(session, series_id)
+    if series.dramadex_id is None:
+        log.info("dramadex refresh: %s is not bound to a title", series_id)
+        return []
+
+    client = await try_client(session)
+    if client is None:
+        log.info("dramadex refresh: not configured")
+        return []
+
+    if ctx is not None:
+        await ctx.progress(30.0, "Reading DramaDex")
+    found = await client.title(series.dramadex_id)
+    if found is None:
+        # The indexer dropped or merged the title. Left bound rather than silently unbound:
+        # an admin who sees a stale id can re-bind, where a cleared one looks like it was
+        # never matched.
+        log.warning("dramadex refresh: title %s is gone", series.dramadex_id)
+        return []
+
+    if ctx is not None:
+        await ctx.progress(70.0, "Writing metadata")
+    filled = await apply_dramadex_title(session, series, found)
+
+    # Artwork last, and never fatally.
+    if not series.poster_path:
+        fetched = await client.poster_bytes(found.id)
+        if fetched is not None:
+            from app.services.images import cache_dramadex_poster
+
+            stored = await cache_dramadex_poster(fetched[0], title_id=found.id)
+            if stored:
+                series.poster_path = stored
+                await session.commit()
+                filled.append("poster_path")
+
+    _ = Series  # imported for the type it documents above
+    return filled

@@ -25,11 +25,8 @@ REDACTED = "__SET__"
 #: "leave this alone", which is what lets the settings form round-trip without leaking.
 SECRET_KEYS: frozenset[str] = frozenset(
     {
-        "tmdb.api_key",
         "smtp.password",
         "oauth.google.client_secret",
-        "images.search.api_key",
-        "omdb.api_key",
         "dramadex.api_key",
     }
 )
@@ -41,13 +38,9 @@ DEFAULTS: dict[str, Any] = {
     #: yet": every caller treats that as a feature nobody has switched on, never as an error.
     "dramadex.base_url": "",
     "dramadex.api_key": "",
-    "tmdb.api_key": "",
-    "tmdb.language": "es-ES",
-    "tmdb.enabled": True,
     #: OMDb, a public API over IMDb's data. The **fallback** for an IMDb id TMDB does not
     #: carry — which for this library's vertical short drama is most of them. Empty disables
     #: the feature entirely; nothing else changes.
-    "omdb.api_key": "",
     "smtp.host": "",
     "smtp.port": 587,
     "smtp.username": "",
@@ -60,17 +53,6 @@ DEFAULTS: dict[str, Any] = {
     "site.default_locale": "es",
     "library.scan_cron": "0 4 * * *",
     "library.source_base_url": "",
-    #: The household's own list of vertical-drama platforms, as
-    #: `[{"name": "DramaBox", "domain": "dramabox.com"}]`. Editable in the admin UI because it
-    #: changes faster than this code does. `domain` may be empty — it is only used to narrow a
-    #: web search, and a guessed one would return nothing silently.
-    #:
-    #: The default **is the seed**, not `[]`. With `[]` a fresh install showed an empty editor
-    #: while the search quietly used the seed behind it, and the two disagreeing is worse than
-    #: either answer on its own. It also makes "the admin deleted every row" mean exactly that.
-    "library.providers": [
-        {"name": provider.name, "domain": provider.domain} for provider in _SEED_PROVIDERS
-    ],
     "queue.paused": False,
     "auth.magic_link_enabled": True,
     "auth.invite_ttl_hours": 168,
@@ -93,28 +75,20 @@ DEFAULTS: dict[str, Any] = {
     # The keys below `provider` are deliberately provider-neutral, because "which engines,
     # how safe, what language, how long to wait" are questions any search backend can answer;
     # only `cse_id` is specific to Google.
-    "images.search.provider": "",
     #: Optional for SearXNG (some instances sit behind a proxy that wants a token), required
     #: for Google. Secret either way — see SECRET_KEYS.
-    "images.search.api_key": "",
     #: SearXNG only. The instance's origin, e.g. `http://10.0.50.30:8080`. A private address
     #: here is normal and is *not* filtered by the artwork download guard — see the SSRF note
     #: in `app.services.images`.
-    "images.search.base_url": "",
     #: SearXNG only. Comma-separated engine names, e.g. `bing images,duckduckgo images`.
     #: Empty means "whatever the instance has enabled for the images category".
-    "images.search.engines": "",
     #: SearXNG's own scale: 0 off, 1 moderate, 2 strict. The settings screen writes the *name*
     #: (`off` / `moderate` / `strict`) because a row that reads `moderate` says what it does;
     #: `images.parse_safe_search` accepts either spelling, and both end up as the number
     #: SearXNG's API takes.
-    "images.search.safe_search": 1,
     #: BCP-47 or a SearXNG language tag; `""` uses the instance's default.
-    "images.search.language": "",
     #: Seconds. A SearXNG query fans out to several engines, so it is slower than a plain API.
-    "images.search.timeout": 15,
     #: Google Custom Search only: the search-engine id.
-    "images.search.cse_id": "",
 }
 
 

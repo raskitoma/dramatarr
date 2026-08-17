@@ -53,7 +53,6 @@ from app.schemas.requests import (
     RequestSeriesRef,
     SeriesRequestOut,
 )
-from app.services import discovery as discovery_service
 from app.services.images import (
     SearxngConfig,
     _configured_searxng,
@@ -67,7 +66,6 @@ from app.services.scanner.scan import safe_media_path
 from app.services.search.normalize import normalize
 from app.services import dramadex
 from app.services.settings import SettingsService
-from app.services.tmdb import IMAGE_BASE, TMDBClient, try_tmdb_client
 from app.services.vocab import (
     Provider,
     configured_providers,
@@ -91,7 +89,10 @@ POSTER_SIZE = "w342"
 #: allowing nothing else keeps the column from becoming a way to point somebody else's browser
 #: anywhere. A URL that fails this is dropped, not rejected — the request is the point, the
 #: picture is decoration.
-_POSTER_HOST = (urlsplit(IMAGE_BASE).hostname or "").lower()
+#: Posters now come from this application's own DramaDex proxy, never a third-party CDN, so
+#: "is this URL safe to render" collapses to "is it one of ours". With TMDB gone there is no
+#: external host on the allowlist at all, which is strictly the safer shape.
+_POSTER_PREFIX = "/api/library/dramadex/titles/"
 
 #: How many web results carrying a TMDB id are promoted into full records. Each promotion is
 #: one TMDB request, made while a member waits, so this is a latency budget rather than a
@@ -188,17 +189,14 @@ def safe_poster_url(value: str | None) -> str | None:
 
     Anything else would put a third party's URL in the *admin's* browser when they open the
     queue, which is a beacon: whoever controls it learns when the page was opened and from
-    where. See `_POSTER_HOST`.
+    where. See `_POSTER_PREFIX`.
     """
     if is_request_poster(value):
         return str(value)
     if not _is_http_url(value):
         return None
-    try:
-        host = (urlsplit(str(value)).hostname or "").lower()
-    except ValueError:
-        return None
-    return str(value) if host == _POSTER_HOST else None
+    text = str(value or "")
+    return text if text.startswith(_POSTER_PREFIX) else None
 
 
 # --- Poster lookup ------------------------------------------------------------------------------
@@ -273,24 +271,6 @@ async def find_poster(session: AsyncSession, title: str, year: int | None = None
 # --- Searching ---------------------------------------------------------------------------------
 
 
-def _tmdb_row_facts(row: dict[str, Any]) -> tuple[str, int | None, str | None, str]:
-    """`(title, year, poster_path, kind)` from a row of either TMDB catalogue.
-
-    Film and series rows use different field names for the same three things — `title` /
-    `name`, `release_date` / `first_air_date` — so every reader of a `/search/multi` or
-    `/find` row needs this, and having it in one place is what stops a film row from silently
-    losing its title.
-    """
-    kind = "movie" if row.get("_kind") == "movie" else "tv"
-    if kind == "movie":
-        title = str(row.get("title") or row.get("original_title") or "").strip()
-        date = str(row.get("release_date") or "")
-    else:
-        title = str(row.get("name") or row.get("original_name") or "").strip()
-        date = str(row.get("first_air_date") or "")
-    year = int(date[:4]) if date[:4].isdigit() else None
-    poster = row.get("poster_path")
-    return title, year, (str(poster) if poster else None), kind
 
 
 def _tmdb_candidate(row: dict[str, Any]) -> RequestCandidate | None:
@@ -341,174 +321,16 @@ def _discovery_candidate(
     )
 
 
-async def _tmdb_search(client: TMDBClient | None, query: str) -> list[RequestCandidate]:
-    """TMDB's own answer, or nothing at all if it is unconfigured or unwell.
-
-    Every failure here is swallowed, which is deliberate and is not the usual rule: this is one
-    of two sources, a member is waiting, and a search that returns SearXNG's results is a
-    better outcome than one that returns a 503 because a third party is having a bad minute.
-    The failure is logged so it is still visible to whoever runs the box.
-
-    Takes a resolved client rather than a session — see `search` for why that matters.
-    """
-    if client is None:
-        return []
-    try:
-        # `search_multi`, not `search_tv`: vertical short-form drama is catalogued as a film
-        # on TMDB at least as often as it is catalogued as a series, and asking only the TV
-        # index is why a lot of this household's library came back empty.
-        rows = await client.search_multi(query)
-    except AppError as exc:
-        log.info("request search: TMDB unavailable (%s)", exc.code)
-        return []
-    return [card for row in rows[:12] if (card := _tmdb_candidate(row)) is not None]
 
 
-async def _discovery_search(
-    config: SearxngConfig | None,
-    query: str,
-    limit: int,
-    *,
-    domains: Sequence[str] = (),
-    platforms: Sequence[Provider] = (),
-) -> list[RequestCandidate]:
-    """The household's SearXNG instance, against an already-resolved configuration.
-
-    When `domains` is given the query is narrowed to the platforms and **stays narrowed**. It
-    used to widen itself when the narrow search found nothing, which sounded protective and was
-    not: a household whose platform domains are thinly indexed hits that path constantly, so
-    the mode advertised as "short drama only" quietly answered with a generic web search. An
-    empty answer is the honest one; the member's own toggle is how the search widens.
-
-    The narrowing is done **here, on the hosts that came back**, not by trusting the `site:`
-    clause. This household's instance ignores that operator outright — asked for
-    `site:dramabox.com` it returns Dailymotion and YouTube — so a mode that relied on it was
-    labelling unfiltered results as narrowed. Same correction the editor's search already
-    carries; this path had been left behind.
-    """
-    if config is None:
-        return []
-
-    async def ask(text: str) -> list[RequestCandidate]:
-        found = await discovery_service.discover_with(config, text, limit=limit)
-        return [_discovery_candidate(row, platforms) for row in found.results]
-
-    try:
-        found = await ask(discovery_service.scoped_query(query, domains) if domains else query)
-        if not domains:
-            return found
-        return [
-            card
-            for card in found
-            if card.source_url and discovery_service._on_a_platform(card.source_url, domains)
-        ]
-    except AppError as exc:
-        # A configured instance that is unwell is downgraded to "no results" for the same
-        # reason TMDB's outage is: the other source may still have the answer, and the member
-        # is owed a list rather than a red box. Logged so the operator can still see it.
-        log.info("request search: SearXNG failed (%s)", exc.code)
-        return []
 
 
-async def _searxng_or_none(session: AsyncSession) -> SearxngConfig | None:
-    """The configured instance, or None when this household has not set one up."""
-    try:
-        return await _configured_searxng(session)
-    except AppError as exc:
-        if exc.code == "SEARCH_NOT_CONFIGURED":
-            return None
-        raise
 
 
-def _apply_details(card: RequestCandidate, row: dict[str, Any]) -> None:
-    """Fill a card's blanks from a TMDB record. Never overwrites something already better."""
-    title, year, poster, _kind = _tmdb_row_facts(row)
-    if poster:
-        card.poster_url = f"{IMAGE_BASE}/{POSTER_SIZE}{poster}"
-    if title:
-        card.title = title
-    if year is not None:
-        card.year = year
-    overview = str(row.get("overview") or "").strip()
-    if overview and not card.snippet:
-        card.snippet = overview[:400]
 
 
-async def _enrich_from_tmdb(
-    client: TMDBClient | None, candidates: Sequence[RequestCandidate]
-) -> None:
-    """Turn web results that name a TMDB **or IMDb** id into records, in place.
-
-    A `themoviedb.org` or `imdb.com` link found by a web search is very often the same title
-    TMDB's own search failed to return — the query matched the show's Wikipedia or IMDb page
-    rather than its TMDB title. Resolving the id gives the card the poster and the year it
-    should have had.
-
-    IMDb ids go through TMDB's `/find`, which is the only bridge between the two catalogues
-    available here: IMDb publishes no free API, so an IMDb id is worth exactly as much as what
-    TMDB can be asked about it — which turns out to be a lot, because most things with an IMDb
-    id have a TMDB record too.
-
-    Bounded by `_MAX_TMDB_ENRICH` and entirely best-effort: a lookup that fails leaves the row
-    as it was, a link with a domain. The dedupe key is **not** recomputed — it is derived from
-    the id, which has not changed, and leaving it alone is what keeps a card's identity stable
-    across enrichment.
-    """
-    if client is None:
-        return
-    targets = [
-        card
-        for card in candidates
-        if card.poster_url is None and (card.ids.tmdb_id or card.ids.imdb_id)
-    ][:_MAX_TMDB_ENRICH]
-    if not targets:
-        return
-
-    async def fetch(card: RequestCandidate) -> None:
-        try:
-            if card.ids.tmdb_id:
-                kind = card.ids.tmdb_kind or "tv"
-                details = (
-                    await client.get_movie(int(card.ids.tmdb_id))
-                    if kind == "movie"
-                    else await client.get_tv(int(card.ids.tmdb_id))
-                )
-                if details:
-                    _apply_details(card, {**details, "_kind": kind})
-                return
-
-            # IMDb only: ask TMDB what it knows about that id, keeping film results too —
-            # a short drama is filed as a film on IMDb about as often as as a series.
-            found = await client.find_any_by_external_id(str(card.ids.imdb_id))
-            first = found[0] if found else None
-            if first is not None:
-                _apply_details(card, first)
-                # Now that it resolves to a TMDB record, record the id so the admin's later
-                # match is one click rather than another search.
-                if isinstance(first.get("id"), int):
-                    card.ids.tmdb_id = int(first["id"])
-                    card.ids.tmdb_kind = "movie" if first.get("_kind") == "movie" else "tv"
-        except AppError:
-            return  # 404, rate limit, outage — the card stands as it is
-
-    await asyncio.gather(*(fetch(card) for card in targets))
 
 
-def _merge(groups: Iterable[Sequence[RequestCandidate]]) -> list[RequestCandidate]:
-    """Concatenate the sources, first occurrence of each key wins.
-
-    TMDB's rows are passed first, so when both sources found the same title the card keeps the
-    poster and the year rather than the web headline.
-    """
-    seen: set[str] = set()
-    out: list[RequestCandidate] = []
-    for group in groups:
-        for card in group:
-            if card.key in seen:
-                continue
-            seen.add(card.key)
-            out.append(card)
-    return out
 
 
 async def _mark_in_library(session: AsyncSession, candidates: Sequence[RequestCandidate]) -> None:
@@ -661,52 +483,19 @@ async def search(
             results=dramadex_cards[:limit],
         )
 
-    # --- Sequential: everything that touches the session ---
-    tmdb = await try_tmdb_client(session)
-    searxng = await _searxng_or_none(session)
-    platforms = await configured_providers(SettingsService(session))
-    # The reference databases ride along with the platforms. A platform page says the show
-    # exists; IMDb says what *year* it is and carries an id that turns the card into a record —
-    # which is the difference between a wishlist entry and something the admin can act on.
-    domains = provider_domains(platforms, with_metadata_sites=True) if short_drama else ()
-
-    # In short-drama mode TMDB is not asked at all. That is the fix for the complaint this
-    # mode exists for: TMDB's catalogue contains only conventional television, so for a
-    # vertical-drama query the best it can offer is the ordinary series that most resembles
-    # it — which then crowds out the results that are actually the show.
-    tmdb_cards, web_cards = await asyncio.gather(
-        _tmdb_search(None if short_drama else tmdb, text),
-        _discovery_search(searxng, text, limit, domains=domains, platforms=platforms),
-    )
-
-    providers: list[str] = []
-    if await dramadex.try_client(session) is not None:
-        # Configured but silent on this query: say so, or an empty page reads as "the index
-        # has nothing" when it may be "the index was never asked".
-        providers.append("dramadex")
-    if tmdb is not None and not short_drama:
-        providers.append("tmdb")
-    if searxng is not None:
-        providers.append("searxng")
-
-    merged = _merge((tmdb_cards, web_cards))[:limit]
-    await _enrich_from_tmdb(tmdb, merged)
-    # Re-merge after enrichment: a promoted web row can now carry the same title as a TMDB
-    # row it did not match before. Keys are id-derived and unchanged, so this only ever
-    # collapses rows that were always the same record.
-    merged = _merge((merged,))
-
-    # --- Sequential again ---
-    await _mark_in_library(session, merged)
-    await _mark_requested(session, user.id, merged)
-
+    # Nothing else to ask.
+    #
+    # This used to fall through to TMDB and a SearXNG web search. Both are gone: TMDB does not
+    # catalogue vertical short drama, and the web search returned links rather than records —
+    # between them they resolved two of this library's seventeen series, where DramaDex
+    # resolves all seventeen. An empty answer is now an honest one, and asking by name is the
+    # path that never needed a provider at all.
+    connected = await dramadex.try_client(session) is not None
     return RequestSearchResults(
         query=text,
-        providers=providers,
-        # A member can always ask by name, so "nothing is configured" is reported without
-        # making the page look broken — the free-text path below needs no provider at all.
-        configured=bool(providers),
-        results=merged,
+        providers=["dramadex"] if connected else [],
+        configured=connected,
+        results=[],
     )
 
 

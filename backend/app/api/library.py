@@ -13,12 +13,10 @@ The `/unmatched/*` import-assistant routes in the middle live under the same rul
 other direction: applying a plan attaches episode rows to files under the names they already
 carry, and the rename script is generated for the operator to run, never run here.
 
-There is no route here that *fetches* an overview. There used to be one, backed by Wikipedia,
-and it was removed because it answered nothing for this library — Wikipedia catalogues
-television, not vertical short-form drama. What replaced it is `/discover`, which finds the
-page and stops: a search snippet is someone else's text cut mid-sentence, so the admin reads
-the page and writes the synopsis themselves. `series.overview_source` still records `wikipedia`
-for rows written while that route existed; the column is history, not a live code path.
+Metadata comes from DramaDex and from nowhere else. TMDB, OMDb and the SearXNG web search
+were all removed once the household's own indexer resolved all seventeen series where between
+them they resolved two. `series.overview_source` still records `wikipedia` and `tmdb` on rows
+written while those existed; the column is history, not a live code path.
 """
 
 from __future__ import annotations
@@ -78,9 +76,8 @@ from app.schemas.library import (
     UnmatchedGroupOut,
 )
 from app.schemas.search import SearchResults
-from app.services import discovery as discovery_service
+from app.services import dramadex, renamer
 from app.services import library as library_service
-from app.services import dramadex, omdb, renamer
 from app.services.images import (
     BACKDROP_SIZE,
     MAX_ARTWORK_BYTES,
@@ -97,7 +94,6 @@ from app.services.search.index import reindex_series
 from app.services.search.normalize import normalize
 from app.services.search.service import search_library
 from app.services.settings import SettingsService
-from app.services.tmdb import IMAGE_BASE, get_tmdb_client, try_tmdb_client
 from app.services.vocab import (
     Provider,
     canonical_content_rating,
@@ -113,13 +109,6 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/library", tags=["library"])
 
-#: Thumbnail rendition for the match dialog's result list.
-TMDB_IMAGE_BASE = f"{IMAGE_BASE}/w185"
-#: What `POST .../artwork` is handed back for a TMDB candidate. `original` because the
-#: re-encode bounds it to `ARTWORK_EDGE` anyway, and downloading a `w500` only to store it at
-#: 500 px would throw away the resolution the admin can see in the picker.
-ARTWORK_PICK_SIZE = "original"
-ARTWORK_THUMB_SIZE = "w342"
 
 #: The series half of this list moved to `library_service.SERIES_METADATA_FIELDS`, where the
 #: single and bulk patch routes share it. Episodes have no bulk route, so theirs stays here.
@@ -189,181 +178,8 @@ async def unmatched(
     return await library_service.list_unmatched(session, page=page, page_size=page_size)
 
 
-def _tmdb_match(row: dict[str, Any]) -> TmdbMatch | None:
-    """One TMDB TV row as a match candidate, or None when it has no usable id."""
-    raw_id = row.get("id")
-    if not isinstance(raw_id, int):
-        return None
-    air_date = row.get("first_air_date") or None
-    poster = row.get("poster_path")
-    return TmdbMatch(
-        tmdb_id=raw_id,
-        name=row.get("name") or row.get("original_name") or "",
-        original_name=row.get("original_name"),
-        original_language=row.get("original_language"),
-        overview=row.get("overview") or None,
-        first_air_date=air_date,
-        year=int(air_date[:4]) if air_date and air_date[:4].isdigit() else None,
-        poster_path=poster,
-        poster_url=f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
-        backdrop_path=row.get("backdrop_path"),
-        popularity=row.get("popularity"),
-        vote_average=row.get("vote_average"),
-        vote_count=row.get("vote_count"),
-    )
 
 
-@router.get("/tmdb/search", response_model=list[TmdbMatch])
-async def tmdb_search(
-    session: SessionDep,
-    admin: AdminUser,
-    q: Annotated[str, Query(min_length=1, max_length=200)],
-    year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
-    language: Annotated[
-        str | None, Query(max_length=16, pattern=r"^[A-Za-z]{2}(-[A-Za-z]{2})?$")
-    ] = None,
-) -> list[TmdbMatch]:
-    """Proxy for the admin's match dialog — the key never leaves the server.
-
-    `language` overrides the configured one *for this search only*. It is what makes an Asian
-    drama findable: TMDB matches a query against the titles it holds for the language asked
-    for, so 미생 typed under the household's `es-ES` returns nothing and the same string under
-    `ko` returns the show. The parameter is validated as a language tag rather than passed
-    through, because it lands in a request to TMDB.
-    """
-    client = await get_tmdb_client(session)
-    rows = await client.search_tv(q, year, language=language)
-    return [match for row in rows[:20] if (match := _tmdb_match(row)) is not None]
-
-
-@router.get("/tmdb/lookup", response_model=list[TmdbMatch])
-async def tmdb_lookup(
-    session: SessionDep,
-    admin: AdminUser,
-    tmdb_id: Annotated[int | None, Query(alias="tmdbId", ge=1)] = None,
-    imdb_id: Annotated[
-        str | None, Query(alias="imdbId", max_length=32, pattern=r"^tt\d{5,12}$")
-    ] = None,
-) -> list[TmdbMatch]:
-    """Fetch one specific title by id, for when search cannot find it but the admin can.
-
-    This is the escape hatch from search entirely — a co-production filed under a title nobody
-    uses, a show whose TMDB entry is in a script the admin cannot type. They read the id off
-    the TMDB or IMDb page and paste it.
-
-    A list of one rather than a bare object, so the match dialog renders the answer with the
-    same component it renders search results with. IMDb ids go through TMDB's `/find`, which
-    is the only way across; the `tt…` pattern is enforced here because the value is
-    interpolated into a request path.
-    """
-    if tmdb_id is None and imdb_id is None:
-        raise AppError("TMDB_LOOKUP_EMPTY", "Provide either tmdbId or imdbId", 400)
-
-    client = await get_tmdb_client(session)
-    if tmdb_id is not None:
-        details = await client.get_tv(tmdb_id)
-        match = _tmdb_match(details) if details else None
-        return [match] if match is not None else []
-
-    rows = await client.find_by_external_id(imdb_id or "")
-    return [match for row in rows[:20] if (match := _tmdb_match(row)) is not None]
-
-
-# --- Web discovery ------------------------------------------------------------------------------
-#
-# The two routes above are the happy path: TMDB knows the title, or the admin knows the id.
-# These two are for the case this library runs into constantly — TMDB's search finds nothing
-# and there is no id to paste, because nobody has the show's page open.
-#
-# A web search does find it, and what makes that useful is not the prose it returns but the
-# *links*: the TMDB, IMDb, Wikipedia or MyDramaList page for the drama, each carrying its own
-# identifier in the URL. `app.services.discovery` reads those out and hands them back, so the
-# result the admin recognizes is one click from `POST /series/{id}/match`.
-#
-# Nothing here fetches a result page. The identifier is already in the URL, and following
-# links to third-party pages would put this server's network position behind whatever a search
-# engine crawled — see the SSRF note in `app.services.images`.
-
-
-async def _platform_scope(
-    session: AsyncSession, enabled: bool
-) -> tuple[list[Provider], tuple[str, ...]]:
-    """The household's platforms, and the domains to narrow to when narrowing was asked for.
-
-    Narrowing is what makes this useful for a library TMDB has never heard of: the pages that
-    describe a vertical drama are on the platform that made it, and a general web search buries
-    them under aggregators. It is opt-in because the wider search is still the right one for
-    anything conventional.
-
-    The reference databases travel with the domains. A platform page says the show exists and
-    what it is called; IMDb says what *year* it is — the field this editor most often cannot
-    fill, and the reason they are included rather than left to the unfiltered search.
-
-    The provider list comes back either way, because it labels every result's platform and that
-    is just as true of a `reelshort.com` page found by a wide search. Resolved **here**, in one
-    await, rather than inside the search: it reads settings, and settings live on the session
-    that must not be touched while a network call is in flight.
-    """
-    providers = await configured_providers(SettingsService(session))
-    if not enabled:
-        return providers, ()
-    return providers, provider_domains(providers, with_metadata_sites=True)
-
-
-@router.get("/discover", response_model=DiscoveryResults)
-async def discover(
-    session: SessionDep,
-    admin: AdminUser,
-    q: Annotated[str, Query(min_length=1, max_length=200)],
-    year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
-    limit: Annotated[int, Query(ge=1, le=discovery_service.MAX_LIMIT)] = (
-        discovery_service.DEFAULT_LIMIT
-    ),
-    platforms: Annotated[bool, Query()] = False,
-) -> DiscoveryResults:
-    """Free-form web search for pages that identify a title.
-
-    Used from the match dialog when TMDB search has come up empty, and from nothing else. The
-    snippets in the response are there so a human can pick a row; they are never stored.
-    """
-    providers, domains = await _platform_scope(session, platforms)
-    return await discovery_service.discover_scoped(
-        session, q, year=year, limit=limit, domains=domains, providers=providers
-    )
-
-
-@router.get("/series/{series_id}/discover", response_model=DiscoveryResults)
-async def discover_for_series(
-    session: SessionDep,
-    admin: AdminUser,
-    series_id: str,
-    q: Annotated[str | None, Query(max_length=200)] = None,
-    year: Annotated[int | None, Query(ge=1800, le=2200)] = None,
-    limit: Annotated[int, Query(ge=1, le=discovery_service.MAX_LIMIT)] = (
-        discovery_service.DEFAULT_LIMIT
-    ),
-    platforms: Annotated[bool, Query()] = False,
-) -> DiscoveryResults:
-    """The same search, with the query already filled in from the series.
-
-    This is the common case and it should cost one click: an unmatched series is a title and a
-    year that the admin has been staring at, and retyping them into a search box is the step
-    worth removing. Both are still overridable — the folder name a series was created from is
-    sometimes the reason the search fails.
-    """
-    series = await library_service.get_series_or_404(session, series_id)
-    query = (q or "").strip() or series.title
-    providers, domains = await _platform_scope(session, platforms)
-    results = await discovery_service.discover_scoped(
-        session,
-        query,
-        year=year if year is not None else series.year,
-        limit=limit,
-        domains=domains,
-        providers=providers,
-    )
-    results.series_id = series.id
-    return results
 
 
 @router.get("/series/{id_or_slug}", response_model=SeriesDetail)
@@ -538,27 +354,6 @@ async def refresh_series(session: SessionDep, admin: AdminUser, series_id: str) 
     )
     return JobRef(id=job.id, type=job.type, status=job.status)
 
-
-@router.post("/series/{series_id}/match", response_model=JobRef, status_code=202)
-async def match_series(
-    session: SessionDep, admin: AdminUser, series_id: str, body: MatchIn
-) -> JobRef:
-    series = await library_service.get_series_or_404(session, series_id)
-    series.tmdb_id = body.tmdb_id
-    # Picking a TMDB entry by hand is a request for the program to take metadata over again.
-    series.metadata_locked = False
-    series.updated_at = utcnow()
-    await session.flush()
-
-    job = await enqueue(
-        session,
-        JobType.METADATA_REFRESH,
-        {"seriesId": series.id, "tmdbId": body.tmdb_id},
-        priority=50,
-        created_by_id=admin.id,
-        series_id=series.id,
-    )
-    return JobRef(id=job.id, type=job.type, status=job.status)
 
 
 @router.post("/series/{series_id}/unlink", response_model=SeriesUnlinked)
@@ -919,42 +714,6 @@ async def unmatched_rename_script(
 # See `app.services.renamer` for the rules the write obeys — rename in place, never across
 # directories; never overwrite; database follows disk, one file at a time.
 
-
-@router.post("/series/{series_id}/metadata/imdb", response_model=SeriesDetail)
-async def apply_imdb_metadata(
-    session: SessionDep, admin: AdminUser, series_id: str, body: ImdbApplyIn
-) -> SeriesDetail:
-    """Fill this series' fields from IMDb, by way of OMDb.
-
-    The path that exists because TMDB does not carry vertical short-form drama. The discovery
-    search finds the IMDb page and reads the `tt…` out of its URL; TMDB's `/find` returns
-    nothing for it; OMDb answers. Measured on all four of this household's series — every TMDB
-    lookup a miss, which is what this route is for.
-
-    Only blanks are filled unless `overwrite` is set. An admin who already wrote a synopsis in
-    Spanish should not lose it to an English plot summary just because they wanted the year.
-
-    Writing here counts as a human curating the row, so `metadata_locked` is set exactly as a
-    manual edit would — otherwise the nightly refresh would undo it.
-    """
-    series = await library_service.get_series_or_404(session, series_id)
-    client = await omdb.try_client(session)
-    if client is None:
-        raise AppError(
-            "OMDB_NOT_CONFIGURED",
-            "Add an OMDb API key in settings to fill metadata from IMDb",
-            400,
-        )
-
-    found = await client.by_imdb_id(body.imdb_id)
-    if found is None:
-        raise NotFound("IMDb title", "OMDB_TITLE_NOT_FOUND")
-
-    filled = await library_service.apply_omdb_title(
-        session, series, found, overwrite=body.overwrite
-    )
-    log.info("omdb: filled %s on %s", ", ".join(filled) or "nothing", series.id)
-    return await library_service.series_detail(session, series, admin.id)
 
 
 @router.get("/series/{series_id}/rename-plan", response_model=RenamePlanOut)

@@ -101,22 +101,22 @@ async def handle_library_rename(ctx: JobContext) -> None:
 
 
 async def handle_metadata_refresh(ctx: JobContext) -> None:
-    from app.services.metadata import refresh_series_metadata
+    """Re-read a series from DramaDex.
+
+    This job used to call TMDB. It now calls the household's own indexer, which is the only
+    source that catalogues this library — and the swap is why removing TMDB did not break the
+    "Refresh metadata" button that admins and the series page both use.
+    """
+    from app.services.dramadex import refresh_series
 
     payload = ctx.job.payload or {}
     series_id = _first(payload, "seriesId", "series_id") or ctx.job.series_id
     if not series_id:
         raise AppError("INVALID_PAYLOAD", "metadata_refresh requires seriesId", 400)
 
-    tmdb_id = _first(payload, "tmdbId", "tmdb_id")
     await ctx.progress(0.0, "Refreshing metadata")
-    await refresh_series_metadata(
-        ctx.session,
-        str(series_id),
-        tmdb_id=int(tmdb_id) if tmdb_id is not None else None,
-        ctx=ctx,
-    )
-    await ctx.progress(100.0, "Metadata refreshed")
+    filled = await refresh_series(ctx.session, str(series_id), ctx=ctx)
+    await ctx.progress(100.0, f"Metadata refreshed ({', '.join(filled) or 'no changes'})")
 
 
 # --- image_cache -----------------------------------------------------------------------------

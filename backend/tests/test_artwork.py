@@ -37,7 +37,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Series, User
 from app.services import images as images_service
-from app.services import tmdb as tmdb_service
 
 pytestmark = pytest.mark.anyio
 
@@ -994,356 +993,32 @@ GALLERY = {
 }
 
 
-async def test_artwork_candidates_degrade_without_any_source(
-    client: AsyncClient, series: Series
-) -> None:
-    """No TMDB key, no search key, no link — and still a usable screen rather than a 503.
-
-    This is the exact state of a fresh install, and it is the screen an admin would open to
-    fix it. An error here would make the feature unreachable precisely when it is needed.
-    """
-    response = await client.get(f"/api/library/series/{series.id}/artwork")
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["posters"] == []
-    assert body["backdrops"] == []
-    assert body["web"] == []
-
-    sources = {item["name"]: item for item in body["sources"]}
-    assert sources["tmdb"]["available"] is False
-    assert sources["tmdb"]["reason"] == "NOT_CONFIGURED"
-    assert sources["web"]["available"] is False
-    assert sources["web"]["reason"] == "NOT_CONFIGURED"
-    assert sources["web"]["provider"] == ""
 
 
-async def test_artwork_candidates_report_an_unlinked_series(
-    client: AsyncClient, db: AsyncSession, series: Series, serve_tmdb: Callable[..., None]
-) -> None:
-    """A key but no match: TMDB is configured and still cannot answer, and says which it is."""
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set("tmdb.api_key", "test-key")
-    serve_tmdb(lambda request: httpx.Response(200, json={}))
-
-    response = await client.get(f"/api/library/series/{series.id}/artwork")
-    assert response.status_code == 200, response.text
-    sources = {item["name"]: item for item in response.json()["sources"]}
-    assert sources["tmdb"] == {
-        "name": "tmdb",
-        "provider": "tmdb",
-        "available": False,
-        "reason": "NOT_LINKED",
-        "count": 0,
-    }
 
 
-async def test_artwork_candidates_from_the_tmdb_gallery(
-    client: AsyncClient, db: AsyncSession, series: Series, serve_tmdb: Callable[..., None]
-) -> None:
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set("tmdb.api_key", "test-key")
-    series.tmdb_id = 4242
-    await db.commit()
-
-    asked: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        asked.append(request)
-        assert request.url.path.endswith("/tv/4242/images")
-        return httpx.Response(200, json=GALLERY)
-
-    serve_tmdb(handler)
-    response = await client.get(f"/api/library/series/{series.id}/artwork")
-    assert response.status_code == 200, response.text
-    body = response.json()
-
-    # The household language, English, and textless — the three an admin chooses between.
-    assert asked[0].url.params["include_image_language"] == "es,en,null"
-
-    assert body["tmdbId"] == 4242
-    assert len(body["posters"]) == 2, "the row with an empty file_path is not a candidate"
-    best = body["posters"][0]
-    assert best["url"].endswith("/original/textless.jpg"), "best-voted first"
-    assert best["language"] is None, "TMDB's null language means textless, and stays null"
-    assert best["thumbnailUrl"].endswith("/w342/textless.jpg")
-    assert best["kind"] == "poster"
-    assert best["source"] == "tmdb"
-    assert body["posters"][1]["language"] == "es"
-
-    assert len(body["backdrops"]) == 1
-    assert body["backdrops"][0]["kind"] == "backdrop"
-
-    sources = {item["name"]: item for item in body["sources"]}
-    assert sources["tmdb"]["available"] is True
-    assert sources["tmdb"]["count"] == 3
 
 
-async def test_artwork_candidates_survive_a_tmdb_outage(
-    client: AsyncClient, db: AsyncSession, series: Series, serve_tmdb: Callable[..., None]
-) -> None:
-    """TMDB being down degrades the source, not the request."""
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set("tmdb.api_key", "test-key")
-    series.tmdb_id = 4242
-    await db.commit()
-    serve_tmdb(lambda request: httpx.Response(401, json={"status_message": "invalid key"}))
-
-    response = await client.get(f"/api/library/series/{series.id}/artwork")
-    assert response.status_code == 200, response.text
-    sources = {item["name"]: item for item in response.json()["sources"]}
-    assert sources["tmdb"]["available"] is False
-    assert sources["tmdb"]["reason"] == "PROVIDER_ERROR"
 
 
 # --- Web image search -----------------------------------------------------------------------------
 
 
-async def test_image_search_stays_off_until_fully_configured(
-    db: AsyncSession, client: AsyncClient, series: Series
-) -> None:
-    """Half-configured is off, not broken — a provider name with no key must not raise."""
-    from app.services.images import get_image_search
-    from app.services.settings import SettingsService
-
-    settings = SettingsService(db)
-    assert await get_image_search(db) is None
-
-    await settings.set("images.search.provider", "google_cse")
-    assert await get_image_search(db) is None, "a provider with no key is not configured"
-
-    await settings.set("images.search.api_key", "key")
-    assert await get_image_search(db) is None, "a key with no engine id is not configured"
-
-    response = await client.get(f"/api/library/series/{series.id}/artwork")
-    assert response.status_code == 200, response.text
-    web = {item["name"]: item for item in response.json()["sources"]}["web"]
-    assert web["available"] is False
-    assert web["reason"] == "NOT_CONFIGURED"
-
-    await settings.set("images.search.cse_id", "cx")
-    provider = await get_image_search(db)
-    assert provider is not None
-    assert provider.name == "google_cse"
 
 
-async def test_image_search_key_is_a_secret(db: AsyncSession) -> None:
-    """It is an API key, so it is redacted on read like every other one."""
-    from app.services.settings import REDACTED, SECRET_KEYS, SettingsService
-
-    assert "images.search.api_key" in SECRET_KEYS
-    settings = SettingsService(db)
-    await settings.set("images.search.api_key", "super-secret")
-    assert (await settings.all())["images.search.api_key"] == REDACTED
-
-    # And a form echoing the redaction back leaves the stored value alone.
-    await settings.update_many({"images.search.api_key": REDACTED})
-    assert await settings.get_str("images.search.api_key") == "super-secret"
 
 
-async def test_image_search_results_join_the_candidates(
-    client: AsyncClient,
-    db: AsyncSession,
-    series: Series,
-    serve_search: Callable[..., None],
-) -> None:
-    from app.services.settings import SettingsService
-
-    settings = SettingsService(db)
-    await settings.set("images.search.provider", "google_cse")
-    await settings.set("images.search.api_key", "key")
-    await settings.set("images.search.cse_id", "cx")
-
-    asked: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        asked.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "items": [
-                    {
-                        "title": "Ruta de Cristal poster",
-                        "link": "https://images.example/one.jpg",
-                        "image": {
-                            "thumbnailLink": "https://images.example/one-thumb.jpg",
-                            "contextLink": "https://images.example/page",
-                            "width": 800,
-                            "height": 1200,
-                        },
-                    },
-                    {"title": "not a link", "link": "javascript:alert(1)"},
-                    {"link": "https://images.example/two.jpg"},
-                ]
-            },
-        )
-
-    serve_search(handler)
-    response = await client.get(f"/api/library/series/{series.id}/artwork?q=ruta%20poster")
-    assert response.status_code == 200, response.text
-    body = response.json()
-
-    assert asked[0].url.params["q"] == "ruta poster"
-    assert asked[0].url.params["searchType"] == "image"
-    assert asked[0].url.params["cx"] == "cx"
-
-    assert len(body["web"]) == 2, "a non-http link is not a candidate"
-    first = body["web"][0]
-    assert first["source"] == "google_cse"
-    assert first["url"] == "https://images.example/one.jpg"
-    assert first["thumbnailUrl"] == "https://images.example/one-thumb.jpg"
-    assert first["contextUrl"] == "https://images.example/page"
-    assert first["width"] == 800
-    # No declared kind: the provider does not know a poster from a backdrop, the admin does.
-    assert first["kind"] == ""
-    # A result with no thumbnail falls back to the image itself rather than to null.
-    assert body["web"][1]["thumbnailUrl"] == "https://images.example/two.jpg"
-
-    web = {item["name"]: item for item in body["sources"]}["web"]
-    assert web["available"] is True
-    assert web["provider"] == "google_cse"
-    assert web["count"] == 2
 
 
-async def test_image_search_failure_degrades_to_a_reason(
-    client: AsyncClient,
-    db: AsyncSession,
-    series: Series,
-    serve_search: Callable[..., None],
-) -> None:
-    from app.services.settings import SettingsService
-
-    settings = SettingsService(db)
-    await settings.set("images.search.provider", "google_cse")
-    await settings.set("images.search.api_key", "key")
-    await settings.set("images.search.cse_id", "cx")
-    serve_search(lambda request: httpx.Response(403, json={"error": {"message": "quota"}}))
-
-    response = await client.get(f"/api/library/series/{series.id}/artwork")
-    assert response.status_code == 200, response.text
-    web = {item["name"]: item for item in response.json()["sources"]}["web"]
-    assert web["available"] is False
-    assert web["reason"] == "PROVIDER_ERROR"
-    assert web["provider"] == "google_cse"
 
 
 # --- Linking metadata by hand -----------------------------------------------------------------
 
 
-async def test_tmdb_search_passes_a_language_through(
-    client: AsyncClient, db: AsyncSession, serve_tmdb: Callable[..., None]
-) -> None:
-    """The parameter that makes an Asian drama findable under its own title."""
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set("tmdb.api_key", "test-key")
-    asked: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        asked.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "results": [
-                    {
-                        "id": 77,
-                        "name": "미생",
-                        "original_name": "미생",
-                        "original_language": "ko",
-                        "overview": "Un pasante...",
-                        "first_air_date": "2014-10-17",
-                        "poster_path": "/misaeng.jpg",
-                        "popularity": 12.5,
-                        "vote_average": 8.7,
-                        "vote_count": 214,
-                    }
-                ]
-            },
-        )
-
-    serve_tmdb(handler)
-    response = await client.get("/api/library/tmdb/search?q=%EB%AF%B8%EC%83%9D&language=ko")
-    assert response.status_code == 200, response.text
-
-    assert asked[0].url.params["language"] == "ko"
-    assert asked[0].url.params["query"] == "미생"
-
-    row = response.json()[0]
-    assert row["tmdbId"] == 77
-    assert row["originalName"] == "미생"
-    assert row["originalLanguage"] == "ko"
-    assert row["year"] == 2014
-    assert row["voteCount"] == 214
-    assert row["popularity"] == 12.5
-    assert row["posterUrl"].endswith("/w185/misaeng.jpg")
-
-    # An unconfigured language falls back to the household's, not to nothing.
-    await client.get("/api/library/tmdb/search?q=misaeng")
-    assert asked[1].url.params["language"] == "es-ES"
 
 
-async def test_tmdb_search_rejects_a_bogus_language(client: AsyncClient) -> None:
-    """The value lands in a request to TMDB, so it is validated as a language tag."""
-    response = await client.get("/api/library/tmdb/search?q=x&language=../../configuration")
-    assert response.status_code == 422
 
 
-async def test_tmdb_lookup_by_id(
-    client: AsyncClient, db: AsyncSession, serve_tmdb: Callable[..., None]
-) -> None:
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set("tmdb.api_key", "test-key")
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/tv/4242"):
-            return httpx.Response(
-                200,
-                json={
-                    "id": 4242,
-                    "name": "Ruta de Cristal",
-                    "original_name": "琉璃之路",
-                    "original_language": "zh",
-                    "first_air_date": "2024-03-01",
-                    "poster_path": "/p.jpg",
-                    "vote_count": 9,
-                },
-            )
-        if request.url.path.endswith("/find/tt1234567"):
-            return httpx.Response(
-                200,
-                json={
-                    "movie_results": [{"id": 1, "title": "wrong shape"}],
-                    "tv_results": [{"id": 555, "name": "Found By IMDb", "vote_count": 2}],
-                },
-            )
-        return httpx.Response(404, json={"status_message": "not found"})
-
-    serve_tmdb(handler)
-
-    by_tmdb = await client.get("/api/library/tmdb/lookup?tmdbId=4242")
-    assert by_tmdb.status_code == 200, by_tmdb.text
-    assert by_tmdb.json()[0]["originalName"] == "琉璃之路"
-
-    by_imdb = await client.get("/api/library/tmdb/lookup?imdbId=tt1234567")
-    assert by_imdb.status_code == 200, by_imdb.text
-    rows = by_imdb.json()
-    assert len(rows) == 1, "only tv_results are candidates"
-    assert rows[0]["tmdbId"] == 555
-
-    missing = await client.get("/api/library/tmdb/lookup?tmdbId=999999")
-    assert missing.status_code == 404
-    assert error_code(missing) == "TMDB_NOT_FOUND"
-
-    empty = await client.get("/api/library/tmdb/lookup")
-    assert empty.status_code == 400
-    assert error_code(empty) == "TMDB_LOOKUP_EMPTY"
-
-    # `imdbId` is interpolated into a request path, so it is pinned to the `tt…` shape.
-    injected = await client.get("/api/library/tmdb/lookup?imdbId=../configuration")
-    assert injected.status_code == 422
 
 
 async def test_unlink_forgets_the_id_and_locks_the_row(
@@ -1374,65 +1049,6 @@ async def test_unlink_forgets_the_id_and_locks_the_row(
     assert detail.json()["tmdbId"] is None
 
 
-async def test_unlink_survives_a_scheduled_refresh(
-    client: AsyncClient,
-    db: AsyncSession,
-    series: Series,
-    serve_tmdb: Callable[..., None],
-) -> None:
-    """The nightly refresh must not hand an unlinked series back to the entry it rejected.
-
-    This is the whole point of the lock half of the unlink. `refresh_series_metadata` is
-    called here exactly as the scheduled `METADATA_REFRESH` job calls it — no explicit id —
-    against a TMDB that would happily match this title, and the series has to come out still
-    unlinked. Without the guard the admin would unlink the wrong match every night.
-    """
-    from app.services.metadata import refresh_series_metadata
-    from app.services.settings import SettingsService
-
-    await SettingsService(db).set("tmdb.api_key", "test-key")
-    series.tmdb_id = 4242
-    series.metadata_locked = False
-    await db.commit()
-
-    searched: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        searched.append(request.url.path)
-        if request.url.path == "/3/search/tv":
-            return httpx.Response(
-                200,
-                json={
-                    "results": [
-                        {
-                            "id": 4242,
-                            "name": series.title,
-                            "original_name": series.title,
-                            "first_air_date": f"{series.year}-01-01",
-                        }
-                    ]
-                },
-            )
-        return httpx.Response(200, json={"id": 4242, "name": series.title})
-
-    serve_tmdb(handler)
-
-    unlinked = await client.post(f"/api/library/series/{series.id}/unlink")
-    assert unlinked.status_code == 200, unlinked.text
-
-    await refresh_series_metadata(db, series.id)
-    await db.commit()
-    await db.refresh(series)
-
-    assert series.tmdb_id is None, "a scheduled refresh re-matched a deliberately unlinked series"
-    assert series.metadata_locked is True
-    assert searched == [], "TMDB should not even have been searched for an unlinked series"
-
-    # The escape hatch still works: naming an id is an operator decision and still binds.
-    await refresh_series_metadata(db, series.id, tmdb_id=4242)
-    await db.commit()
-    await db.refresh(series)
-    assert series.tmdb_id == 4242
 
 
 async def test_unlink_is_admin_only(viewer_client: AsyncClient, series: Series) -> None:
