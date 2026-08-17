@@ -420,3 +420,50 @@
     gap: var(--space-5);
   }
 }
+
+/* Where this came from. In the hero because it is part of what the show *is*, not an action —
+   and one per platform, since a title can sit on both. */
+.watchLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.watchLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.watchLink:hover {
+  color: var(--accent);
+}
+
+/* Chips rather than a list: names are short, there are rarely more than a dozen, and each one
+   is a link into everything else that actor is in. */
+.castList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.castLink {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+.castLink:hover {
+  color: var(--accent);
+  border-color: var(--border-strong);
+  text-decoration: none;
+}

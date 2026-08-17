@@ -41,6 +41,7 @@ import { cx } from '@/components/cx'
 import {
   CheckCircleIcon,
   EditIcon,
+  ExternalLinkIcon,
   GridIcon,
   InfoIcon,
   ListIcon,
@@ -410,6 +411,23 @@ export function SeriesPage() {
               ) : null}
             </div>
 
+            {(detail.links ?? []).length > 0 ? (
+              <p className={styles.watchLinks}>
+                {(detail.links ?? []).map((link) => (
+                  <a
+                    key={link.studioKey}
+                    className={styles.watchLink}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLinkIcon size="1em" aria-hidden="true" />
+                    {t('series.watchOn', { studio: link.studioName })}
+                  </a>
+                ))}
+              </p>
+            ) : null}
+
             {next ? (
               <p className={styles.nextUp}>
                 {t('series.episodeLabel', episodeLabelParts(next))}
@@ -536,6 +554,29 @@ export function SeriesPage() {
             </ul>
           ) : null}
         </section>
+        ) : null}
+
+        {(detail.cast ?? []).length > 0 ? (
+          <section className={styles.block} aria-labelledby="series-cast">
+            <h2 className={styles.blockHeading} id="series-cast">
+              {t('series.cast')}
+            </h2>
+            {/* Each name is a link, and that is the feature: this genre has no cast data
+                anywhere else, so "what else is this actor in" had no answer until the
+                indexer existed. */}
+            <ul className={styles.castList}>
+              {(detail.cast ?? []).map((member) => (
+                <li key={member.dramadexPersonId}>
+                  <Link
+                    href={`/people/${member.dramadexPersonId}`}
+                    className={styles.castLink}
+                  >
+                    {member.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         {alsoKnownAs.length > 0 ? (

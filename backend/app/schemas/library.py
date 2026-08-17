@@ -198,6 +198,9 @@ class SeriesDetail(SeriesSummary):
     backdrop_url: str | None = None
     tmdb_id: int | None = None
     imdb_id: str | None = None
+    dramadex_id: int | None = None
+    cast: list[CastMemberOut] = Field(default_factory=list)
+    links: list[SeriesLinkOut] = Field(default_factory=list)
     library_path: str = ""
     metadata_locked: bool = False
     updated_at: datetime | None = None
@@ -630,6 +633,90 @@ class DiscoveredIds(APIModel):
     dramaboxdb_slug: str | None = None
 
 
+class CastMemberOut(APIModel):
+    """One credited performer, cached from DramaDex.
+
+    `dramadex_person_id` is the whole point: it is what makes the name a link. Following it
+    reaches everything that actor is in across the indexer's 7000 titles, not just the shorts
+    this household happens to own — which for a genre with no cast data anywhere else is the
+    feature, not a detail.
+    """
+
+    dramadex_person_id: int
+    name: str
+    role: str | None = None
+    billing_order: int | None = None
+
+
+class SeriesLinkOut(APIModel):
+    """"Watch on ReelShort" — the URL is rendered by DramaDex from the platform's id rather
+    than its slug, so it survives the retitles these platforms do constantly."""
+
+    studio_key: str
+    studio_name: str
+    url: str
+
+
+class DramadexHit(APIModel):
+    """One DramaDex title, as something to choose between.
+
+    `matches` is what separates this from the search panel it replaces: it is true only when
+    the normalised titles are equal, so the UI can lead with the row that *is* this series and
+    present the rest as neighbours. Ranking alone would offer "Call to Arms, Call to Love" for
+    "The Call Boy I Met in Paris" with nothing to say it is a different show.
+    """
+
+    id: int
+    title: str
+    year: int | None = None
+    episode_count: int | None = None
+    poster_url: str | None = None
+    synopsis: str | None = None
+    studio: str | None = None
+    watch_url: str | None = None
+    genres: list[str] = Field(default_factory=list)
+    cast: list[str] = Field(default_factory=list)
+    matches: bool = False
+    #: Already in this household's catalogue, so the UI offers a link rather than an action.
+    in_library: bool = False
+
+
+class DramadexApplyIn(APIModel):
+    dramadex_id: int = Field(ge=1)
+    #: Blanks-only by default, like every other fill. Replacing is a separate, explicit act.
+    overwrite: bool = False
+
+
+class DramadexHits(APIModel):
+    configured: bool = False
+    query: str = ""
+    items: list[DramadexHit] = Field(default_factory=list)
+
+
+class DramadexStatus(APIModel):
+    """What the settings screen shows after "test connection"."""
+
+    configured: bool = False
+    reachable: bool = False
+    titles: int = 0
+    episodes: int = 0
+    people: int = 0
+    detail: str = ""
+
+
+class PersonCredits(APIModel):
+    """An actor, and everything the indexer has them in.
+
+    `in_library` per credit is the point of the screen: it turns "who else is in this" into
+    "which of those do we already have", which is the question a household actually asks.
+    """
+
+    id: int
+    name: str
+    bio: str | None = None
+    credits: list[DramadexHit] = Field(default_factory=list)
+
+
 class DiscoveryResult(APIModel):
     """One web result, as something to choose between rather than something to read."""
 
@@ -804,7 +891,14 @@ __all__ = [
     "CleanupResult",
     "ContinueWatchingItem",
     "DiscoveredIds",
+    "CastMemberOut",
+    "DramadexApplyIn",
+    "DramadexHit",
+    "DramadexHits",
+    "DramadexStatus",
+    "PersonCredits",
     "DiscoveryResult",
+    "SeriesLinkOut",
     "DiscoveryResults",
     "SeriesBulkPatch",
     "SeriesBulkResult",

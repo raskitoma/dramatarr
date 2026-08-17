@@ -193,7 +193,26 @@ export interface OverviewProvenance {
   overviewSourceLang?: string | null
 }
 
+/** One credited performer, cached from DramaDex when the series was bound to it. */
+export interface CastMember {
+  /** The indexer's person id — what makes the name a link to everything else they are in. */
+  dramadexPersonId: number
+  name: string
+  role: string | null
+  billingOrder: number | null
+}
+
+/** "Watch on ReelShort". The URL is built from the platform's id, so it survives a retitle. */
+export interface SeriesLink {
+  studioKey: string
+  studioName: string
+  url: string
+}
+
 export interface SeriesDetail extends SeriesSummary, OverviewProvenance {
+  dramadexId?: number | null
+  cast?: CastMember[]
+  links?: SeriesLink[]
   overview: string | null
   originalTitle: string | null
   originalLanguage: string | null
@@ -382,6 +401,9 @@ export interface SystemSettings {
    * OMDb, a public API over IMDb's data. The fallback for an IMDb id TMDB does not carry —
    * which for vertical short drama is most of them. Empty disables the feature.
    */
+  /** DramaDex — the household's indexer, and the primary metadata source. */
+  'dramadex.base_url': string
+  'dramadex.api_key': string
   'omdb.api_key': string
   'tmdb.language': string
   'tmdb.enabled': boolean

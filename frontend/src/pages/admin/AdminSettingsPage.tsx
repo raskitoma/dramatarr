@@ -40,6 +40,7 @@ import Switch from '@/components/Switch'
 import { useAuth } from '@/hooks/useAuth'
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@/i18n'
 
+import DramadexSection from '@/components/admin/DramadexSection'
 import ProvidersSection from '@/components/admin/ProvidersSection'
 import SettingsToc, { type TocSection } from '@/components/admin/SettingsToc'
 
@@ -50,13 +51,21 @@ const SECTIONS: readonly TocSection[] = [
   { id: 'settings-site', labelKey: 'admin.settings.site' },
   { id: 'settings-library', labelKey: 'admin.settings.librarySection' },
   { id: 'settings-providers', labelKey: 'admin.settings.providersSection' },
+  { id: 'settings-dramadex', labelKey: 'admin.settings.dramadexSection' },
   { id: 'settings-metadata', labelKey: 'admin.settings.metadata' },
   { id: 'settings-email', labelKey: 'admin.settings.email' },
   { id: 'settings-security', labelKey: 'admin.settings.security' },
   { id: 'settings-signin', labelKey: 'admin.settings.signIn' },
 ]
 
-type SectionId = 'site' | 'library' | 'metadata' | 'email' | 'security' | 'signin'
+type SectionId =
+  | 'site'
+  | 'library'
+  | 'dramadex'
+  | 'metadata'
+  | 'email'
+  | 'security'
+  | 'signin'
 
 interface FormState {
   siteName: string
@@ -64,6 +73,8 @@ interface FormState {
   scanCron: string
   sourceBaseUrl: string
   tmdbKey: string
+  dramadexUrl: string
+  dramadexKey: string
   omdbKey: string
   tmdbLanguage: string
   imageSearchProvider: string
@@ -300,6 +311,8 @@ function toForm(settings: Partial<SystemSettings>): FormState {
     scanCron: readString(settings, 'library.scan_cron'),
     sourceBaseUrl: readString(settings, 'library.source_base_url'),
     tmdbKey: '',
+    dramadexUrl: readString(settings, 'dramadex.base_url'),
+    dramadexKey: '',
     omdbKey: '',
     tmdbLanguage: readString(settings, 'tmdb.language'),
     imageSearchProvider: readString(settings, 'images.search.provider'),
@@ -373,6 +386,7 @@ export function AdminSettingsPage() {
   })
 
   const [form, setForm] = useState<FormState>(() => toForm({}))
+  const [editingDramadexKey, setEditingDramadexKey] = useState(false)
   const [seeded, setSeeded] = useState(false)
   const [editingTmdbKey, setEditingTmdbKey] = useState(false)
   const [editingOmdbKey, setEditingOmdbKey] = useState(false)
@@ -420,6 +434,8 @@ export function AdminSettingsPage() {
   })
 
   const tmdbConfigured = settings['tmdb.api_key'] === SECRET_SENTINEL
+  const dramadexConfigured = settings['dramadex.api_key'] === SECRET_SENTINEL
+  const dramadexKeyEditable = !dramadexConfigured || editingDramadexKey
   const omdbConfigured = settings['omdb.api_key'] === SECRET_SENTINEL
   const imageSearchKeyConfigured = settings['images.search.api_key'] === SECRET_SENTINEL
   const smtpPasswordConfigured = settings['smtp.password'] === SECRET_SENTINEL
@@ -540,6 +556,16 @@ export function AdminSettingsPage() {
       }
       if (form.defaultLocale !== readString(settings, 'site.default_locale')) {
         patch['site.default_locale'] = form.defaultLocale
+      }
+    }
+
+    if (section === 'dramadex') {
+      if (form.dramadexUrl.trim() !== readString(settings, 'dramadex.base_url')) {
+        patch['dramadex.base_url'] = form.dramadexUrl.trim()
+      }
+      // Only a freshly typed key travels; the sentinel is never echoed back as if it were one.
+      if (dramadexKeyEditable && form.dramadexKey.trim() !== '') {
+        patch['dramadex.api_key'] = form.dramadexKey.trim()
       }
     }
 
@@ -817,6 +843,32 @@ export function AdminSettingsPage() {
           </div>
         </div>
         {sectionFooter('library', cronValid)}
+      </form>
+
+      {/* DramaDex ----------------------------------------------------------------------- */}
+      {/* First, because it is now the primary source. Everything in the card below it —
+          TMDB, OMDb, the web image search — predates the indexer and exists because nothing
+          catalogued this library's genre. */}
+      <form
+        className={styles.card}
+        id="settings-dramadex"
+        onSubmit={submit('dramadex', true)}
+      >
+        <h2 className={styles.sectionTitle}>{t('admin.settings.dramadexSection')}</h2>
+        <DramadexSection
+          baseUrl={form.dramadexUrl}
+          apiKey={form.dramadexKey}
+          keyConfigured={dramadexConfigured}
+          editingKey={editingDramadexKey}
+          onEditKey={() => setEditingDramadexKey(true)}
+          onChange={(patch: { baseUrl?: string; apiKey?: string }) =>
+            setField({
+              ...(patch.baseUrl === undefined ? {} : { dramadexUrl: patch.baseUrl }),
+              ...(patch.apiKey === undefined ? {} : { dramadexKey: patch.apiKey }),
+            })
+          }
+        />
+        {sectionFooter('dramadex', true)}
       </form>
 
       {/* Metadata ----------------------------------------------------------------------- */}

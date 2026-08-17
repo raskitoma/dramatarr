@@ -1514,6 +1514,8 @@ export const adminKeys = {
   /* Effectively static — it changes only when the server does — so the editor caches it hard
    * rather than refetching a constant on every visit to a series. */
   vocabulary: () => [...adminKeys.all, 'vocabulary'] as const,
+  dramadex: (q: string) => [...adminKeys.all, 'dramadex', q] as const,
+  dramadexPerson: (id: number) => [...adminKeys.all, 'dramadex-person', id] as const,
   series: () => [...adminKeys.all, 'series'] as const,
   seriesList: (params: AdminSeriesQuery) => [...adminKeys.series(), 'list', params] as const,
   seriesDetail: (idOrSlug: string) => [...adminKeys.series(), 'detail', idOrSlug] as const,
@@ -1655,4 +1657,81 @@ export function getRenamePlan(seriesId: string): Promise<RenamePlan> {
 
 export function renameSeriesFiles(seriesId: string): Promise<JobRef> {
   return api.post<JobRef>(`/library/series/${encodeURIComponent(seriesId)}/rename`)
+}
+
+// --- DramaDex -------------------------------------------------------------------------------
+//
+// The household's own indexer of DramaBox and ReelShort. It replaces the web-search panel and
+// the TMDB match dialog for this library's genre, because unlike either of them it actually
+// catalogues it — and it carries cast and platform links, which nothing else here ever had.
+
+export interface DramadexHit {
+  id: number
+  title: string
+  year: number | null
+  episodeCount: number | null
+  posterUrl: string | null
+  synopsis: string | null
+  studio: string | null
+  watchUrl: string | null
+  genres: string[]
+  cast: string[]
+  /**
+   * True only when the normalised titles are equal.
+   *
+   * The distinction the whole panel rests on: a query the index cannot satisfy still returns
+   * its nearest neighbours, so ranking alone would offer "Call to Arms, Call to Love" for
+   * "The Call Boy I Met in Paris" with nothing to say it is a different show. The UI leads
+   * with the row that *is* this series and presents the rest as neighbours.
+   */
+  matches: boolean
+  inLibrary: boolean
+}
+
+export interface DramadexHits {
+  configured: boolean
+  query: string
+  items: DramadexHit[]
+}
+
+export interface DramadexStatus {
+  configured: boolean
+  reachable: boolean
+  titles: number
+  episodes: number
+  people: number
+  detail: string
+}
+
+export interface PersonCredits {
+  id: number
+  name: string
+  bio: string | null
+  credits: DramadexHit[]
+}
+
+export function searchDramadex(q: string, limit = 20): Promise<DramadexHits> {
+  return api.get<DramadexHits>('/library/dramadex/search', { q, limit })
+}
+
+/** Fill a series from a DramaDex title and bind the two. Blanks only unless `overwrite`. */
+export function applyDramadex(
+  seriesId: string,
+  dramadexId: number,
+  overwrite = false,
+): Promise<SeriesDetail> {
+  return api.post<SeriesDetail>(
+    `/library/series/${encodeURIComponent(seriesId)}/metadata/dramadex`,
+    { dramadexId, overwrite },
+  )
+}
+
+/** An actor and everything the indexer has them in. Any signed-in member may read this. */
+export function dramadexPerson(personId: number): Promise<PersonCredits> {
+  return api.get<PersonCredits>(`/library/dramadex/people/${personId}`)
+}
+
+/** Ask DramaDex who it is. Never throws for a bad key — that is a state of the form. */
+export function testDramadex(): Promise<DramadexStatus> {
+  return api.post<DramadexStatus>('/admin/dramadex/test')
 }

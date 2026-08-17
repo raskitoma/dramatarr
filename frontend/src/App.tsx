@@ -29,6 +29,7 @@ import { RequestsPage } from '@/pages/RequestsPage'
 import { SearchPage } from '@/pages/SearchPage'
 import { SeriesPage } from '@/pages/SeriesPage'
 
+const PersonPage = lazy(async () => ({ default: (await import('@/pages/PersonPage')).PersonPage }))
 const WatchPage = lazy(async () => ({ default: (await import('@/pages/WatchPage')).WatchPage }))
 
 const AdminDashboardPage = lazy(async () => ({
@@ -210,6 +211,15 @@ function Routes() {
         <AdminPage>
           <AdminQueuePage />
         </AdminPage>
+      </Route>
+      <Route path="/people/:id">
+        <ProtectedRoute>
+          <Chrome>
+            <Suspense fallback={<PageLoader />}>
+              <PersonPage />
+            </Suspense>
+          </Chrome>
+        </ProtectedRoute>
       </Route>
       <Route path="/admin/library">
         <AdminPage>

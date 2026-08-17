@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, File, Query, Response, UploadFile
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -46,6 +46,10 @@ from app.schemas.library import (
     CleanupIn,
     CleanupResult,
     DiscoveryResults,
+    DramadexApplyIn,
+    DramadexHit,
+    DramadexHits,
+    PersonCredits,
     EpisodeDetail,
     EpisodePatch,
     EpisodeSummary,
@@ -76,12 +80,13 @@ from app.schemas.library import (
 from app.schemas.search import SearchResults
 from app.services import discovery as discovery_service
 from app.services import library as library_service
-from app.services import omdb, renamer
+from app.services import dramadex, omdb, renamer
 from app.services.images import (
     BACKDROP_SIZE,
     MAX_ARTWORK_BYTES,
     POSTER_SIZE,
     ArtworkKind,
+    cache_dramadex_poster,
     fetch_remote_image,
     get_image_search,
     read_capped,
@@ -1037,3 +1042,141 @@ async def cleanup(
 
 
 __all__ = ["router"]
+
+
+# --- DramaDex ---------------------------------------------------------------------------------
+#
+# The indexer that makes the rest of this file's metadata plumbing legacy. TMDB, OMDb and the
+# SearXNG discovery search all exist because nothing catalogued vertical short drama; DramaDex
+# does, and it carries what none of them could — cast, platform links and structured tags.
+
+
+def _hit(payload: dict[str, Any], found: dramadex.DramadexTitle) -> DramadexHit:
+    """Attach the proxied poster path, which only the API layer knows."""
+    payload = dict(payload)
+    payload["poster_url"] = f"/api/library/dramadex/titles/{found.id}/poster"
+    return DramadexHit(**payload)
+
+
+async def _known_dramadex_ids(session: AsyncSession, ids: list[int]) -> set[int]:
+    if not ids:
+        return set()
+    rows = await session.execute(
+        select(Series.dramadex_id).where(Series.dramadex_id.in_(ids))
+    )
+    return {row for row in rows.scalars() if row is not None}
+
+
+@router.get("/dramadex/search", response_model=DramadexHits)
+async def dramadex_search(
+    session: SessionDep,
+    admin: AdminUser,
+    q: Annotated[str, Query(min_length=1, max_length=200)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> DramadexHits:
+    """Search the household's indexer.
+
+    Replaces the web-search panel entirely. That one scored search-engine results and could
+    only ever hand back a link; this returns a record with a synopsis, a cast and a platform.
+
+    `matches` is set per row from the normalised title, so the UI can lead with the one that
+    *is* this series. Ranking alone is not enough — a query DramaDex cannot satisfy still
+    returns its nearest neighbours, and binding one of those is how a series ends up with
+    another show's metadata.
+    """
+    client = await dramadex.try_client(session)
+    if client is None:
+        return DramadexHits(configured=False, query=q)
+
+    page = await client.search(q, limit=limit)
+    known = await _known_dramadex_ids(session, [t.id for t in page.items])
+    return DramadexHits(
+        configured=True,
+        query=q,
+        items=[
+            _hit(dramadex.hit_from(t, wanted=q, in_library=t.id in known), t)
+            for t in page.items
+        ],
+    )
+
+
+@router.get("/dramadex/titles/{title_id}/poster")
+async def dramadex_poster(session: SessionDep, admin: AdminUser, title_id: int) -> Response:
+    """Proxy key art from DramaDex.
+
+    Proxied rather than linked because the indexer requires an API key on every route, and
+    that key must not reach a browser. DramaDex serves its own posters for the same reason
+    dramatarr does — so rendering a page never leaks a viewer's IP to a platform CDN.
+    """
+    client = await dramadex.require_client(session)
+    fetched = await client.poster_bytes(title_id)
+    if fetched is None:
+        raise NotFound("Poster", "DRAMADEX_POSTER_NOT_FOUND")
+    raw, content_type = fetched
+    return Response(
+        content=raw,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@router.post("/series/{series_id}/metadata/dramadex", response_model=SeriesDetail)
+async def apply_dramadex(
+    session: SessionDep, admin: AdminUser, series_id: str, body: DramadexApplyIn
+) -> SeriesDetail:
+    """Fill a series from a DramaDex title, and bind the two.
+
+    Blanks only unless `overwrite`, like every other fill here. The cast and the watch links
+    are the exception and are replaced outright: they are a cache of the indexer's answer, not
+    something an admin curates, so a merge would only preserve a mistake.
+    """
+    series = await library_service.get_series_or_404(session, series_id)
+    client = await dramadex.require_client(session)
+
+    found = await client.title(body.dramadex_id)
+    if found is None:
+        raise NotFound("DramaDex title", "DRAMADEX_TITLE_NOT_FOUND")
+
+    filled = await library_service.apply_dramadex_title(
+        session, series, found, overwrite=body.overwrite
+    )
+
+    # Artwork last and never fatally: a poster that will not decode must not undo a fill that
+    # already succeeded.
+    if not series.poster_path or body.overwrite:
+        fetched = await client.poster_bytes(found.id)
+        if fetched is not None:
+            stored = await cache_dramadex_poster(fetched[0], title_id=found.id)
+            if stored:
+                series.poster_path = stored
+                await session.commit()
+
+    log.info("dramadex: filled %s on %s", ", ".join(filled) or "nothing", series.id)
+    return await library_service.series_detail(session, series, admin.id)
+
+
+@router.get("/dramadex/people/{person_id}", response_model=PersonCredits)
+async def dramadex_person(
+    session: SessionDep, user: CurrentUser, person_id: int
+) -> PersonCredits:
+    """An actor and everything the indexer has them in.
+
+    Open to any signed-in member, not just admins: following a performer from a series to
+    their other shorts is browsing, and it is the one thing this genre never had anywhere.
+    Each credit is flagged `in_library`, which turns "who else is in this" into "which of
+    those do we already have".
+    """
+    client = await dramadex.require_client(session)
+    person = await client.person(person_id)
+    if person is None:
+        raise NotFound("Person", "DRAMADEX_PERSON_NOT_FOUND")
+
+    known = await _known_dramadex_ids(session, [t.id for t in person.titles])
+    return PersonCredits(
+        id=person.id,
+        name=person.name,
+        bio=person.bio,
+        credits=[
+            _hit(dramadex.hit_from(t, in_library=t.id in known), t) for t in person.titles
+        ],
+    )

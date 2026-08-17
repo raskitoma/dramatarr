@@ -30,10 +30,17 @@ SECRET_KEYS: frozenset[str] = frozenset(
         "oauth.google.client_secret",
         "images.search.api_key",
         "omdb.api_key",
+        "dramadex.api_key",
     }
 )
 
 DEFAULTS: dict[str, Any] = {
+    #: DramaDex — the household's own indexer of DramaBox and ReelShort, and the only source
+    #: that catalogues this library's genre. Everything above it (TMDB, OMDb, the SearXNG
+    #: discovery search) predates it and exists because it did not. Empty means "not connected
+    #: yet": every caller treats that as a feature nobody has switched on, never as an error.
+    "dramadex.base_url": "",
+    "dramadex.api_key": "",
     "tmdb.api_key": "",
     "tmdb.language": "es-ES",
     "tmdb.enabled": True,

@@ -34,6 +34,7 @@ import type {
 } from '@/api/types'
 import ArtworkPicker from '@/components/admin/ArtworkPicker'
 import RenamePanel from '@/components/admin/RenamePanel'
+import DramadexPanel from '@/components/admin/DramadexPanel'
 import SynopsisFinder from '@/components/admin/SynopsisFinder'
 import TmdbMatchDialog from '@/components/admin/TmdbMatchDialog'
 import { TocLayout } from '@/components/admin/TocLayout'
@@ -516,6 +517,13 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
                 onChange={(event) => setForm({ ...form, overview: event.target.value })}
               />
             </Field>
+            {/* DramaDex first: it returns a record, where the panel below returns a link.
+                The old one stays for the titles the indexer's sync has not reached yet. */}
+            <DramadexPanel
+              seriesId={detail.id}
+              seriesTitle={detail.title}
+              onApplied={() => setSeed(null)}
+            />
             <SynopsisFinder
               seriesId={detail.id}
               seriesTitle={detail.title}

@@ -308,6 +308,45 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "es": "Ya existe un episodio con ese número en esta temporada.",
         "en": "An episode with that number already exists in this season.",
     },
+    # DramaDex — the household's indexer. Every one of these distinguishes a failure that
+    # otherwise reads as "nothing works": a wrong key, a dead container and a title the sync
+    # has not reached are three different repairs.
+    "DRAMADEX_NOT_CONFIGURED": {
+        "es": "Conectá DramaDex en preferencias primero.",
+        "en": "Connect DramaDex in settings first.",
+    },
+    "DRAMADEX_UNREACHABLE": {
+        "es": "No pudimos alcanzar DramaDex. Revisá la dirección y que el contenedor esté arriba.",
+        "en": "Could not reach DramaDex. Check the address and that the container is up.",
+    },
+    "DRAMADEX_UNAUTHORIZED": {
+        "es": "DramaDex rechazó la clave.",
+        "en": "DramaDex rejected the API key.",
+    },
+    "DRAMADEX_BAD_RESPONSE": {
+        "es": "DramaDex contestó algo que no entendemos.",
+        "en": "DramaDex sent something we could not read.",
+    },
+    "DRAMADEX_BAD_URL": {
+        "es": "La dirección de DramaDex tiene que ser http(s) con un host.",
+        "en": "The DramaDex address must be http(s) with a host.",
+    },
+    "DRAMADEX_TITLE_NOT_FOUND": {
+        "es": "DramaDex ya no tiene ese título.",
+        "en": "DramaDex no longer has that title.",
+    },
+    "DRAMADEX_PERSON_NOT_FOUND": {
+        "es": "DramaDex no tiene esa persona.",
+        "en": "DramaDex has no such person.",
+    },
+    "DRAMADEX_POSTER_NOT_FOUND": {
+        "es": "DramaDex no tiene póster guardado para ese título.",
+        "en": "DramaDex has no poster stored for that title.",
+    },
+    "DRAMADEX_POSTER_INVALID": {
+        "es": "No pudimos decodificar ese póster.",
+        "en": "We could not decode that poster.",
+    },
     "SERIES_BULK_EMPTY": {
         "es": "No elegiste ningún campo para cambiar.",
         "en": "You didn't choose any field to change.",

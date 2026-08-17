@@ -79,6 +79,10 @@ class Series(Base):
 
     tmdb_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     imdb_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: The household's own indexer. Not "another id like the two above" — for vertical short
+    #: drama this is the *only* one that resolves, and it is what carries cast, tags and the
+    #: platform watch links. See `app.services.dramadex`.
+    dramadex_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     poster_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     backdrop_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
@@ -101,6 +105,75 @@ class Series(Base):
     )
     translations: Mapped[list[SeriesTranslation]] = relationship(
         back_populates="series", cascade="all, delete-orphan"
+    )
+    cast: Mapped[list[SeriesCast]] = relationship(
+        back_populates="series",
+        cascade="all, delete-orphan",
+        order_by="(SeriesCast.billing_order, SeriesCast.name)",
+        lazy="selectin",
+    )
+    links: Mapped[list[SeriesLink]] = relationship(
+        back_populates="series", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class SeriesCast(Base):
+    """Who is in a series, denormalized from DramaDex.
+
+    A copy rather than a foreign key into the indexer, because dramatarr has to keep working
+    when DramaDex is down, moved or not yet configured — the series page cannot depend on a
+    second service being reachable to render a cast list.
+
+    `dramadex_person_id` is what makes an actor *followable*: it is the key the indexer's
+    `/people/{id}` answers on, so "everything else they are in" is one call away and is not
+    limited to the shorts this household happens to own.
+    """
+
+    __tablename__ = "series_cast"
+
+    id: Mapped[str] = pk()
+    series_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("series.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    dramadex_person_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: DramaDex leaves this null on some rows; those sort last, by name.
+    billing_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = created_column()
+
+    series: Mapped[Series] = relationship(back_populates="cast")
+
+    __table_args__ = (
+        UniqueConstraint("series_id", "dramadex_person_id", name="uq_series_cast_person"),
+    )
+
+
+class SeriesLink(Base):
+    """"Watch on ReelShort" — one row per platform that carries this series.
+
+    The URL is stored as DramaDex renders it, which is built from the platform's **id rather
+    than its slug**. Both platforms 301 the id form to whatever the show is called today, and
+    these platforms retitle constantly, so a slug-based link rots while this one does not.
+    """
+
+    __tablename__ = "series_links"
+
+    id: Mapped[str] = pk()
+    series_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("series.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: `reelshort`, `dramabox` — the studio key DramaDex uses.
+    studio_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    studio_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    created_at: Mapped[datetime] = created_column()
+
+    series: Mapped[Series] = relationship(back_populates="links")
+
+    __table_args__ = (
+        UniqueConstraint("series_id", "studio_key", name="uq_series_link_studio"),
     )
 
 

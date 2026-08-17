@@ -1761,3 +1761,42 @@ __all__ = [
     "request_poster_url",
     "store_series_artwork",
 ]
+
+
+async def cache_dramadex_poster(raw: bytes, *, title_id: int) -> str | None:
+    """Store key art fetched from DramaDex. Returns its served URL, or None.
+
+    A separate entry point from `cache_request_poster` because DramaDex's poster route needs
+    the API key in a header — the bytes are already in hand by the time they get here, so this
+    takes them rather than a URL it could not fetch.
+
+    Keyed by title id rather than by URL: DramaDex serves every poster from the same path per
+    title and re-encodes in place when a source rotates its art, so the URL is not a content
+    key and hashing it would pin the first version forever.
+
+    None on every failure, like its sibling: a card with no picture is still a card, and a
+    poster that will not decode must not turn a working metadata fill into an error.
+    """
+    if not raw:
+        return None
+
+    stem = _poster_stem(f"dramadex:{int(title_id)}")
+    directory = _requests_dir()
+    existing = await asyncio.to_thread(_find_existing, directory, stem)
+    if existing is not None:
+        return request_poster_url(existing.name)
+
+    try:
+        encoded, suffix = await reencode(
+            raw, vfilter=_artwork_filter(), code="DRAMADEX_POSTER_INVALID"
+        )
+    except AppError as exc:
+        log.info("dramadex poster skipped (%s) for title %s", exc.code, title_id)
+        return None
+    except Exception:  # pragma: no cover - defensive; artwork must never fail a fill
+        log.warning("dramadex poster failed for title %s", title_id, exc_info=True)
+        return None
+
+    dest = directory / f"{stem}{suffix}"
+    await asyncio.to_thread(_write_atomic, dest, encoded)
+    return request_poster_url(dest.name)

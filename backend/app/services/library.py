@@ -43,6 +43,8 @@ from app.models import (
     MediaStatus,
     PlayEvent,
     Series,
+    SeriesCast,
+    SeriesLink,
     SeriesTitle,
     SeriesTranslation,
     SubtitleTrack,
@@ -71,7 +73,9 @@ from app.schemas.library import (
     SeasonGroup,
     SeriesDeleted,
     SeriesDeletionPreview,
+    CastMemberOut,
     SeriesDetail,
+    SeriesLinkOut,
     SeriesProgress,
     SeriesSummary,
     SeriesTitleOut,
@@ -646,6 +650,22 @@ async def series_detail(session: AsyncSession, series: Series, user_id: str) -> 
         backdrop_url=image_url(series.backdrop_path, BACKDROP_SIZE),
         tmdb_id=series.tmdb_id,
         imdb_id=series.imdb_id,
+        dramadex_id=series.dramadex_id,
+        cast=[
+            CastMemberOut(
+                dramadex_person_id=member.dramadex_person_id,
+                name=member.name,
+                role=member.role,
+                billing_order=member.billing_order,
+            )
+            for member in series.cast
+        ],
+        links=[
+            SeriesLinkOut(
+                studio_key=link.studio_key, studio_name=link.studio_name, url=link.url
+            )
+            for link in series.links
+        ],
         library_path=series.library_path,
         metadata_locked=series.metadata_locked,
         updated_at=as_aware(series.updated_at),
@@ -2318,3 +2338,134 @@ __all__ = [
     "unmatched_groups",
     "watch_history",
 ]
+
+
+async def apply_dramadex_title(
+    session: AsyncSession,
+    series: Series,
+    found: Any,
+    *,
+    overwrite: bool = False,
+) -> list[str]:
+    """Write a DramaDex record onto a series. Returns the field names actually filled.
+
+    This is the fill the application was missing. TMDB and OMDb could offer a year and, on a
+    good day, an English plot; DramaDex knows the platform, the cast, sixteen namespaces of
+    tags and the link to watch it — for a genre neither of the others catalogues.
+
+    **Blanks only unless `overwrite`**, the same rule the OMDb path follows and for the same
+    reason: this household writes its synopses in Spanish, and coming back for the cast must
+    not cost the paragraph somebody wrote.
+
+    Cast and links are the exception, and deliberately so. They are a *cache* of DramaDex's
+    answer rather than something an admin curates here, so they are replaced wholesale — a
+    merge would leave an actor behind after the indexer corrected a bad scrape, and there is
+    no local edit to protect.
+
+    `declared_episode_count` goes through the same guard as every other writer: a count below
+    what is already on the NAS is refused, because the file count is the number that is a
+    fact. See `services/metadata._apply_series_fields`.
+    """
+    filled: list[str] = []
+
+    def put(field_name: str, value: Any) -> None:
+        if value in (None, "", (), []):
+            return
+        if not overwrite and getattr(series, field_name, None):
+            return
+        setattr(series, field_name, value)
+        filled.append(field_name)
+
+    put("overview", found.synopsis)
+    put("year", found.year)
+    put("genres", normalize_genres(found.genres()))
+    put("network", found.studio_name)
+    put("content_rating", canonical_content_rating(found.audience_rating))
+
+    if found.synopsis and "overview" in filled:
+        series.overview_source = OverviewSource.MANUAL
+        series.overview_source_lang = "en"
+        watch = next((s.watch_url for s in found.studios if s.is_watchable), None)
+        if watch:
+            series.overview_source_url = watch[:1000]
+
+    files_on_disk = int(
+        (
+            await session.execute(
+                select(func.count(func.distinct(Episode.id)))
+                .select_from(Episode)
+                .join(MediaFile, MediaFile.episode_id == Episode.id)
+                .where(Episode.series_id == series.id)
+            )
+        ).scalar_one()
+    )
+    if found.episode_count and found.episode_count >= files_on_disk:
+        put("declared_episode_count", found.episode_count)
+
+    # --- The cached halves, replaced rather than merged ---------------------------------
+    await session.execute(sql_delete(SeriesCast).where(SeriesCast.series_id == series.id))
+    for member in found.cast:
+        session.add(
+            SeriesCast(
+                series_id=series.id,
+                dramadex_person_id=member.person_id,
+                name=member.name[:255],
+                role=(member.role or None),
+                billing_order=member.billing_order,
+            )
+        )
+    if found.cast:
+        filled.append("cast")
+
+    await session.execute(sql_delete(SeriesLink).where(SeriesLink.series_id == series.id))
+    for link in found.studios:
+        if not link.is_watchable:
+            continue
+        session.add(
+            SeriesLink(
+                series_id=series.id,
+                studio_key=link.key[:32],
+                studio_name=link.name[:64],
+                external_id=link.external_id[:128],
+                url=link.watch_url[:1000],
+            )
+        )
+    if any(s.is_watchable for s in found.studios):
+        filled.append("links")
+
+    # Aliases become searchable title rows, which is what makes a member typing the platform's
+    # own spelling find the series the household actually filed under another name.
+    known = {
+        row
+        for row in (
+            await session.execute(
+                select(SeriesTitle.normalized).where(SeriesTitle.series_id == series.id)
+            )
+        ).scalars()
+    }
+    for alias in found.aliases:
+        slug = normalize(alias)
+        if not slug or slug in known:
+            continue
+        known.add(slug)
+        session.add(
+            SeriesTitle(
+                series_id=series.id,
+                language="",
+                title=alias[:500],
+                kind=TitleKind.ALTERNATE,
+                source=TitleSource.MANUAL,
+                normalized=slug,
+            )
+        )
+
+    series.dramadex_id = found.id
+    if "dramadex_id" not in filled:
+        filled.append("dramadex_id")
+
+    series.metadata_locked = True
+    series.updated_at = utcnow()
+    await session.flush()
+    await reindex_series(session, series.id)
+    await session.commit()
+    return filled

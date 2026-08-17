@@ -64,6 +64,7 @@ from app.schemas.admin import (
     VocabularyOut,
 )
 from app.schemas.common import Ok, Page
+from app.schemas.library import DramadexStatus
 from app.schemas.requests import (
     AdminSeriesRequestOut,
     RequestCounts,
@@ -76,6 +77,7 @@ from app.services import oauth as oauth_service
 from app.services import requests as requests_service
 from app.services.images import diagnose_search, list_search_engines
 from app.services.mail import send_mail
+from app.services import dramadex
 from app.services.settings import REDACTED, SettingsService
 from app.services.vocab import CONTENT_RATINGS, PROVIDERS
 from app.utils.ids import new_token
@@ -1052,3 +1054,34 @@ async def get_stats(session: SessionDep) -> StatsOut:
 
 
 __all__ = ["router"]
+
+
+@router.post("/dramadex/test", response_model=DramadexStatus)
+async def dramadex_test(session: SessionDep) -> DramadexStatus:
+    """Ask DramaDex who it is, and say plainly what came back.
+
+    A settings screen that only stores a URL and a key leaves an admin guessing which of four
+    things is wrong — typo, wrong port, wrong key, container down — and every one of those
+    presents identically as "nothing works" somewhere else in the app hours later. So this
+    reports the distinction: unreachable, rejected, or answering with a catalogue this size.
+
+    Never raises for a failed connection. A wrong key is an ordinary state of a settings form,
+    not a server error.
+    """
+    client = await dramadex.try_client(session)
+    if client is None:
+        return DramadexStatus(configured=False, detail="not configured")
+
+    try:
+        stats = await client.stats()
+    except AppError as exc:
+        return DramadexStatus(configured=True, reachable=False, detail=exc.code)
+
+    return DramadexStatus(
+        configured=True,
+        reachable=True,
+        titles=int(stats.get("titles") or 0),
+        episodes=int(stats.get("episodes") or 0),
+        people=int(stats.get("people") or 0),
+        detail="ok",
+    )
