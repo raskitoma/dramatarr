@@ -19,6 +19,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'wouter'
@@ -40,6 +41,8 @@ import { useToast } from '@/components/Toast'
 import { cx } from '@/components/cx'
 import {
   CheckCircleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   EditIcon,
   ExternalLinkIcon,
   GridIcon,
@@ -276,8 +279,75 @@ export function SeriesPage() {
     tabRefs.current[wrapped]?.focus()
   }
 
+
+/**
+ * Step to the title before or after this one.
+ *
+ * The neighbours arrive **on the series payload**, so this renders correctly the first time
+ * even on a cold load of a link somebody pasted — there is no list on the client to walk, and
+ * asking for one would have been a second request that a shared link could not answer anyway.
+ *
+ * At the ends of the catalogue the control is **disabled rather than removed**. A pair that
+ * loses a button at the first and last title shifts under the cursor exactly when someone is
+ * clicking through quickly, and `aria-disabled` keeps the reason readable: the label says which
+ * end you are at instead of going silent.
+ *
+ * The order is the catalogue's A–Z — the same one Explorar shows by default — never the list
+ * the viewer came through. That is why the labels say "title", not "next result".
+ */
+function TitleNav({ detail }: { detail: SeriesDetail }) {
+  const { t } = useTranslation()
+
+  const previousLabel =
+    detail.previousSeriesSlug === null
+      ? t('series.previousTitleNone')
+      : t('series.previousTitle', { title: detail.previousSeriesTitle ?? '' })
+  const nextLabel =
+    detail.nextSeriesSlug === null
+      ? t('series.nextTitleNone')
+      : t('series.nextTitle', { title: detail.nextSeriesTitle ?? '' })
+
+  return (
+    <nav className={styles.titleNav} aria-label={t('series.titleNav')}>
+      <NavArrow
+        slug={detail.previousSeriesSlug}
+        label={previousLabel}
+        icon={<ChevronLeftIcon />}
+      />
+      <NavArrow slug={detail.nextSeriesSlug} label={nextLabel} icon={<ChevronRightIcon />} />
+    </nav>
+  )
+}
+
+/** One arrow: a link when there is somewhere to go, a disabled button when there is not. */
+function NavArrow({
+  slug,
+  label,
+  icon,
+}: {
+  slug: string | null
+  label: string
+  icon: ReactNode
+}) {
+  if (slug === null) {
+    return (
+      <span className={cx(styles.navArrow, styles.navArrowOff)} aria-disabled="true" title={label}>
+        {icon}
+        <span className="sr-only">{label}</span>
+      </span>
+    )
+  }
+  return (
+    <Link href={`/series/${slug}`} className={styles.navArrow} title={label} aria-label={label}>
+      {icon}
+    </Link>
+  )
+}
+
   return (
     <article className={styles.page}>
+      <TitleNav detail={detail} />
+
       <header
         className={styles.hero}
         style={

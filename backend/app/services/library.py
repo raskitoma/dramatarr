@@ -566,8 +566,10 @@ async def list_series(
         ratio = case((available_count > 0, watched_count * 1.0 / available_count), else_=0.0)
         joined = joined.order_by(ratio.desc(), agg.c.last_played_at.desc(), Series.id)
     else:
-        sort_key = func.coalesce(func.nullif(Series.sort_title, ""), Series.title)
-        joined = joined.order_by(sort_key, Series.title)
+        # One expression, shared with `series_neighbours`. If these two ever disagree the
+        # arrows walk a different sequence than the page they came from, which is the kind of
+        # difference nobody notices until two titles sort the same.
+        joined = joined.order_by(*_catalogue_order())
 
     joined = joined.limit(page_size).offset(max(0, (page - 1) * page_size))
     rows = (await session.execute(joined)).all()
@@ -615,9 +617,98 @@ async def genre_facets(session: AsyncSession) -> list[GenreFacet]:
 # --- Detail ---------------------------------------------------------------------------------
 
 
+#: The catalogue's canonical order, as one expression per level.
+#:
+#: Level 1 and 2 are exactly what the `title` sort in `list_series` orders by, so the arrows walk
+#: the sequence Explorar shows by default. Level 3 is the id, which that sort does not carry: a
+#: list may leave two identically-titled rows in either order and nobody notices, but a *walk*
+#: needs a total order or a pair of ties becomes a loop between two titles with no way past.
+def _catalogue_order() -> tuple[ColumnElement[Any], ...]:
+    # `lower()` on the first level because the two things it coalesces are cased differently:
+    # `sort_title` is written by `normalize()` and is lower case, while the fallback is the
+    # display title. SQLite collates binary, so without folding every row that fell back sorted
+    # *before* every row that did not — "Zeta" ahead of "alfa" — which reads as a random title
+    # pinned to the front of the catalogue. A no-op for well-formed rows, since theirs is
+    # already lower case.
+    return (
+        func.lower(func.coalesce(func.nullif(Series.sort_title, ""), Series.title)),
+        Series.title,
+        Series.id,
+    )
+
+
+async def series_neighbours(
+    session: AsyncSession, series: Series
+) -> tuple[tuple[str, str] | None, tuple[str, str] | None]:
+    """The titles either side of this one in the catalogue's order.
+
+    Returns `(previous, next)`, each either `(slug, title)` or None at the ends.
+
+    Written as a lexicographic comparison rather than by loading the ordered list and finding an
+    index. At seventeen series either works; the difference is that this one keeps working, and
+    the list form has a specific trap — `GET /library/series` caps `page_size` at 100, so a
+    client walking the list would start **silently** skipping neighbours at the 101st series
+    with nothing failing anywhere.
+
+    Two queries rather than a window function, because SQLite's `LAG`/`LEAD` need a full scan of
+    the ordered set anyway and this shape can use an index on the sort key.
+    """
+    first, second, third = _catalogue_order()
+    # The anchor must be folded exactly the way `_catalogue_order` folds the column, or the
+    # comparison is against a value that is in the ordering nowhere. That mistake does not
+    # raise: it returns a neighbour on the wrong side, and the walk loops between two titles
+    # forever. `test_the_walk_visits_exactly_what_the_list_shows_in_the_same_order` is what
+    # catches it, by hanging rather than by asserting.
+    anchor = (
+        (series.sort_title or series.title).lower(),
+        series.title,
+        series.id,
+    )
+
+    # `(a, b, c) < (x, y, z)` spelled out. A row-value comparison would read better and is
+    # supported by SQLite 3.15+, but this form is what every backend agrees on and the query
+    # planner treats it the same.
+    def before() -> ColumnElement[bool]:
+        return or_(
+            first < anchor[0],
+            and_(first == anchor[0], second < anchor[1]),
+            and_(first == anchor[0], second == anchor[1], third < anchor[2]),
+        )
+
+    def after() -> ColumnElement[bool]:
+        return or_(
+            first > anchor[0],
+            and_(first == anchor[0], second > anchor[1]),
+            and_(first == anchor[0], second == anchor[1], third > anchor[2]),
+        )
+
+    previous_row = (
+        await session.execute(
+            select(Series.slug, Series.title)
+            .where(before())
+            .order_by(first.desc(), second.desc(), third.desc())
+            .limit(1)
+        )
+    ).first()
+    next_row = (
+        await session.execute(
+            select(Series.slug, Series.title)
+            .where(after())
+            .order_by(first, second, third)
+            .limit(1)
+        )
+    ).first()
+
+    return (
+        (previous_row[0], previous_row[1]) if previous_row else None,
+        (next_row[0], next_row[1]) if next_row else None,
+    )
+
+
 async def series_detail(session: AsyncSession, series: Series, user_id: str) -> SeriesDetail:
     pairs = await episodes_with_progress(session, series.id, user_id)
     progress = _progress_from_pairs(series, pairs)
+    previous_series, next_series = await series_neighbours(session, series)
 
     seasons: list[SeasonGroup] = []
     by_id: dict[str, EpisodeSummary] = {}
@@ -688,6 +779,10 @@ async def series_detail(session: AsyncSession, series: Series, user_id: str) -> 
         seasons=seasons,
         progress=progress,
         next_episode=next_episode,
+        previous_series_slug=previous_series[0] if previous_series else None,
+        previous_series_title=previous_series[1] if previous_series else None,
+        next_series_slug=next_series[0] if next_series else None,
+        next_series_title=next_series[1] if next_series else None,
     )
 
 
@@ -2273,6 +2368,7 @@ __all__ = [
     "rename_script",
     "series_counts",
     "series_detail",
+    "series_neighbours",
     "series_episodes",
     "series_progress",
     "series_summary",

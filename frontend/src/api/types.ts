@@ -228,6 +228,21 @@ export interface SeriesDetail extends SeriesSummary, OverviewProvenance {
   seasons: SeasonGroup[]
   /** The episode a Play/Resume button should start with. Null when nothing is playable. */
   nextEpisode: EpisodeSummary | null
+  /**
+   * The titles either side of this one in the catalogue's A–Z order — Explorar's default.
+   *
+   * Sent with the detail rather than fetched, the same way `previousEpisodeId`/`nextEpisodeId`
+   * ride along on an episode. That is what makes the arrows correct on a cold load of a pasted
+   * link, where there is no list to walk, and it is why the series page needs no second query.
+   *
+   * The order is the catalogue's own, never the list the viewer arrived through: a series is
+   * reachable from home, browse, search and the wishlist and the URL is identical in all four.
+   * Null at each end — the control disables rather than disappears.
+   */
+  previousSeriesSlug: string | null
+  previousSeriesTitle: string | null
+  nextSeriesSlug: string | null
+  nextSeriesTitle: string | null
 }
 
 export interface SeasonGroup {

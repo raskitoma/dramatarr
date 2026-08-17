@@ -73,6 +73,12 @@ function detail(overrides: Partial<SeriesDetail> = {}): SeriesDetail {
     originalTitle: null,
     originalLanguage: null,
     backdropUrl: null,
+    // Both ends of the catalogue by default, so a test that says nothing about the arrows is
+    // exercising the disabled pair rather than an accidental one.
+    previousSeriesSlug: null,
+    previousSeriesTitle: null,
+    nextSeriesSlug: null,
+    nextSeriesTitle: null,
     network: 'ReelShort',
     contentRating: null,
     tmdbId: null,
@@ -185,5 +191,63 @@ describe('SeriesPage hero', () => {
     expect(screen.queryByRole('link', { name: /editar/i })).toBeNull()
     // Their own actions are untouched.
     expect(screen.getByRole('button', { name: /marcar serie como vista/i })).toBeTruthy()
+  })
+})
+
+describe('SeriesPage — moving between titles', () => {
+  it('links each arrow at the neighbour the payload named, and names it out loud', async () => {
+    seriesDetail.mockReturnValue({
+      data: detail({
+        previousSeriesSlug: 'american-sniper',
+        previousSeriesTitle: 'American Sniper The Kid of Guns',
+        nextSeriesSlug: 'djinn-under-contract',
+        nextSeriesTitle: 'Djinn Under Contract',
+      }),
+      isLoading: false,
+      isError: false,
+    })
+
+    renderIn(<SeriesPage />)
+
+    const previous = screen.getByRole('link', { name: /título anterior: American Sniper/i })
+    const next = screen.getByRole('link', { name: /título siguiente: Djinn Under Contract/i })
+    expect(previous.getAttribute('href')).toBe('/series/american-sniper')
+    expect(next.getAttribute('href')).toBe('/series/djinn-under-contract')
+  })
+
+  it('keeps both arrows in place at the ends, saying which end rather than vanishing', async () => {
+    // The pair must not change width between the first title and the second: a control that
+    // appears and disappears moves under the cursor of somebody clicking through the library.
+    seriesDetail.mockReturnValue({
+      data: detail({
+        previousSeriesSlug: null,
+        previousSeriesTitle: null,
+        nextSeriesSlug: 'djinn-under-contract',
+        nextSeriesTitle: 'Djinn Under Contract',
+      }),
+      isLoading: false,
+      isError: false,
+    })
+
+    const { container } = renderIn(<SeriesPage />)
+
+    const nav = container.querySelector('nav[aria-label="Navegar entre títulos"]')
+    expect(nav, 'the pair should be present').toBeTruthy()
+    expect(nav?.children.length, 'both arrows render at an end').toBe(2)
+
+    // The dead end is inert and still explains itself.
+    expect(screen.queryByRole('link', { name: /título anterior/i })).toBeNull()
+    expect(screen.getByText(/es el primer título de la biblioteca/i)).toBeTruthy()
+    expect(screen.getByRole('link', { name: /título siguiente/i })).toBeTruthy()
+  })
+
+  it('shows a lone title both ends disabled rather than a pair that goes nowhere', async () => {
+    seriesDetail.mockReturnValue({ data: detail(), isLoading: false, isError: false })
+    renderIn(<SeriesPage />)
+
+    expect(screen.queryByRole('link', { name: /título anterior/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /título siguiente/i })).toBeNull()
+    expect(screen.getByText(/es el primer título/i)).toBeTruthy()
+    expect(screen.getByText(/es el último título/i)).toBeTruthy()
   })
 })

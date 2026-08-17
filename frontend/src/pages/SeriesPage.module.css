@@ -467,3 +467,68 @@
   border-color: var(--border-strong);
   text-decoration: none;
 }
+
+/* --- Moving between titles ----------------------------------------------------------------
+ *
+ * Its own row above the hero rather than inside it. The hero is a two-column grid whose right
+ * column is already carrying counts, progress and the action row, and dropping a floating pair
+ * into it either collides with those or has to be absolutely positioned over a backdrop whose
+ * height changes with the synopsis.
+ *
+ * Right-aligned because that is where the *next* arrow wants to be, and a pair reads as one
+ * control when it sits together at one end rather than split across the width. */
+.titleNav {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  /* The hero already opens the page; this row should sit against it, not float in its own
+     band of whitespace. `.page` has a `--space-6` gap, so most of that is pulled back. */
+  margin-block-end: calc(var(--space-6) * -1 + var(--space-2));
+}
+
+.navArrow {
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transition:
+    color var(--duration-fast) var(--ease),
+    background var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.navArrow:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.navArrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* At the ends of the catalogue. Kept in the layout, visibly inert: `pointer-events: none` is
+   deliberately absent, so the title attribute still says *which* end you are at on hover. */
+.navArrowOff {
+  color: var(--text-subtle, var(--text-muted));
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* A 40px target is under the 44px touch floor the rest of the app holds to, so on a coarse
+   pointer the arrows grow rather than staying a decorative size nobody can hit. */
+@media (pointer: coarse) {
+  .navArrow {
+    inline-size: 44px;
+    block-size: 44px;
+  }
+}

@@ -220,6 +220,30 @@ class SeriesDetail(SeriesSummary):
     #: synopsis anywhere may deliberately carry a Korean or English one.
     overview_source_lang: str | None = None
 
+    # --- The titles either side of this one ---------------------------------------------------
+    #
+    # Sent with the detail rather than fetched separately, exactly as `previous_episode_id` and
+    # `next_episode_id` ride along on `EpisodeDetail`. Two reasons, and the second is the real
+    # one: it costs the client no second round trip, and it means the arrows are correct on a
+    # cold load of a link somebody pasted into a chat, where there is no list to walk.
+    #
+    # The order is the catalogue's own — the same `sort_title` ordering Explorar shows by
+    # default — **not** the list the viewer happened to arrive through. A series is reachable
+    # from home, browse, search and the wishlist, and the URL is byte-identical in all four, so
+    # no answer can reflect the path taken. Naming one stable order and labelling the controls
+    # "previous/next title" is honest; guessing at the viewer's history is not.
+    #
+    # Null at each end of the catalogue, and the UI disables rather than hides — a control that
+    # vanishes at the last title makes the pair jump.
+
+    #: Slug of the title before this one, or null when this is the first.
+    previous_series_slug: str | None = None
+    #: Its title, so the control can name where it goes instead of saying only "previous".
+    previous_series_title: str | None = None
+    #: Slug of the title after this one, or null when this is the last.
+    next_series_slug: str | None = None
+    next_series_title: str | None = None
+
 
 class ContinueWatchingItem(APIModel):
     series: SeriesSummary
