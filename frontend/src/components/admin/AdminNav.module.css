@@ -31,7 +31,17 @@
   text-decoration: none;
 }
 
+/* Same treatment as the header's nav, and for the same measured reason: `--accent-soft` on the
+   page background is 1.10:1, so the pill alone was invisible and the section you were in read
+   the same as the ones you were not. Kept identical to `AppHeader.module.css` deliberately —
+   two navigations in one app that indicate "you are here" differently is its own defect. */
 .link[aria-current='page'] {
-  color: var(--text);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: var(--weight-semibold);
+}
+
+.link[aria-current='page']:hover {
+  color: var(--accent);
   background: var(--accent-soft);
 }

@@ -33,19 +33,47 @@ import { CloseIcon, MenuIcon, SearchIcon } from '@/components/icons'
 
 import styles from './AppHeader.module.css'
 
-interface NavItem {
+export interface NavItem {
   href: string
   labelKey: string
+  /**
+   * Route prefixes this item also owns, beyond its own `href`.
+   *
+   * Without these the highlight only ever appeared on the four destinations themselves, so it
+   * went out the moment you opened anything — which is most of the time you are using the app.
+   * A series page and an actor page are both places *in the catalogue*, so Explorar keeps the
+   * light. That is a small claim about where you are rather than how you got here: you can
+   * reach a series from home or from search too, and no single answer is right for all three.
+   * Naming the catalogue is more useful than naming nothing.
+   */
+  owns?: readonly string[]
 }
 
-const NAV_ITEMS: readonly NavItem[] = [
+export const NAV_ITEMS: readonly NavItem[] = [
+  // Deliberately no `owns`. Home is the one route that would swallow every path under a prefix
+  // test, so it matches exactly and nothing else.
   { href: '/', labelKey: 'nav.home' },
-  { href: '/browse', labelKey: 'nav.browse' },
+  { href: '/browse', labelKey: 'nav.browse', owns: ['/series', '/people'] },
   { href: '/search', labelKey: 'nav.search' },
   // Last, and deliberately after search: asking for something is what you do once looking for
   // it has failed, and putting it earlier would invite requests for things already on the NAS.
   { href: '/requests', labelKey: 'nav.requests' },
 ]
+
+/**
+ * Whether this item is the one the current location belongs to.
+ *
+ * `/account`, `/watch/…` and the whole admin area answer false for every item, and that is
+ * correct — none of them is reached from this menu, so lighting one would point at the wrong
+ * door. (The player has no header at all.)
+ */
+export function ownsLocation(item: NavItem, location: string): boolean {
+  if (location === item.href) return true
+  // `startsWith` on the bare prefix would make `/serieskkk` match `/series`.
+  return (item.owns ?? []).some(
+    (prefix) => location === prefix || location.startsWith(`${prefix}/`),
+  )
+}
 
 /** Closes a popup when a pointer lands outside it, or when focus moves out of it. */
 function useDismissOnOutside(
@@ -89,7 +117,7 @@ function NavLinks({ linkClassName }: { linkClassName: string | undefined }) {
           key={item.href}
           href={item.href}
           className={linkClassName}
-          aria-current={location === item.href ? 'page' : undefined}
+          aria-current={ownsLocation(item, location) ? 'page' : undefined}
         >
           {t(item.labelKey)}
         </Link>

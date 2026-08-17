@@ -65,8 +65,26 @@
   text-decoration: none;
 }
 
+/* The current section, and it has to be legible at a glance rather than technically present.
+ *
+ * This rule used to set `--text` on `--accent-soft`, which measures **1.18:1** against the
+ * header's white surface in light and **1.10:1** in dark — WCAG asks 3:1 of a non-text
+ * indicator, so the pill was doing no work at all and the only real signal was a grey going
+ * slightly darker. The owner reported the menu as simply not highlighting anything.
+ *
+ * The colour is what carries it now: `--accent` on the header surface is 5.37:1 in light and
+ * 5.90:1 in dark, and it is a hue change rather than a shade of the same grey. The pill and the
+ * weight stay as reinforcement, not as the message. */
 .navLink[aria-current='page'] {
-  color: var(--text);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: var(--weight-semibold);
+}
+
+/* Hover must not read as "selected". Without this the hover state of an inactive link lands
+   very close to the active pill, which is the failure this whole rule is meant to fix. */
+.navLink[aria-current='page']:hover {
+  color: var(--accent);
   background: var(--accent-soft);
 }
 
