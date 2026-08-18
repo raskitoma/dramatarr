@@ -33,6 +33,35 @@
   pointer-events: none;
 }
 
+/* Same card as Explorar's, and the same breakpoints: they are one set of controls and a
+   member moving between the two screens should not have to find them twice. */
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  align-items: end;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* The switch renders its own label, so it aligns to the bottom of the labelled fields. */
+.switchCell {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-6);
+}
+
+/* The whole label is the target, and at rest it is only as tall as its track. base.css cannot
+   reach it — a <label> is not a button — so the floor is set here. */
+@media (pointer: coarse) {
+  .switch {
+    align-items: center;
+    min-block-size: 44px;
+  }
+}
+
 .status {
   display: flex;
   flex-wrap: wrap;
@@ -142,4 +171,15 @@
 .episodeUnavailable {
   font-size: var(--text-xs);
   color: var(--unavailable);
+}
+
+@media (max-width: 400px) {
+  .filters {
+    grid-template-columns: 1fr;
+    padding: var(--space-3);
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
 }

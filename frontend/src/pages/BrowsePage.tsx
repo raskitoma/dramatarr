@@ -16,6 +16,7 @@ import {
   isSeriesStatus,
   useGenres,
   useSeriesList,
+  useYears,
   type SeriesSort,
 } from '@/api/library'
 import type { SeriesStatus } from '@/api/types'
@@ -62,12 +63,16 @@ export function BrowsePage() {
   const sortParam = params.get('sort')
   const sort: SeriesSort = isSeriesSort(sortParam) ? sortParam : 'title'
   const availableOnly = params.get('availableOnly') === '1'
+  const yearParam = Number.parseInt(params.get('year') ?? '', 10)
+  const year = Number.isFinite(yearParam) && yearParam > 0 ? yearParam : undefined
   const page = parsePage(params.get('page'))
 
   const genres = useGenres()
+  const years = useYears()
   const list = useSeriesList({
     genre: genre || undefined,
     status,
+    year,
     sort,
     availableOnly,
     page,
@@ -105,6 +110,21 @@ export function BrowsePage() {
             {(genres.data ?? []).map((facet) => (
               <option key={facet.genre} value={facet.genre}>
                 {`${facet.genre} (${facet.count})`}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label={t('search.filterYear')} htmlFor={`${fieldId}-year`}>
+          <Select
+            id={`${fieldId}-year`}
+            value={year ? String(year) : ''}
+            onChange={(event) => update({ year: event.target.value })}
+          >
+            <option value="">{t('common.all')}</option>
+            {(years.data ?? []).map((facet) => (
+              <option key={facet.year} value={String(facet.year)}>
+                {`${facet.year} (${facet.count})`}
               </option>
             ))}
           </Select>

@@ -51,6 +51,10 @@ class RequestCandidate(APIModel):
     #: The search engine's extract, when there was one. Display only — never stored on the
     #: request, for the same reason it never becomes a series overview.
     snippet: str = ""
+    #: Set when this card is here because somebody in it is named like the query, rather than
+    #: because the title is. Shown on the card: a row that does not resemble what was typed is
+    #: noise unless it says why it is there.
+    matched_person: str = ""
     ids: DiscoveredIds = Field(default_factory=DiscoveredIds)
     #: True when the library already holds this title, with the slug to link to. Answering
     #: "we have it" at the moment of asking is worth more than answering it a day later.

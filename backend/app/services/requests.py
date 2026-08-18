@@ -191,8 +191,6 @@ def safe_poster_url(value: str | None) -> str | None:
 # --- Searching ---------------------------------------------------------------------------------
 
 
-
-
 async def _mark_in_library(session: AsyncSession, candidates: Sequence[RequestCandidate]) -> None:
     """Flag the cards the household already owns.
 
@@ -256,47 +254,80 @@ async def _mark_requested(
             card.request_status = status  # type: ignore[assignment]
 
 
-async def _dramadex_search(
-    session: AsyncSession, text: str, limit: int
-) -> list[RequestCandidate]:
+def _candidate_from(found: dramadex.DramadexTitle, *, person: str = "") -> RequestCandidate:
+    watch = next((s for s in found.studios if s.is_watchable), None)
+    return RequestCandidate(
+        key=f"dramadex:{found.id}",
+        title=found.primary_title,
+        year=found.year,
+        # Proxied through this app: DramaDex needs an API key on every route, and that key
+        # must never reach a browser.
+        poster_url=f"/api/library/dramadex/titles/{found.id}/poster",
+        source_url=watch.watch_url if watch else None,
+        provider=watch.name if watch else "DramaDex",
+        # A real synopsis, not a search-engine extract — so unlike the web path, this one is
+        # safe to store on the request.
+        snippet=(found.synopsis or "")[:400],
+        matched_person=person,
+    )
+
+
+async def _dramadex_page(
+    client: dramadex.DramadexClient, limit: int, **params: Any
+) -> list[dramadex.DramadexTitle]:
+    """One call, empty on failure.
+
+    Empty rather than raising: a member typing a title should never meet a stack trace because
+    a container is restarting. The reason a search came back empty is reported through
+    `providers`, not through an error.
+    """
+    try:
+        page = await client.search(limit=limit, **params)
+    except AppError as exc:
+        log.info("dramadex wishlist search failed (%s)", exc.code)
+        return []
+    return page.items
+
+
+#: The share of a wishlist page that cast matches may claim when there are any. Half, because
+#: neither reading of a typed name is the obviously right one — "Adam" is a plausible title
+#: word and a real actor — and starving either would make one of the two searches invisible.
+PERSON_SHARE = 2
+
+
+async def _dramadex_search(session: AsyncSession, text: str, limit: int) -> list[RequestCandidate]:
     """Wishlist cards from the household's own indexer, or an empty list.
 
-    Empty on every failure rather than raising: a member typing a title should never meet a
-    stack trace because a container is restarting, and the providers below are still there to
-    answer. The reason a search came back empty is reported through `providers`, not through
-    an error.
+    Asked **twice**: once as a title and once as a person. DramaDex indexes the cast of ~2300
+    titles and answers `?person=` on a case-insensitive partial name, and short drama is the
+    genre where the actor is the thing a member remembers — these shows are retitled between
+    platforms and the face is not. The two calls are independent HTTP requests and touch no
+    session, so they are raced.
 
     `key` is the DramaDex id, which makes it stable across spellings — the same show found by
-    two different queries collapses to one wishlist row instead of two.
+    two different queries collapses to one wishlist row instead of two, and it is also what
+    de-duplicates a title that both searches return.
     """
     client = await dramadex.try_client(session)
     if client is None:
         return []
-    try:
-        page = await client.search(text, limit=limit)
-    except AppError as exc:
-        log.info("dramadex wishlist search failed (%s)", exc.code)
-        return []
 
-    cards: list[RequestCandidate] = []
-    for found in page.items:
-        watch = next((s for s in found.studios if s.is_watchable), None)
-        cards.append(
-            RequestCandidate(
-                key=f"dramadex:{found.id}",
-                title=found.primary_title,
-                year=found.year,
-                # Proxied through this app: DramaDex needs an API key on every route, and that
-                # key must never reach a browser.
-                poster_url=f"/api/library/dramadex/titles/{found.id}/poster",
-                source_url=watch.watch_url if watch else None,
-                provider=watch.name if watch else "DramaDex",
-                # A real synopsis, not a search-engine extract — so unlike the web path, this
-                # one is safe to store on the request.
-                snippet=(found.synopsis or "")[:400],
-            )
-        )
-    return cards
+    by_title, by_person = await asyncio.gather(
+        _dramadex_page(client, limit, query=text),
+        _dramadex_page(client, limit, person=text),
+    )
+
+    titled = [_candidate_from(found) for found in by_title]
+    seen = {card.key for card in titled}
+    credited = [
+        _candidate_from(found, person=text)
+        for found in by_person
+        if f"dramadex:{found.id}" not in seen
+    ]
+
+    # Titles first, but never so many that the cast matches fall off the page entirely.
+    room = limit - min(len(credited), limit // PERSON_SHARE)
+    return [*titled[:room], *credited][:limit]
 
 
 async def search(
@@ -453,8 +484,10 @@ async def _already_in_library(session: AsyncSession, payload: RequestCreateIn) -
     """
     if payload.ids.tmdb_id:
         found = (
-            await session.execute(select(Series).where(Series.tmdb_id == payload.ids.tmdb_id))
-        ).scalars().first()
+            (await session.execute(select(Series).where(Series.tmdb_id == payload.ids.tmdb_id)))
+            .scalars()
+            .first()
+        )
         if found is not None:
             return found
 
@@ -480,9 +513,7 @@ async def _already_in_library(session: AsyncSession, payload: RequestCreateIn) -
     )
 
 
-async def create(
-    session: AsyncSession, user: User, payload: RequestCreateIn
-) -> SeriesRequestOut:
+async def create(session: AsyncSession, user: User, payload: RequestCreateIn) -> SeriesRequestOut:
     """Write the note, or hand back the one that is already there.
 
     Three outcomes, and only one of them is a new row:
@@ -502,12 +533,16 @@ async def create(
 
     key = dedupe_key(payload.ids, payload.title, payload.year)
     duplicate = (
-        await session.execute(
-            select(SeriesRequest).where(
-                SeriesRequest.user_id == user.id, SeriesRequest.dedupe_key == key
+        (
+            await session.execute(
+                select(SeriesRequest).where(
+                    SeriesRequest.user_id == user.id, SeriesRequest.dedupe_key == key
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if duplicate is not None:
         return request_out(duplicate, already_existed=True)
 
@@ -537,12 +572,16 @@ async def create(
         # read the winner back and report it the same way the duplicate branch above does.
         await session.rollback()
         winner = (
-            await session.execute(
-                select(SeriesRequest).where(
-                    SeriesRequest.user_id == user.id, SeriesRequest.dedupe_key == key
+            (
+                await session.execute(
+                    select(SeriesRequest).where(
+                        SeriesRequest.user_id == user.id, SeriesRequest.dedupe_key == key
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if winner is None:
             raise
         return request_out(winner, already_existed=True)
@@ -645,10 +684,7 @@ async def list_all(
     where = [SeriesRequest.status == status] if status else []
 
     total = int(
-        await session.scalar(
-            select(func.count()).select_from(SeriesRequest).where(*where)
-        )
-        or 0
+        await session.scalar(select(func.count()).select_from(SeriesRequest).where(*where)) or 0
     )
     rows = list(
         (
@@ -659,9 +695,7 @@ async def list_all(
                     # `pending` and `approved` sort before the settled two. A CASE rather than
                     # alphabetical luck: "approved" happens to sort first alphabetically and
                     # "declined" would land between the open ones.
-                    SeriesRequest.status.notin_(
-                        [RequestStatus.PENDING, RequestStatus.APPROVED]
-                    ),
+                    SeriesRequest.status.notin_([RequestStatus.PENDING, RequestStatus.APPROVED]),
                     SeriesRequest.created_at.desc(),
                 )
                 .offset(max(0, (page - 1) * page_size))

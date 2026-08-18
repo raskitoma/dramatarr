@@ -59,6 +59,9 @@ export interface RequestCandidate {
   provider: string
   /** The engine's extract. Display only; never stored on the request. */
   snippet: string
+  /** Set when the card is here because of somebody in the cast rather than the title. Empty
+   *  for a title match, which is what lets the card say why it is on screen. */
+  matchedPerson: string
   ids: RequestIds
   inLibrary: boolean
   inLibrarySlug: string | null
@@ -68,7 +71,7 @@ export interface RequestCandidate {
 
 export interface RequestSearchResults {
   query: string
-  /** Which sources are set up: `tmdb`, `searxng`, or neither. */
+  /** Which sources answered. `dramadex` or nothing — it is the only one left. */
   providers: string[]
   /**
    * False when neither provider is configured. Not an error and not a dead end — asking by

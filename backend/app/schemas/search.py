@@ -21,13 +21,15 @@ from app.schemas.library import EpisodeSummary, SeriesSummary
 
 class MatchField(StrEnum):
     """Which stored text the query hit. `TITLE` is the canonical display title, `ALTERNATE`
-    any other registered title, `ROMANIZATION` a generated transliteration."""
+    any other registered title, `ROMANIZATION` a generated transliteration, `CAST` a credited
+    actor's name."""
 
     TITLE = "title"
     ALTERNATE = "alternate"
     ROMANIZATION = "romanization"
     OVERVIEW = "overview"
     EPISODE = "episode"
+    CAST = "cast"
 
 
 class EpisodeHit(APIModel):

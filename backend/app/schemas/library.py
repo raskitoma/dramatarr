@@ -275,6 +275,11 @@ class GenreFacet(APIModel):
     count: int
 
 
+class YearFacet(APIModel):
+    year: int
+    count: int
+
+
 # --- Admin-side library shapes --------------------------------------------------------------
 
 
@@ -903,27 +908,21 @@ class ImportApplyIn(APIModel):
 
 __all__ = [
     "ArtworkApplied",
+    "ArtworkFromDramadexIn",
     "ArtworkSelectIn",
     "AssignIn",
     "AudioTrackOut",
+    "CastMemberOut",
     "CleanupIn",
     "CleanupResult",
     "ContinueWatchingItem",
     "DiscoveredIds",
-    "CastMemberOut",
+    "DiscoveryResult",
+    "DiscoveryResults",
     "DramadexApplyIn",
-    "ArtworkFromDramadexIn",
-    "MetadataPreview",
-    "MetadataDiffRow",
     "DramadexHit",
     "DramadexHits",
     "DramadexStatus",
-    "PersonCredits",
-    "DiscoveryResult",
-    "SeriesLinkOut",
-    "DiscoveryResults",
-    "SeriesBulkPatch",
-    "SeriesBulkResult",
     "EpisodeDetail",
     "EpisodePatch",
     "EpisodeSummary",
@@ -941,10 +940,16 @@ __all__ = [
     "JobRef",
     "MatchIn",
     "MediaFileOut",
+    "MetadataDiffRow",
+    "MetadataPreview",
+    "PersonCredits",
     "SeasonGroup",
+    "SeriesBulkPatch",
+    "SeriesBulkResult",
     "SeriesDeleted",
     "SeriesDeletionPreview",
     "SeriesDetail",
+    "SeriesLinkOut",
     "SeriesPatch",
     "SeriesProgress",
     "SeriesSummary",
@@ -955,4 +960,5 @@ __all__ = [
     "UnmatchedFileOut",
     "UnmatchedGroupOut",
     "WatchProgressOut",
+    "YearFacet",
 ]

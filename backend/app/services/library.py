@@ -56,6 +56,7 @@ from app.models.library import OverviewSource
 from app.schemas.common import Page
 from app.schemas.library import (
     AudioTrackOut,
+    CastMemberOut,
     CleanupResult,
     ContinueWatchingItem,
     EpisodeDetail,
@@ -73,7 +74,6 @@ from app.schemas.library import (
     SeasonGroup,
     SeriesDeleted,
     SeriesDeletionPreview,
-    CastMemberOut,
     SeriesDetail,
     SeriesLinkOut,
     SeriesProgress,
@@ -83,6 +83,7 @@ from app.schemas.library import (
     UnmatchedFileOut,
     UnmatchedGroupOut,
     WatchProgressOut,
+    YearFacet,
 )
 from app.services import audit
 from app.services.images import (
@@ -490,6 +491,36 @@ async def series_progress(session: AsyncSession, series: Series, user_id: str) -
 # --- Listing --------------------------------------------------------------------------------
 
 
+def series_facet_conditions(
+    *,
+    genre: str | None = None,
+    status: str | None = None,
+    language: str | None = None,
+    year: int | None = None,
+) -> list[ColumnElement[bool]]:
+    """The facet filters, shared by `list_series` and by search.
+
+    Extracted rather than duplicated because Explorar and Buscar now offer the same controls,
+    and a genre that means one thing on one screen and another on the other is worse than
+    having no filter at all. `available_only` is deliberately *not* here: it reads a computed
+    availability count, which the two callers reach by different routes.
+    """
+    conditions: list[ColumnElement[bool]] = []
+    if genre:
+        # `genres` is a JSON array of strings. Matching the quoted form against the serialized
+        # column is exact-element (the quotes delimit) and needs no JSON1 extension.
+        conditions.append(
+            cast(Series.genres, String).like(f'%"{_escape_like(genre)}"%', escape="\\")
+        )
+    if status:
+        conditions.append(Series.status == status)
+    if language:
+        conditions.append(Series.original_language == language)
+    if year:
+        conditions.append(Series.year == year)
+    return conditions
+
+
 async def list_series(
     session: AsyncSession,
     *,
@@ -498,6 +529,7 @@ async def list_series(
     genre: str | None = None,
     status: str | None = None,
     language: str | None = None,
+    year: int | None = None,
     sort: SortKey = "title",
     available_only: bool = False,
     page: int = 1,
@@ -521,6 +553,16 @@ async def list_series(
             raw = f"%{_escape_like(term)}%"
             matches.append(Series.title.ilike(raw, escape="\\"))
             matches.append(Series.original_title.ilike(raw, escape="\\"))
+            # Cast, on the same terms as the titles. These shows are retitled constantly and
+            # the actor is often the only thing a member remembers about one.
+            matches.append(
+                select(SeriesCast.id)
+                .where(
+                    SeriesCast.series_id == Series.id,
+                    SeriesCast.name.ilike(raw, escape="\\"),
+                )
+                .exists()
+            )
         if normalized_term:
             normalized = f"%{_escape_like(normalized_term)}%"
             matches.append(Series.sort_title.like(normalized, escape="\\"))
@@ -534,16 +576,9 @@ async def list_series(
             )
         if matches:
             conditions.append(or_(*matches))
-    if genre:
-        # `genres` is a JSON array of strings. Matching the quoted form against the serialized
-        # column is exact-element (the quotes delimit) and needs no JSON1 extension.
-        conditions.append(
-            cast(Series.genres, String).like(f'%"{_escape_like(genre)}"%', escape="\\")
-        )
-    if status:
-        conditions.append(Series.status == status)
-    if language:
-        conditions.append(Series.original_language == language)
+    conditions.extend(
+        series_facet_conditions(genre=genre, status=status, language=language, year=year)
+    )
     if available_only:
         conditions.append(available_count > 0)
 
@@ -624,6 +659,24 @@ async def genre_facets(session: AsyncSession) -> list[GenreFacet]:
         GenreFacet(genre=name, count=count)
         for name, count in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0].casefold()))
     ]
+
+
+async def year_facets(session: AsyncSession) -> list[YearFacet]:
+    """Release years that actually occur, newest first.
+
+    A range picker would be wrong here: this catalogue spans three years, and a member wants
+    to pick one of them, not to nominate a boundary. Rows without a year are simply absent —
+    "unknown" is not a year to filter by, it is the absence of the filter.
+    """
+    rows = (
+        await session.execute(
+            select(Series.year, func.count())
+            .where(Series.year.is_not(None))
+            .group_by(Series.year)
+            .order_by(Series.year.desc())
+        )
+    ).all()
+    return [YearFacet(year=int(year), count=int(count)) for year, count in rows]
 
 
 # --- Detail ---------------------------------------------------------------------------------
@@ -2383,8 +2436,9 @@ __all__ = [
     "rename_script",
     "series_counts",
     "series_detail",
-    "series_neighbours",
     "series_episodes",
+    "series_facet_conditions",
+    "series_neighbours",
     "series_progress",
     "series_summary",
     "stream_url",
@@ -2394,6 +2448,7 @@ __all__ = [
     "unmatched_file_out",
     "unmatched_groups",
     "watch_history",
+    "year_facets",
 ]
 
 

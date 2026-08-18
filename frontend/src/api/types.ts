@@ -332,6 +332,11 @@ export interface GenreFacet {
   count: number
 }
 
+export interface YearFacet {
+  year: number
+  count: number
+}
+
 // --- Search --------------------------------------------------------------------------------
 
 export interface SeriesHit {
@@ -340,7 +345,7 @@ export interface SeriesHit {
   /** The stored title variant that matched — lets the UI explain a cross-language hit. */
   matchedTitle: string
   matchedLanguage: string
-  matchedField: 'title' | 'alternate' | 'romanization' | 'overview' | 'episode'
+  matchedField: 'title' | 'alternate' | 'romanization' | 'overview' | 'episode' | 'cast'
 }
 
 export interface EpisodeHit {

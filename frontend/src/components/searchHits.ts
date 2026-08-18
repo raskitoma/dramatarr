@@ -5,7 +5,7 @@
  * this repo keeps producing defects in.
  */
 
-import type { EpisodeHit, SeriesSummary } from '@/api/types'
+import type { EpisodeHit, SeriesHit, SeriesSummary } from '@/api/types'
 
 /** The matched variant is only worth showing when it is not simply the title already on screen. */
 export function matchedVia(matchedTitle: string, displayTitle: string): string | null {
@@ -13,6 +13,23 @@ export function matchedVia(matchedTitle: string, displayTitle: string): string |
   if (!matched) return null
   if (matched.toLocaleLowerCase() === displayTitle.trim().toLocaleLowerCase()) return null
   return matched
+}
+
+/** What to say under a hit about why it is a hit, as an i18n key and its interpolation.
+ *
+ * A cast match needs its own sentence: a show whose title resembles nothing that was typed
+ * reads as a bug unless the line says it was the actor that matched, and "coincide con Adam
+ * Daniel" phrased as a title would be a lie about what is in the record.
+ *
+ * Returns null when the matched text is the title already on screen, which is most hits.
+ */
+export function matchNote(hit: SeriesHit): { key: string; title: string } | null {
+  if (hit.matchedField === 'cast') {
+    const name = hit.matchedTitle.trim()
+    return name ? { key: 'search.matchedCast', title: name } : null
+  }
+  const alternate = matchedVia(hit.matchedTitle, hit.series.title)
+  return alternate ? { key: 'search.matchedVia', title: alternate } : null
 }
 
 export function seriesHref(series: SeriesSummary): string {

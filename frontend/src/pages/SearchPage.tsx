@@ -9,19 +9,49 @@ import { useEffect, useId, useMemo, useRef, useState, type ComponentProps } from
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useSearch as useLocationSearch } from 'wouter'
 
-import { SEARCH_DEBOUNCE_MS, SEARCH_MIN_QUERY_LENGTH, useSearch } from '@/api/library'
-import type { EpisodeHit, SeriesHit } from '@/api/types'
+import {
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_MIN_QUERY_LENGTH,
+  SERIES_STATUSES,
+  isSeriesStatus,
+  useGenres,
+  useSearch,
+  useYears,
+  type SeriesFacets,
+} from '@/api/library'
+import type { EpisodeHit, SeriesHit, SeriesStatus } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { episodeLabelParts } from '@/components/EpisodeRow'
 import { Field } from '@/components/Field'
 import { Input } from '@/components/Input'
+import { Select } from '@/components/Select'
 import { SeriesCard } from '@/components/SeriesCard'
 import { Spinner } from '@/components/Spinner'
-import { episodeHref, matchedVia } from '@/components/searchHits'
+import { Switch } from '@/components/Switch'
+import { episodeHref, matchNote, matchedVia } from '@/components/searchHits'
 import { SearchIcon } from '@/components/icons'
 
 import styles from './SearchPage.module.css'
+
+const STATUS_LABEL_KEY: Record<SeriesStatus, string> = {
+  ongoing: 'series.statusOngoing',
+  completed: 'series.statusCompleted',
+  unknown: 'series.statusUnknown',
+}
+
+/** Everything in the query string except the query itself. Read from the URL rather than from
+ *  state for the same reason Explorar does it: a narrowed search is then a link. */
+function facetsFrom(params: URLSearchParams): SeriesFacets {
+  const status = params.get('status')
+  const year = Number.parseInt(params.get('year') ?? '', 10)
+  return {
+    genre: params.get('genre') || undefined,
+    status: isSeriesStatus(status) ? status : undefined,
+    year: Number.isFinite(year) && year > 0 ? year : undefined,
+    availableOnly: params.get('availableOnly') === '1',
+  }
+}
 
 
 /**
@@ -46,7 +76,11 @@ export function SearchPage() {
   const searchString = useLocationSearch()
   const inputId = useId()
 
-  const urlQuery = useMemo(() => new URLSearchParams(searchString).get('q') ?? '', [searchString])
+  const params = useMemo(() => new URLSearchParams(searchString), [searchString])
+  const urlQuery = params.get('q') ?? ''
+  const facets = useMemo(() => facetsFrom(params), [params])
+  const genres = useGenres()
+  const years = useYears()
 
   const [input, setInput] = useState(urlQuery)
   const [query, setQuery] = useState(urlQuery)
@@ -59,12 +93,30 @@ export function SearchPage() {
     return () => window.clearTimeout(timer)
   }, [input])
 
+  /** Writes one part of the query string and keeps the rest.
+   *
+   *  It has to read `window.location.search` rather than close over `searchString`: the
+   *  debounce means the query is written from an effect while a filter may be written from a
+   *  click, and a stale copy of the parameters would silently drop whichever one landed first.
+   */
+  const update = (changes: Record<string, string | null>, replace = false): void => {
+    const next = new URLSearchParams(window.location.search)
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null || value === '') next.delete(key)
+      else next.set(key, value)
+    }
+    const qs = next.toString()
+    navigate(qs ? `/search?${qs}` : '/search', { replace })
+  }
+
   useEffect(() => {
     if (query === lastWritten.current) return
     lastWritten.current = query
     // Replace, so a session of typing leaves one history entry, not thirty.
-    navigate(query ? `/search?q=${encodeURIComponent(query)}` : '/search', { replace: true })
-  }, [query, navigate])
+    update({ q: query || null }, true)
+    // `update` is recreated every render; the effect is keyed on the query alone on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   useEffect(() => {
     if (urlQuery === lastWritten.current) return
@@ -73,7 +125,7 @@ export function SearchPage() {
     setQuery(urlQuery)
   }, [urlQuery])
 
-  const results = useSearch(query)
+  const results = useSearch(query, facets)
   const active = query.length >= SEARCH_MIN_QUERY_LENGTH
   /* `keepPreviousData` would otherwise leave the last full result set on screen while the
      query is too short to run — results that no longer match what the box says. */
@@ -96,6 +148,65 @@ export function SearchPage() {
           />
         </Field>
       </form>
+
+      {/* Always on screen rather than revealed once there are results: a member who wants
+          "2026 romances" sets the year and then types, and a panel that appears underneath
+          them mid-sentence moves the box they are typing into. */}
+      <div className={styles.filters}>
+        <Field label={t('browse.filterGenre')} htmlFor={`${inputId}-genre`}>
+          <Select
+            id={`${inputId}-genre`}
+            value={facets.genre ?? ''}
+            onChange={(event) => update({ genre: event.target.value })}
+          >
+            <option value="">{t('common.all')}</option>
+            {(genres.data ?? []).map((facet) => (
+              <option key={facet.genre} value={facet.genre}>
+                {`${facet.genre} (${facet.count})`}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label={t('search.filterYear')} htmlFor={`${inputId}-year`}>
+          <Select
+            id={`${inputId}-year`}
+            value={facets.year ? String(facets.year) : ''}
+            onChange={(event) => update({ year: event.target.value })}
+          >
+            <option value="">{t('common.all')}</option>
+            {(years.data ?? []).map((facet) => (
+              <option key={facet.year} value={String(facet.year)}>
+                {`${facet.year} (${facet.count})`}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label={t('browse.filterStatus')} htmlFor={`${inputId}-status`}>
+          <Select
+            id={`${inputId}-status`}
+            value={facets.status ?? ''}
+            onChange={(event) => update({ status: event.target.value })}
+          >
+            <option value="">{t('common.all')}</option>
+            {SERIES_STATUSES.map((value) => (
+              <option key={value} value={value}>
+                {t(STATUS_LABEL_KEY[value])}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <div className={styles.switchCell}>
+          <Switch
+            className={styles.switch}
+            checked={facets.availableOnly ?? false}
+            onChange={(checked) => update({ availableOnly: checked ? '1' : null })}
+            label={t('browse.filterAvailable')}
+          />
+        </div>
+      </div>
 
       <p className={styles.status} aria-live="polite">
         {active && data ? (
@@ -158,12 +269,9 @@ export function SearchPage() {
 
 function SeriesHitCard({ hit }: { hit: SeriesHit }) {
   const { t } = useTranslation()
-  const alternate = matchedVia(hit.matchedTitle, hit.series.title)
+  const note = matchNote(hit)
   return (
-    <SeriesCard
-      series={hit.series}
-      note={alternate ? t('search.matchedVia', { title: alternate }) : undefined}
-    />
+    <SeriesCard series={hit.series} note={note ? t(note.key, { title: note.title }) : undefined} />
   )
 }
 

@@ -35,7 +35,7 @@ import type { EpisodeHit, SeriesHit } from '@/api/types'
 import { IconButton } from '@/components/IconButton'
 import { Poster } from '@/components/Poster'
 import { cx } from '@/components/cx'
-import { episodeHref, matchedVia, seriesHref } from '@/components/searchHits'
+import { episodeHref, matchNote, seriesHref } from '@/components/searchHits'
 import { CloseIcon, SearchIcon } from '@/components/icons'
 import { useDismissOnOutside } from '@/hooks/useDismissOnOutside'
 
@@ -80,7 +80,9 @@ export function HeaderSearch({ open, onOpenChange }: HeaderSearchProps) {
     return () => window.clearTimeout(timer)
   }, [trimmed])
 
-  const search = useSearch(query, MAX_SERIES + MAX_EPISODES + 10)
+  // No facets: the header is a jump-to box, and a filter set on /search must not silently
+  // narrow what it offers from another page.
+  const search = useSearch(query, {}, MAX_SERIES + MAX_EPISODES + 10)
 
   const close = useCallback(() => {
     onOpenChange(false)
@@ -248,24 +250,23 @@ export function HeaderSearch({ open, onOpenChange }: HeaderSearchProps) {
           {seriesHits.length > 0 ? (
             <div role="group" aria-label={t('search.seriesSection')}>
               <p className={styles.groupLabel}>{t('search.seriesSection')}</p>
-              {seriesHits.map((hit, index) => (
-                <Row
-                  key={hit.series.id}
-                  id={optionId(index)}
-                  active={activeIndex === index}
-                  posterUrl={hit.series.posterUrl}
-                  title={hit.series.title}
-                  meta={[
-                    hit.series.year ? String(hit.series.year) : '',
-                    matchedVia(hit.matchedTitle, hit.series.title)
-                      ? t('search.matchedVia', {
-                          title: matchedVia(hit.matchedTitle, hit.series.title),
-                        })
-                      : '',
-                  ]}
-                  onChoose={() => go(seriesHref(hit.series))}
-                />
-              ))}
+              {seriesHits.map((hit, index) => {
+                const note = matchNote(hit)
+                return (
+                  <Row
+                    key={hit.series.id}
+                    id={optionId(index)}
+                    active={activeIndex === index}
+                    posterUrl={hit.series.posterUrl}
+                    title={hit.series.title}
+                    meta={[
+                      hit.series.year ? String(hit.series.year) : '',
+                      note ? t(note.key, { title: note.title }) : '',
+                    ]}
+                    onChoose={() => go(seriesHref(hit.series))}
+                  />
+                )
+              })}
             </div>
           ) : null}
 

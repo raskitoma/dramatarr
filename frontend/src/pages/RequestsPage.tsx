@@ -312,6 +312,15 @@ function CandidateCard({ candidate, busy, onAsk }: CandidateCardProps) {
           ) : null}
         </p>
 
+        {/* A card whose title resembles nothing that was typed is noise unless it says why it
+            is here. The indexer was asked by person as well as by title, and this is the only
+            place that difference is visible. */}
+        {candidate.matchedPerson ? (
+          <p className={styles.matchedPerson}>
+            {t('requests.matchedCast', { name: candidate.matchedPerson })}
+          </p>
+        ) : null}
+
         {candidate.snippet ? <p className={styles.snippet}>{candidate.snippet}</p> : null}
 
         <div className={styles.cardActions}>

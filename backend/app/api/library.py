@@ -73,6 +73,7 @@ from app.schemas.library import (
     SeriesUnlinked,
     UnmatchedFileOut,
     UnmatchedGroupOut,
+    YearFacet,
 )
 from app.schemas.search import SearchResults
 from app.services import dramadex, renamer
@@ -132,6 +133,7 @@ async def list_series(
     genre: Annotated[str | None, Query(max_length=100)] = None,
     status: Annotated[str | None, Query(max_length=32)] = None,
     language: Annotated[str | None, Query(max_length=16)] = None,
+    year: Annotated[int | None, Query(ge=1900, le=2200)] = None,
     sort: Annotated[SortKey, Query()] = "title",
     available_only: Annotated[bool, Query(alias="availableOnly")] = False,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -144,6 +146,7 @@ async def list_series(
         genre=genre,
         status=status,
         language=language,
+        year=year,
         sort=sort,
         available_only=available_only,
         page=page,
@@ -157,13 +160,38 @@ async def search(
     user: CurrentUser,
     q: Annotated[str, Query(max_length=200)],
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    genre: Annotated[str | None, Query(max_length=100)] = None,
+    year: Annotated[int | None, Query(ge=1900, le=2200)] = None,
+    status: Annotated[str | None, Query(max_length=32)] = None,
+    language: Annotated[str | None, Query(max_length=16)] = None,
+    available_only: Annotated[bool, Query(alias="availableOnly")] = False,
 ) -> SearchResults:
-    return await search_library(session, q, limit=limit)
+    """Ranked search, optionally narrowed by the same facets Explorar offers.
+
+    `user_id` is passed so hits carry this member's own progress — without it a search result
+    is the only card in the app that does not know whether it has been watched.
+    """
+    return await search_library(
+        session,
+        q,
+        limit=limit,
+        user_id=user.id,
+        genre=genre,
+        year=year,
+        status=status,
+        language=language,
+        available_only=available_only,
+    )
 
 
 @router.get("/genres", response_model=list[GenreFacet])
 async def genres(session: SessionDep, user: CurrentUser) -> list[GenreFacet]:
     return await library_service.genre_facets(session)
+
+
+@router.get("/years", response_model=list[YearFacet])
+async def years(session: SessionDep, user: CurrentUser) -> list[YearFacet]:
+    return await library_service.year_facets(session)
 
 
 @router.get("/unmatched", response_model=Page[UnmatchedFileOut])

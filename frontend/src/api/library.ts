@@ -26,6 +26,7 @@ import type {
   SeriesDetail,
   SeriesStatus,
   SeriesSummary,
+  YearFacet,
 } from '@/api/types'
 
 // --- Query vocabulary ----------------------------------------------------------------------
@@ -45,27 +46,43 @@ export function isSeriesStatus(value: string | null | undefined): value is Serie
 
 export const DEFAULT_PAGE_SIZE = 36
 
-export interface SeriesListParams {
-  q?: string
+/** The facets Explorar and Buscar share. One shape, because they are one set of controls
+ *  answered by one helper on the server; letting them diverge is how a genre comes to mean
+ *  two different things on two screens. */
+export interface SeriesFacets {
   genre?: string
   status?: SeriesStatus
   language?: string
-  sort?: SeriesSort
+  year?: number
   availableOnly?: boolean
+}
+
+export interface SeriesListParams extends SeriesFacets {
+  q?: string
+  sort?: SeriesSort
   page?: number
   pageSize?: number
+}
+
+/** One spelling of the facets on the wire, shared by the list and the search so a cache key
+ *  and a request can never disagree about what "no filter" looks like. */
+function facetQuery(facets: SeriesFacets): Record<string, string | number | boolean | undefined> {
+  return {
+    genre: facets.genre || undefined,
+    status: facets.status || undefined,
+    language: facets.language || undefined,
+    year: facets.year || undefined,
+    // Only sent when on: a `false` in the URL is noise and defeats cache sharing.
+    availableOnly: facets.availableOnly ? true : undefined,
+  }
 }
 
 /** Normalized so two equivalent filter states share one cache entry. */
 function listQuery(params: SeriesListParams): Record<string, string | number | boolean | undefined> {
   return {
     q: params.q || undefined,
-    genre: params.genre || undefined,
-    status: params.status || undefined,
-    language: params.language || undefined,
+    ...facetQuery(params),
     sort: params.sort ?? 'title',
-    // Only sent when on: a `false` in the URL is noise and defeats cache sharing.
-    availableOnly: params.availableOnly ? true : undefined,
     page: params.page ?? 1,
     pageSize: params.pageSize ?? DEFAULT_PAGE_SIZE,
   }
@@ -80,8 +97,10 @@ export const libraryKeys = {
   seriesDetail: (idOrSlug: string) => [...libraryKeys.series(), 'detail', idOrSlug] as const,
   seriesEpisodes: (id: string) => [...libraryKeys.series(), 'episodes', id] as const,
   episode: (id: string) => [...libraryKeys.all, 'episode', id] as const,
-  search: (q: string, limit: number) => [...libraryKeys.all, 'search', q, limit] as const,
+  search: (q: string, limit: number, facets: SeriesFacets) =>
+    [...libraryKeys.all, 'search', q, limit, facetQuery(facets)] as const,
   genres: () => [...libraryKeys.all, 'genres'] as const,
+  years: () => [...libraryKeys.all, 'years'] as const,
 } as const
 
 export const meKeys = {
@@ -169,13 +188,22 @@ export function useEpisodeDetail(episodeId: string | undefined) {
 export const SEARCH_MIN_QUERY_LENGTH = 2
 export const SEARCH_DEBOUNCE_MS = 250
 
-export function useSearch(query: string, limit = 30) {
+export function useSearch(query: string, facets: SeriesFacets = {}, limit = 30) {
   const trimmed = query.trim()
+  const narrowed = facetQuery(facets)
   return useQuery({
-    queryKey: libraryKeys.search(trimmed, limit),
-    queryFn: () => api.get<SearchResults>('/library/search', { q: trimmed, limit }),
+    queryKey: libraryKeys.search(trimmed, limit, facets),
+    queryFn: () => api.get<SearchResults>('/library/search', { q: trimmed, limit, ...narrowed }),
     enabled: trimmed.length >= SEARCH_MIN_QUERY_LENGTH,
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useYears() {
+  return useQuery({
+    queryKey: libraryKeys.years(),
+    queryFn: () => api.get<YearFacet[]>('/library/years'),
+    staleTime: 5 * 60_000,
   })
 }
 

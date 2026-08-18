@@ -156,6 +156,14 @@
 }
 
 /* Somebody else's words about somebody else's page. Styled to read as a quotation. */
+/* Reads as a caption, not as a chip: it is a sentence about the row, and a pill here would
+   compete with the provider badge directly above it. */
+.matchedPerson {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 .snippet {
   font-size: var(--text-xs);
   color: var(--text-subtle);

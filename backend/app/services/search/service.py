@@ -26,6 +26,7 @@ from app.services import library as library_service
 from app.services.search.index import (
     INDEX_TABLE,
     KIND_EPISODE_TITLE,
+    KIND_SERIES_CAST,
     KIND_SERIES_OVERVIEW,
     KIND_SERIES_TITLE,
     ensure_index,
@@ -42,6 +43,10 @@ MIN_TRIGRAM_LEN = 3
 MIN_SCORE = 50.0
 OVERVIEW_WEIGHT = 0.7
 EPISODE_WEIGHT = 0.9
+#: Just under 1: a name is as exact a thing to match as a title, so it must not be discounted
+#: the way an overview is — but when a query hits both, the title is the more likely intent
+#: and this is what breaks that tie.
+CAST_WEIGHT = 0.95
 MAX_EPISODES_PER_SERIES = 20
 
 _MATCH_SQL = sql(
@@ -185,6 +190,25 @@ def _overview_match(query: str, series: Series) -> _Match | None:
     return _Match(score, series.overview or "", MatchField.OVERVIEW)
 
 
+def _cast_match(query: str, series: Series) -> _Match | None:
+    """Best-scoring credited name, weighted just below a title.
+
+    Scored against the whole name rather than each word: "adam" alone should reach Adam Daniel
+    (`_score` gives a prefix 94), while "daniel adam" should not outrank the title it also
+    resembles. `series.cast` is loaded eagerly by the relationship, so this touches no
+    database.
+    """
+    best: _Match | None = None
+    for member in series.cast:
+        body = normalize(member.name)
+        if not body:
+            continue
+        score = _score(query, body) * CAST_WEIGHT
+        if best is None or score > best.score:
+            best = _Match(score, member.name, MatchField.CAST)
+    return best
+
+
 def _best_episode_text(query: str, episode: Episode) -> tuple[float, str]:
     best_score = 0.0
     best_text = episode.title or ""
@@ -210,11 +234,22 @@ async def search_library(
     *,
     limit: int = 30,
     user_id: str | None = None,
+    genre: str | None = None,
+    year: int | None = None,
+    status: str | None = None,
+    language: str | None = None,
+    available_only: bool = False,
 ) -> SearchResults:
-    """Multilingual search over titles, romanizations, overviews and episode titles.
+    """Multilingual search over titles, romanizations, overviews, episode titles and cast.
 
     `user_id` is optional so the function stays callable from maintenance code; pass it from
     the API so hits carry the caller's watched/progress counters like every other list does.
+
+    The facet filters are the same ones Explorar offers, built by
+    `library.series_facet_conditions` so the two screens cannot drift apart. They narrow the
+    *candidates*, not the ranking: a filtered search is a search of a smaller library, and
+    `total` counts what survived. `available_only` is applied after the counts query for the
+    same reason it is not in the shared helper — availability is computed, not stored.
     """
     started = time.perf_counter()
     raw = (query or "").strip()
@@ -248,6 +283,7 @@ async def search_library(
     series_ids: set[str] = set()
     episode_ids: set[str] = set()
     overview_hits: set[str] = set()
+    cast_hits: set[str] = set()
 
     rows: list[tuple[str, str, str]] = []
     if len(normalized) >= MIN_TRIGRAM_LEN:
@@ -262,6 +298,8 @@ async def search_library(
             episode_ids.add(ref_id)
         elif kind == KIND_SERIES_OVERVIEW:
             overview_hits.add(series_id)
+        elif kind == KIND_SERIES_CAST:
+            cast_hits.add(series_id)
         elif kind != KIND_SERIES_TITLE:  # forward-compatible with row kinds added later
             log.debug("Unknown search_index kind %r", kind)
 
@@ -271,25 +309,37 @@ async def search_library(
     if not series_ids:
         return _empty()
 
+    facets = library_service.series_facet_conditions(
+        genre=genre, status=status, language=language, year=year
+    )
     series_rows = list(
         (
             await session.execute(
-                select(Series).where(Series.id.in_(series_ids)).options(selectinload(Series.titles))
+                select(Series)
+                .where(Series.id.in_(series_ids), *facets)
+                .options(selectinload(Series.titles))
             )
         ).scalars()
     )
+    if not series_rows:
+        return _empty()
 
     episodes: list[Episode] = []
     if episode_ids:
-        episodes = list(
-            (
+        # Restricted to the series that survived the facets: an episode whose series was
+        # filtered out must not appear in the flat episode list either.
+        surviving = {row.id for row in series_rows}
+        episodes = [
+            episode
+            for episode in (
                 await session.execute(
                     select(Episode)
                     .where(Episode.id.in_(episode_ids))
                     .options(selectinload(Episode.titles), selectinload(Episode.media_files))
                 )
             ).scalars()
-        )
+            if episode.series_id in surviving
+        ]
 
     # One aggregate query for every candidate series and one for every candidate episode's
     # progress — the per-hit serializers below must not touch the database.
@@ -301,6 +351,19 @@ async def search_library(
         if user_id and episodes
         else {}
     )
+
+    if available_only:
+        # After `series_counts`, because availability is a tally over media files rather than a
+        # column — the same number the card shows, so the filter and the badge agree.
+        def has_a_file(series_id: str) -> bool:
+            tally = counts.get(series_id)
+            return tally is not None and tally.available_count > 0
+
+        series_rows = [row for row in series_rows if has_a_file(row.id)]
+        if not series_rows:
+            return _empty()
+        surviving = {row.id for row in series_rows}
+        episodes = [episode for episode in episodes if episode.series_id in surviving]
 
     by_series: dict[str, list[tuple[float, str, Episode]]] = defaultdict(list)
     for episode in episodes:
@@ -315,6 +378,11 @@ async def search_library(
             overview = _overview_match(normalized, series)
             if overview is not None and overview.score > best.score:
                 best = overview
+
+        if series.id in cast_hits:
+            credited = _cast_match(normalized, series)
+            if credited is not None and credited.score > best.score:
+                best = credited
 
         episode_matches = sorted(by_series.get(series.id, []), key=lambda item: -item[0])
         if episode_matches and episode_matches[0][0] * EPISODE_WEIGHT > best.score:

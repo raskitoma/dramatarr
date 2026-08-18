@@ -21,7 +21,7 @@ from app.bootstrap import bootstrap
 from app.config import get_settings
 from app.db import dispose_engine, get_sessionmaker
 from app.services.images import close_image_client
-from app.services.search.index import ensure_index
+from app.services.search.index import ensure_generation, ensure_index
 from app.workers.queue import start_worker, stop_worker
 from app.workers.scheduler import start_scheduler, stop_scheduler
 
@@ -58,6 +58,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async with get_sessionmaker()() as session:
         await ensure_index(session)
+        # Before the worker starts, which is the one moment nothing is reading the index.
+        # Only does anything when the indexed shape changed under a settled catalogue.
+        await ensure_generation(session)
         await bootstrap(session)
 
     await start_worker(app)
