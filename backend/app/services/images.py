@@ -1153,11 +1153,25 @@ __all__ = [
     "REQUEST_POSTER_KIND",
     "cache_request_poster",
     "cached_file",
+    "dramadex_poster_name",
     "poster_is_loadable",
     "is_request_poster",
     "request_poster_url",
     "store_series_artwork",
 ]
+
+
+def dramadex_poster_name(title_id: int) -> str:
+    """The cache stem `cache_dramadex_poster` stores a title's key art under.
+
+    Exposed because "is this poster the indexer's art for *this* title?" cannot be answered
+    from the path. DramaDex key art and wishlist thumbnails share one directory and one served
+    route, so they are indistinguishable by shape — the stem is the only thing that tells them
+    apart, and getting this wrong in either direction is a real bug: treat key art as a
+    thumbnail and every refresh re-downloads it forever, treat a thumbnail as key art and the
+    indexer's picture never arrives.
+    """
+    return _poster_stem(f"dramadex:{int(title_id)}")
 
 
 async def cache_dramadex_poster(raw: bytes, *, title_id: int) -> str | None:
@@ -1177,7 +1191,7 @@ async def cache_dramadex_poster(raw: bytes, *, title_id: int) -> str | None:
     if not raw:
         return None
 
-    stem = _poster_stem(f"dramadex:{int(title_id)}")
+    stem = dramadex_poster_name(title_id)
     directory = _requests_dir()
     existing = await asyncio.to_thread(_find_existing, directory, stem)
     if existing is not None:

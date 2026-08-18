@@ -672,7 +672,48 @@ async def test_a_wishlist_thumbnail_is_replaced_by_the_indexers_key_art(
     from app.services.images import _requests_dir, request_poster_url
 
     series = await make_series(db)
-    name = "abc123.webp"
+    series.dramadex_id = 4242
+    name = "abc123.webp"  # a thumbnail, cached under the request URL's own stem
+    directory = _requests_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_bytes(b"non-empty")
+    series.poster_path = request_poster_url(name)
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is True
+
+
+async def test_key_art_already_cached_is_not_downloaded_again(
+    db: AsyncSession, tmp_env
+) -> None:
+    """The trap on the other side of that rule, and it is not hypothetical.
+
+    DramaDex key art and wishlist thumbnails share one directory and one served route, so
+    nothing about the *path* tells them apart. A shape-based test therefore calls the indexer's
+    own poster a thumbnail and re-downloads it on every refresh, forever. The stem is the only
+    exact answer: `dramadex:<title id>` hashed.
+    """
+    from app.services.images import _requests_dir, dramadex_poster_name, request_poster_url
+
+    series = await make_series(db)
+    series.dramadex_id = 4242
+    name = f"{dramadex_poster_name(4242)}.webp"
+    directory = _requests_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_bytes(b"non-empty")
+    series.poster_path = request_poster_url(name)
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is False
+
+
+async def test_key_art_for_a_different_title_is_replaced(db: AsyncSession, tmp_env) -> None:
+    """A series re-bound to another title must not keep the previous one's picture."""
+    from app.services.images import _requests_dir, dramadex_poster_name, request_poster_url
+
+    series = await make_series(db)
+    series.dramadex_id = 4242
+    name = f"{dramadex_poster_name(999)}.webp"
     directory = _requests_dir()
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_bytes(b"non-empty")

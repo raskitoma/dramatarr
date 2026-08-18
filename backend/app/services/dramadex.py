@@ -500,12 +500,25 @@ def _needs_poster(series: Any) -> bool:
     `metadata_locked` and stores under the series' own stem, and overruling somebody's explicit
     choice on a schedule is how a feature stops being used.
     """
-    from app.services.images import is_request_poster, poster_is_loadable
+    from app.services.images import (
+        dramadex_poster_name,
+        is_request_poster,
+        poster_is_loadable,
+    )
 
     path = series.poster_path or ""
     if not poster_is_loadable(path):
         return True
-    return is_request_poster(path) and not series.metadata_locked
+    if series.metadata_locked or not is_request_poster(path):
+        return False
+    # Cached under this title's own DramaDex stem? Then it already *is* the indexer's art.
+    # This has to be exact rather than shape-based: key art and wishlist thumbnails share one
+    # directory and one served route, so a path-shaped test calls DramaDex's own poster a
+    # thumbnail and re-downloads it on every single refresh.
+    if series.dramadex_id is None:
+        return False
+    stored = path.rsplit("/", 1)[-1].split(".", 1)[0]
+    return stored != dramadex_poster_name(series.dramadex_id)
 
 
 async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:
