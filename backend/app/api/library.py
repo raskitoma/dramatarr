@@ -41,9 +41,12 @@ from app.schemas.library import (
     CleanupIn,
     CleanupResult,
     DiscoveryResults,
+    ArtworkFromDramadexIn,
     DramadexApplyIn,
     DramadexHit,
     DramadexHits,
+    MetadataDiffRow,
+    MetadataPreview,
     PersonCredits,
     EpisodeDetail,
     EpisodePatch,
@@ -775,39 +778,142 @@ async def dramadex_poster(session: SessionDep, admin: AdminUser, title_id: int) 
     )
 
 
+@router.get("/series/{series_id}/metadata/preview", response_model=MetadataPreview)
+async def preview_dramadex(
+    session: SessionDep,
+    admin: AdminUser,
+    series_id: str,
+    dramadex_id: Annotated[int | None, Query(ge=1)] = None,
+) -> MetadataPreview:
+    """What applying a DramaDex record would change, before anything is written.
+
+    Read-only, and that is the point: "Actualizar metadata" used to be a button that went away
+    and came back having done something, with a job log as the only account of what. Now the
+    admin sees the rows first and unticks what they do not want.
+
+    Pass `dramadexId` to preview a *different* title than the one bound — which is how rebinding
+    works, and it still writes nothing until the apply.
+
+    Four not-ready situations are **200 with a flag**, not errors: DramaDex not connected, the
+    series not bound, and the upstream record gone are three ordinary states with three
+    different repairs, and one red box for all of them makes the admin guess which. Only a
+    genuine transport failure raises.
+    """
+    series = await library_service.get_series_or_404(session, series_id)
+
+    client = await dramadex.try_client(session)
+    if client is None:
+        return MetadataPreview(configured=False)
+
+    title_id = dramadex_id or series.dramadex_id
+    if title_id is None:
+        return MetadataPreview(configured=True, bound=False)
+
+    found = await client.title(title_id)
+    if found is None:
+        return MetadataPreview(configured=True, bound=True, found=False, dramadex_id=title_id)
+
+    rows = await library_service.plan_dramadex_title(session, series, found)
+    watch = next((s for s in found.studios if s.is_watchable), None)
+    return MetadataPreview(
+        configured=True,
+        bound=True,
+        found=True,
+        dramadex_id=found.id,
+        dramadex_title=found.primary_title,
+        dramadex_year=found.year,
+        dramadex_episode_count=found.episode_count,
+        watch_url=watch.watch_url if watch else None,
+        watch_studio=watch.name if watch else None,
+        rows=[
+            MetadataDiffRow(
+                field=row.field,
+                kind=row.kind,
+                current=row.current,
+                incoming=row.incoming,
+                changed=row.changed,
+                default_checked=row.default_checked,
+                note=row.note,
+                note_args=row.note_args,
+            )
+            for row in rows
+        ],
+        changed_count=sum(1 for row in rows if row.changed),
+    )
+
+
 @router.post("/series/{series_id}/metadata/dramadex", response_model=SeriesDetail)
 async def apply_dramadex(
     session: SessionDep, admin: AdminUser, series_id: str, body: DramadexApplyIn
 ) -> SeriesDetail:
-    """Fill a series from a DramaDex title, and bind the two.
+    """Write the rows the admin left ticked, and bind the series to the title.
 
-    Blanks only unless `overwrite`, like every other fill here. The cast and the watch links
-    are the exception and are replaced outright: they are a cache of the indexer's answer, not
-    something an admin curates, so a merge would only preserve a mistake.
+    `fields` comes straight from the preview the admin was looking at, and both sides compute it
+    with `plan_dramadex_title` — so what is written is what was shown. Omitting `fields`
+    re-applies everything that changed, which is what the job path does.
+
+    The poster is one of those fields rather than a separate step: "INCLUIDA LA IMAGEN". Taking
+    it here deliberately does **not** set `artwork_locked` — you chose the automatic source, and
+    a later refresh may improve on it. Pinning is what the artwork picker is for.
+
+    Returns the whole `SeriesDetail` synchronously, so the editor stops showing the values it
+    had a moment ago.
     """
     series = await library_service.get_series_or_404(session, series_id)
     client = await dramadex.require_client(session)
 
-    found = await client.title(body.dramadex_id)
+    title_id = body.dramadex_id or series.dramadex_id
+    if title_id is None:
+        raise NotFound("DramaDex title", "DRAMADEX_TITLE_NOT_FOUND")
+
+    found = await client.title(title_id)
     if found is None:
         raise NotFound("DramaDex title", "DRAMADEX_TITLE_NOT_FOUND")
 
-    filled = await library_service.apply_dramadex_title(
-        session, series, found, overwrite=body.overwrite
-    )
+    selected = frozenset(body.fields) if body.fields is not None else None
+    filled = await library_service.apply_dramadex_title(session, series, found, only=selected)
 
     # Artwork last and never fatally: a poster that will not decode must not undo a fill that
     # already succeeded.
-    if not series.poster_path or body.overwrite:
+    if selected is None or "poster" in selected:
         fetched = await client.poster_bytes(found.id)
         if fetched is not None:
             stored = await cache_dramadex_poster(fetched[0], title_id=found.id)
-            if stored:
+            if stored and stored != series.poster_path:
                 series.poster_path = stored
                 await session.commit()
+                filled.append("poster")
 
     log.info("dramadex: filled %s on %s", ", ".join(filled) or "nothing", series.id)
     return await library_service.series_detail(session, series, admin.id)
+
+
+@router.post("/series/{series_id}/artwork/dramadex", response_model=ArtworkApplied)
+async def artwork_from_dramadex(
+    session: SessionDep, admin: AdminUser, series_id: str, body: ArtworkFromDramadexIn
+) -> ArtworkApplied:
+    """Take a DramaDex title's key art as this series' poster or backdrop.
+
+    Fetched here rather than by the browser, because the indexer's poster route wants an API key
+    in a header and that key must never reach a page. It is also why this takes a *title id*
+    rather than a URL: routing our own proxy address back through the SSRF-guarded fetcher would
+    be a round trip through our own gate to arrive where we started.
+
+    Deliberately does not touch `dramadex_id`. Borrowing a neighbouring title's artwork — which
+    is exactly what the grid in the picker is for when the indexer has nothing for this one — is
+    not a claim that the series *is* that title.
+
+    Unlike the metadata dialog's poster row, this **does** set `artwork_locked`: reaching this
+    route means somebody looked at the options and chose.
+    """
+    series = await library_service.get_series_or_404(session, series_id)
+    client = await dramadex.require_client(session)
+
+    fetched = await client.poster_bytes(body.title_id)
+    if fetched is None:
+        raise NotFound("DramaDex poster", "DRAMADEX_POSTER_NOT_FOUND")
+
+    return await _apply_artwork(session, series, body.kind, fetched[0])
 
 
 @router.get("/dramadex/people/{person_id}", response_model=PersonCredits)

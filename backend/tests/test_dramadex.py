@@ -291,11 +291,14 @@ async def test_no_configuration_is_not_an_error(db: AsyncSession) -> None:
 
 
 async def make_series(db: AsyncSession, *, files: int = 0, **fields: Any) -> Series:
+    title = fields.pop("title", "You Fired A Genius Surgeon")
+    slug = fields.pop("slug", "genius-surgeon")
     series = Series(
-        title=fields.pop("title", "You Fired A Genius Surgeon"),
-        slug="genius-surgeon",
-        sort_title="you fired a genius surgeon",
-        library_path="You Fired A Genius Surgeon",
+        title=title,
+        slug=slug,
+        sort_title=title.lower(),
+        # Unique in the schema, so a second series in one test needs its own.
+        library_path=fields.pop("path", title),
         **fields,
     )
     db.add(series)
@@ -803,3 +806,147 @@ def test_a_poster_written_before_the_digest_is_still_recognised(tmp_env) -> None
 
     legacy = images.request_poster_url(f"{images.dramadex_poster_name(668)}.webp")
     assert images.is_dramadex_poster(legacy, 668) is True
+
+
+# --- The preview, and its promise to the writer -------------------------------------------------
+#
+# "Actualizar metadata" used to be a button that went away and came back having done something.
+# Now the admin is shown the rows first. The property that has to hold is not that the preview
+# looks nice — it is that **the preview and the write share one decision path**, so what is
+# shown is what happens. `plan_dramadex_title` is that path; these tests are what keeps the two
+# from drifting.
+
+
+async def test_the_plan_offers_the_poster_first(db: AsyncSession) -> None:
+    """"INCLUIDA LA IMAGEN" — the owner's words, in capitals. It is row zero."""
+    series = await make_series(db)
+
+    rows = await library_service.plan_dramadex_title(db, series, parsed())
+
+    assert rows[0].field == "poster"
+    assert rows[0].kind == "image"
+    # A URL, not bytes: previewing must cost no download.
+    assert rows[0].incoming == ["/api/library/dramadex/titles/4242/poster"]
+
+
+async def test_pinned_artwork_is_offered_but_not_ticked(db: AsyncSession) -> None:
+    """Refusing to *show* the row would be a different lie. It is offered, unticked, explained."""
+    series = await make_series(db)
+    series.artwork_locked = True
+    await db.flush()
+
+    poster = (await library_service.plan_dramadex_title(db, series, parsed()))[0]
+
+    assert poster.default_checked is False
+    assert poster.note == "ownArtwork"
+
+
+async def test_a_synopsis_somebody_wrote_is_offered_but_not_ticked(db: AsyncSession) -> None:
+    series = await make_series(db, overview="Una sinopsis que escribí yo.")
+    series.overview_source = OverviewSource.MANUAL
+    await db.flush()
+
+    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+
+    assert rows["overview"].changed is True
+    assert rows["overview"].default_checked is False
+    assert rows["overview"].note == "manualOverview"
+
+
+async def test_a_declared_count_below_the_files_on_disk_is_refused(db: AsyncSession) -> None:
+    """The file count is the number that is a fact. Sixty-six files, a record claiming one."""
+    series = await make_series(db, files=80)
+
+    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+
+    row = rows["declared_episode_count"]
+    assert row.default_checked is False
+    assert row.note == "fewerEpisodes"
+    assert row.note_args == {"declared": "51", "actual": "80"}
+
+
+async def test_applying_only_what_was_ticked_writes_only_that(db: AsyncSession) -> None:
+    """The seam this whole design exists to close.
+
+    An admin unticks the synopsis and ticks the year. Writing both would be the application
+    doing something it showed no sign of intending.
+    """
+    series = await make_series(db)
+
+    await library_service.apply_dramadex_title(db, series, parsed(), only=frozenset({"year"}))
+
+    assert series.year == 2025
+    assert series.overview is None
+    assert series.network is None
+
+
+async def test_an_empty_selection_writes_no_fields_but_still_binds(db: AsyncSession) -> None:
+    """Ticking nothing must change nothing — except the binding, which is not a field.
+
+    The binding is the answer to "which title is this", and it is what the admin settled by
+    choosing a record at all. An unbound series with every box unticked would otherwise leave
+    the dialog having established nothing, and the next visit would ask again.
+    """
+    series = await make_series(db, overview="Intacta.")
+    before = series.year
+
+    filled = await library_service.apply_dramadex_title(db, series, parsed(), only=frozenset())
+
+    assert filled == ["dramadex_id"]
+    assert series.dramadex_id == 4242
+    assert series.overview == "Intacta."
+    assert series.year == before
+
+
+async def test_ticking_a_manual_synopsis_does_replace_it(db: AsyncSession) -> None:
+    """The note warns; it does not overrule.
+
+    `only` is the admin having read "esta sinopsis la escribiste tú" and ticked the box anyway.
+    Refusing at that point would be the application arguing with somebody who already decided.
+    """
+    series = await make_series(db, overview="Una sinopsis que escribí yo.")
+    series.overview_source = OverviewSource.MANUAL
+    await db.flush()
+
+    await library_service.apply_dramadex_title(db, series, parsed(), only=frozenset({"overview"}))
+
+    assert series.overview == "After Dr. Adrian Marksman is dismissed, he..."
+
+
+async def test_the_default_path_is_unchanged_by_any_of_this(db: AsyncSession) -> None:
+    """`only=None` has to behave exactly as it did before the dialog existed.
+
+    The import path and the refresh job both take it, and the provenance matrix above is only
+    meaningful while this holds.
+    """
+    series = await make_series(db, overview="Una sinopsis que escribí yo.")
+    series.overview_source = OverviewSource.MANUAL
+    await db.flush()
+
+    await library_service.apply_dramadex_title(db, series, parsed(), overwrite=True)
+
+    assert series.overview == "Una sinopsis que escribí yo."
+
+
+async def test_every_planned_field_is_a_field_the_writer_understands(db: AsyncSession) -> None:
+    """The drift guard.
+
+    The dialog sends back the `field` names the plan gave it. If the planner ever names a row
+    the writer does not recognise, that checkbox becomes a control that does nothing — and
+    nothing else in the suite would notice, because both halves stay internally consistent.
+    """
+    series = await make_series(db)
+    rows = await library_service.plan_dramadex_title(db, series, parsed())
+
+    for row in rows:
+        await library_service.apply_dramadex_title(
+            db, series, parsed(), only=frozenset({row.field})
+        )
+
+    # Applying them one at a time must end up where applying them together does.
+    fresh = await make_series(db, title="Otra", slug="otra", path="Otra")
+    await library_service.apply_dramadex_title(db, fresh, parsed())
+
+    assert series.year == fresh.year
+    assert series.network == fresh.network
+    assert series.genres == fresh.genres

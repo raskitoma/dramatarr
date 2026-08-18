@@ -639,8 +639,64 @@ class DramadexHit(APIModel):
     library_slug: str | None = None
 
 
+class MetadataDiffRow(APIModel):
+    """One field a DramaDex record would change, as the dialog shows it.
+
+    Computed by `library.plan_dramadex_title`, which is the *same* function the write consumes.
+    A preview that decides separately from the writer disagrees with it eventually, and the
+    disagreement is invisible: the admin ticks four boxes and gets three edits.
+    """
+
+    field: str
+    #: `text` | `long_text` | `number` | `list` | `image`. `image` holds URLs.
+    kind: str
+    #: Rendered values. `[]` means empty — never `[""]`, which would render as a blank chip.
+    current: list[str] = Field(default_factory=list)
+    incoming: list[str] = Field(default_factory=list)
+    changed: bool = False
+    #: Ticked when the dialog opens: changed, minus what the app will not presume on.
+    default_checked: bool = False
+    #: i18n key stem for a refusal or caveat — `manualOverview`, `ownArtwork`, `fewerEpisodes`,
+    #: `wholesale`, `aliasesKept` — or null.
+    note: str | None = None
+    note_args: dict[str, str] = Field(default_factory=dict)
+
+
+class MetadataPreview(APIModel):
+    """What "Actualizar metadata" would do, before it does any of it.
+
+    Every not-ready state is a **200 with a flag**, not an error: not connected, not bound, and
+    the record having disappeared upstream are three ordinary situations with three different
+    repairs, and collapsing them into one red box makes the admin guess which. Only a genuine
+    transport failure raises, as `DRAMADEX_UNREACHABLE`.
+    """
+
+    configured: bool = False
+    bound: bool = False
+    #: False when the indexer no longer has the bound title — merged, or withdrawn.
+    found: bool = False
+    dramadex_id: int | None = None
+    dramadex_title: str | None = None
+    dramadex_year: int | None = None
+    dramadex_episode_count: int | None = None
+    watch_url: str | None = None
+    watch_studio: str | None = None
+    rows: list[MetadataDiffRow] = Field(default_factory=list)
+    changed_count: int = 0
+
+
+class ArtworkFromDramadexIn(APIModel):
+    """Take a title's key art. Fetched server-side, with a key the browser never sees."""
+
+    title_id: int = Field(ge=1)
+    kind: Literal["poster", "backdrop"] = "poster"
+
+
 class DramadexApplyIn(APIModel):
-    dramadex_id: int = Field(ge=1)
+    #: Omit to re-apply the current binding; provide one to bind somewhere else.
+    dramadex_id: int | None = Field(default=None, ge=1)
+    #: Omit for every changed row; provide the subset the admin left ticked.
+    fields: list[str] | None = None
     #: Blanks-only by default, like every other fill. Replacing is a separate, explicit act.
     overwrite: bool = False
 
@@ -848,6 +904,9 @@ __all__ = [
     "DiscoveredIds",
     "CastMemberOut",
     "DramadexApplyIn",
+    "ArtworkFromDramadexIn",
+    "MetadataPreview",
+    "MetadataDiffRow",
     "DramadexHit",
     "DramadexHits",
     "DramadexStatus",

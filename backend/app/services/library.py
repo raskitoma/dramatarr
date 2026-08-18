@@ -2456,43 +2456,261 @@ def _one_row_per_person(cast: Sequence[Any]) -> list[Any]:
     )
 
 
+@dataclass(frozen=True)
+class FieldChange:
+    """One field a DramaDex record would change, as both the preview and the write see it.
+
+    The preview and the write **share this list**. That is the whole design: a dialog that
+    promises "estos son los cambios" and a writer that decides separately what to touch will
+    disagree eventually, and the disagreement is invisible — the admin ticks four boxes and
+    gets three edits, or six.
+    """
+
+    field: str
+    #: How the UI renders the pair. `image` holds URLs; everything else holds display text.
+    kind: str
+    current: list[str]
+    incoming: list[str]
+    changed: bool
+    #: Ticked when the dialog opens. Changed, minus the cases the application refuses to
+    #: presume on — a synopsis somebody wrote, artwork somebody pinned.
+    default_checked: bool
+    #: An i18n key stem explaining a refusal or a caveat, or None.
+    note: str | None = None
+    note_args: dict[str, str] = field(default_factory=dict)
+
+
+def _as_list(value: Any) -> list[str]:
+    """A field's value as display strings. `[]` means empty, never `[""]`."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value if str(item).strip()]
+    return [str(value)]
+
+
+async def plan_dramadex_title(
+    session: AsyncSession, series: Series, found: Any
+) -> list[FieldChange]:
+    """What applying this record would change, decided once.
+
+    Always planned as though the admin had asked for everything — this is "what a refresh would
+    do" — and the dialog narrows it by unticking rows. Two rows come unticked because the
+    application will not presume: a synopsis stamped `MANUAL` belongs to whoever wrote it, and
+    artwork stamped `artwork_locked` belongs to whoever pinned it. Both stay *offered*, because
+    refusing to show them would be a different lie.
+
+    The poster is row zero and carries URLs rather than bytes: `incoming` is the admin-only
+    proxy at `/api/library/dramadex/titles/{id}/poster`, so previewing costs no download and no
+    write. Nothing here touches the session.
+    """
+    rows: list[FieldChange] = []
+
+    # --- Artwork, first, because it is the one the owner asked to be able to choose ----------
+    rows.append(
+        FieldChange(
+            field="poster",
+            kind="image",
+            current=_as_list(image_url(series.poster_path, POSTER_SIZE)),
+            incoming=[f"/api/library/dramadex/titles/{found.id}/poster"],
+            changed=True,
+            default_checked=not series.artwork_locked,
+            note="ownArtwork" if series.artwork_locked else None,
+        )
+    )
+
+    # --- The synopsis, which answers to provenance rather than to any flag ------------------
+    overview_is_ours = series.overview_source in (
+        None,
+        OverviewSource.DRAMADEX,
+        OverviewSource.TMDB,
+        OverviewSource.WIKIPEDIA,
+    )
+    if found.synopsis:
+        rows.append(
+            FieldChange(
+                field="overview",
+                kind="long_text",
+                current=_as_list(series.overview),
+                incoming=[found.synopsis],
+                changed=series.overview != found.synopsis,
+                default_checked=series.overview != found.synopsis and overview_is_ours,
+                note=None if overview_is_ours else "manualOverview",
+            )
+        )
+
+    def scalar(name: str, incoming: Any, kind: str) -> None:
+        if incoming in (None, "", (), []):
+            return
+        current = getattr(series, name, None)
+        rows.append(
+            FieldChange(
+                field=name,
+                kind=kind,
+                current=_as_list(current),
+                incoming=_as_list(incoming),
+                changed=current != incoming,
+                default_checked=current != incoming,
+            )
+        )
+
+    scalar("year", found.year, "number")
+    scalar("genres", normalize_genres(found.genres()), "list")
+    scalar("network", found.studio_name, "text")
+    scalar("content_rating", canonical_content_rating(found.audience_rating), "text")
+
+    # --- The declared count, refused when it is below what is on the NAS --------------------
+    files_on_disk = int(
+        (
+            await session.execute(
+                select(func.count(func.distinct(Episode.id)))
+                .select_from(Episode)
+                .join(MediaFile, MediaFile.episode_id == Episode.id)
+                .where(Episode.series_id == series.id)
+            )
+        ).scalar_one()
+    )
+    if found.episode_count:
+        too_few = found.episode_count < files_on_disk
+        rows.append(
+            FieldChange(
+                field="declared_episode_count",
+                kind="number",
+                current=_as_list(series.declared_episode_count),
+                incoming=_as_list(found.episode_count),
+                changed=series.declared_episode_count != found.episode_count,
+                default_checked=(
+                    series.declared_episode_count != found.episode_count and not too_few
+                ),
+                note="fewerEpisodes" if too_few else None,
+                note_args=(
+                    {"declared": str(found.episode_count), "actual": str(files_on_disk)}
+                    if too_few
+                    else {}
+                ),
+            )
+        )
+
+    # --- The cached halves. Replaced wholesale, and the note says so ------------------------
+    # Queried rather than read off the relationship: this planner runs from a route that may
+    # not have eager-loaded them, and a lazy load inside an async session raises rather than
+    # fetching. The failure would be at call time, on the one screen this is for.
+    current_cast = [
+        name
+        for name in (
+            await session.execute(
+                select(SeriesCast.name)
+                .where(SeriesCast.series_id == series.id)
+                .order_by(SeriesCast.billing_order.nulls_last(), SeriesCast.name)
+            )
+        ).scalars()
+    ]
+    incoming_cast = [m.name for m in _one_row_per_person(found.cast)]
+    if incoming_cast:
+        rows.append(
+            FieldChange(
+                field="cast",
+                kind="list",
+                current=current_cast,
+                incoming=incoming_cast,
+                changed=current_cast != incoming_cast,
+                default_checked=current_cast != incoming_cast,
+                note="wholesale",
+            )
+        )
+
+    current_links = sorted(
+        (
+            await session.execute(
+                select(SeriesLink.studio_name).where(SeriesLink.series_id == series.id)
+            )
+        ).scalars()
+    )
+    incoming_links = sorted(
+        {link.name for link in found.studios if link.is_watchable}
+    )
+    if incoming_links:
+        rows.append(
+            FieldChange(
+                field="links",
+                kind="list",
+                current=current_links,
+                incoming=incoming_links,
+                changed=current_links != incoming_links,
+                default_checked=current_links != incoming_links,
+                note="wholesale",
+            )
+        )
+
+    # --- Aliases, which are added and never removed -----------------------------------------
+    known = {
+        row
+        for row in (
+            await session.execute(
+                select(SeriesTitle.normalized).where(SeriesTitle.series_id == series.id)
+            )
+        ).scalars()
+    }
+    fresh = [alias for alias in found.aliases if normalize(alias) and normalize(alias) not in known]
+    if fresh:
+        rows.append(
+            FieldChange(
+                field="titles",
+                kind="list",
+                current=[],
+                incoming=fresh,
+                changed=True,
+                default_checked=True,
+                note="aliasesKept",
+            )
+        )
+
+    return rows
+
+
 async def apply_dramadex_title(
     session: AsyncSession,
     series: Series,
     found: Any,
     *,
     overwrite: bool = False,
+    only: frozenset[str] | None = None,
 ) -> list[str]:
-    """Write a DramaDex record onto a series. Returns the field names actually filled.
+    """Write a DramaDex record onto a series. Returns the field names actually written.
 
-    This is the fill the application was missing. The sources this replaced could offer a year
-    and, on a good day, an English plot; DramaDex knows the platform, the cast, sixteen
-    namespaces of tags and the link to watch it — for a genre neither of the others catalogued.
+    Three callers, three shapes of intent:
 
-    **Blanks only unless `overwrite`**, and a deliberate refresh passes `overwrite=True`
-    because re-reading the one authoritative index is the entire point of the button. What
-    `overwrite` does *not* do is take a synopsis away from the person who wrote it: the
-    overview is protected by its provenance rather than by the flag, so text stamped
-    `OverviewSource.MANUAL` survives every refresh while DramaDex's own text is replaced.
+    * the **import** path takes the defaults — blanks only, nothing overwritten;
+    * the **refresh** job passes `overwrite=True`, because re-reading the one authoritative
+      index is the entire point of that button;
+    * the **dialog** passes `only={…}` — exactly the rows the admin ticked, which are computed
+      by `plan_dramadex_title` and therefore cannot disagree with what they were shown.
 
-    That distinction did not exist until now, and its absence is what made "Actualizar
-    metadata" look broken: the indexer's synopsis was stored as MANUAL, so it was
-    indistinguishable from a human paragraph and no refresh could ever touch it.
+    `only=None` is byte-identical to the behaviour before the dialog existed, which is what
+    keeps the provenance matrix in `test_dramadex.py` meaningful.
 
-    Cast and links are replaced wholesale in either mode. They are a *cache* of DramaDex's
+    What no mode does is take a synopsis away from the person who wrote it. The overview is
+    protected by its provenance rather than by any flag: text stamped `OverviewSource.MANUAL`
+    survives every refresh, while DramaDex's own text is the indexer's to correct. That
+    distinction did not exist for a while, and its absence is what made "Actualizar metadata"
+    look broken — the indexer's synopsis was stored as MANUAL, indistinguishable from a human
+    paragraph, so no refresh could ever touch it.
+
+    Cast and links are replaced wholesale when selected. They are a *cache* of DramaDex's
     answer rather than something an admin curates here — a merge would leave an actor behind
     after the indexer corrected a bad scrape, and there is no local edit to protect.
-
-    `declared_episode_count` goes through the same guard as every other writer: a count below
-    what is already on the NAS is refused, because the file count is the number that is a
-    fact. See `services/metadata._apply_series_fields`.
     """
     filled: list[str] = []
+
+    def wanted(name: str) -> bool:
+        return only is None or name in only
 
     def put(field_name: str, value: Any) -> None:
         if value in (None, "", (), []):
             return
-        if not overwrite and getattr(series, field_name, None):
+        if not wanted(field_name):
+            return
+        if only is None and not overwrite and getattr(series, field_name, None):
             return
         if getattr(series, field_name, None) == value:
             # Nothing changed. Reporting it as "filled" is what made a refresh claim to have
@@ -2502,14 +2720,24 @@ async def apply_dramadex_title(
         filled.append(field_name)
 
     # The synopsis answers to provenance, not to the flag. A person's paragraph is theirs even
-    # under `overwrite`; anything the indexer wrote is the indexer's to correct.
+    # under `overwrite`; anything the indexer wrote is the indexer's to correct. An explicit
+    # `only` is the admin saying so with the note in front of them, which does override it.
     overview_is_ours = series.overview_source in (
         None,
         OverviewSource.DRAMADEX,
         OverviewSource.TMDB,
         OverviewSource.WIKIPEDIA,
     )
-    if found.synopsis and (not series.overview or (overwrite and overview_is_ours)):
+    take_overview = (
+        wanted("overview")
+        and bool(found.synopsis)
+        and (
+            not series.overview
+            or (only is not None)
+            or (overwrite and overview_is_ours)
+        )
+    )
+    if take_overview:
         if series.overview != found.synopsis:
             series.overview = found.synopsis
             filled.append("overview")
@@ -2538,66 +2766,68 @@ async def apply_dramadex_title(
         put("declared_episode_count", found.episode_count)
 
     # --- The cached halves, replaced rather than merged ---------------------------------
-    await session.execute(sql_delete(SeriesCast).where(SeriesCast.series_id == series.id))
-    for member in _one_row_per_person(found.cast):
-        session.add(
-            SeriesCast(
-                series_id=series.id,
-                dramadex_person_id=member.person_id,
-                name=member.name[:255],
-                role=(member.role or None),
-                billing_order=member.billing_order,
+    if wanted("cast") and found.cast:
+        await session.execute(sql_delete(SeriesCast).where(SeriesCast.series_id == series.id))
+        for member in _one_row_per_person(found.cast):
+            session.add(
+                SeriesCast(
+                    series_id=series.id,
+                    dramadex_person_id=member.person_id,
+                    name=member.name[:255],
+                    role=(member.role or None),
+                    billing_order=member.billing_order,
+                )
             )
-        )
-    if found.cast:
         filled.append("cast")
 
-    await session.execute(sql_delete(SeriesLink).where(SeriesLink.series_id == series.id))
-    # One row per platform, and the first wins.
-    #
-    # A platform can list the same show twice: GoodShort carries "Found A Homeless Genius To
-    # Save My Company" under two ids, and once DramaDex merged them into one title it returned
-    # both links. Storing both violates the one-link-per-studio constraint, and it would put
-    # two identical "Watch on GoodShort" buttons on the page even if it did not — a reader
-    # cannot choose between two links to the same platform, so offering the choice is worse
-    # than picking for them.
-    seen_studios: set[str] = set()
-    for link in found.studios:
-        if not link.is_watchable or link.key in seen_studios:
-            continue
-        seen_studios.add(link.key)
-        session.add(
-            SeriesLink(
-                series_id=series.id,
-                studio_key=link.key[:32],
-                studio_name=link.name[:64],
-                external_id=link.external_id[:128],
-                url=link.watch_url[:1000],
+    if wanted("links") and any(s.is_watchable for s in found.studios):
+        await session.execute(sql_delete(SeriesLink).where(SeriesLink.series_id == series.id))
+        # One row per platform, and the first wins.
+        #
+        # A platform can list the same show twice: GoodShort carries "Found A Homeless Genius
+        # To Save My Company" under two ids, and once DramaDex merged them into one title it
+        # returned both links. Storing both violates the one-link-per-studio constraint, and it
+        # would put two identical "Watch on GoodShort" buttons on the page even if it did not —
+        # a reader cannot choose between two links to the same platform, so offering the choice
+        # is worse than picking for them.
+        seen_studios: set[str] = set()
+        for link in found.studios:
+            if not link.is_watchable or link.key in seen_studios:
+                continue
+            seen_studios.add(link.key)
+            session.add(
+                SeriesLink(
+                    series_id=series.id,
+                    studio_key=link.key[:32],
+                    studio_name=link.name[:64],
+                    external_id=link.external_id[:128],
+                    url=link.watch_url[:1000],
+                )
             )
-        )
-    if any(s.is_watchable for s in found.studios):
         filled.append("links")
 
     # Aliases become searchable title rows, which is what makes a member typing the platform's
     # own spelling find the series the household actually filed under another name.
-    known = {
-        row
-        for row in (
-            await session.execute(
-                select(SeriesTitle.normalized).where(SeriesTitle.series_id == series.id)
-            )
-        ).scalars()
-    }
-    for alias in found.aliases:
-        slug = normalize(alias)
-        if not slug or slug in known:
-            continue
-        known.add(slug)
-        session.add(
-            SeriesTitle(
-                series_id=series.id,
-                language="",
-                title=alias[:500],
+    if wanted("titles"):
+        known = {
+            row
+            for row in (
+                await session.execute(
+                    select(SeriesTitle.normalized).where(SeriesTitle.series_id == series.id)
+                )
+            ).scalars()
+        }
+        for alias in found.aliases:
+            slug = normalize(alias)
+            if not slug or slug in known:
+                continue
+            known.add(slug)
+            session.add(
+                SeriesTitle(
+                    series_id=series.id,
+                    language="",
+                    title=alias[:500],
+
                 kind=TitleKind.ALTERNATE,
                 source=TitleSource.MANUAL,
                 normalized=slug,
