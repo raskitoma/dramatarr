@@ -165,12 +165,16 @@ export function useEpisodeDetail(episodeId: string | undefined) {
 }
 
 /** Multilingual search (§7). Callers debounce; a query under 2 characters is not sent. */
+/** Shared with the header's dropdown so the two cannot disagree about when to ask. */
+export const SEARCH_MIN_QUERY_LENGTH = 2
+export const SEARCH_DEBOUNCE_MS = 250
+
 export function useSearch(query: string, limit = 30) {
   const trimmed = query.trim()
   return useQuery({
     queryKey: libraryKeys.search(trimmed, limit),
     queryFn: () => api.get<SearchResults>('/library/search', { q: trimmed, limit }),
-    enabled: trimmed.length >= 2,
+    enabled: trimmed.length >= SEARCH_MIN_QUERY_LENGTH,
     placeholderData: keepPreviousData,
   })
 }

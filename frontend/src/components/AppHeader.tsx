@@ -13,23 +13,23 @@ import {
   useId,
   useRef,
   useState,
-  type FormEvent,
   type KeyboardEvent,
-  type RefObject,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useSearch } from 'wouter'
+import { Link, useLocation } from 'wouter'
 
 import { avatarUrlOf, type User } from '@/api/types'
 import { useAuth } from '@/hooks/useAuth'
 
 import { Avatar } from '@/components/Avatar'
+import { HeaderSearch } from '@/components/HeaderSearch'
 import { IconButton } from '@/components/IconButton'
-import { Input } from '@/components/Input'
 import { LocaleSelect } from '@/components/LocaleSelect'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useToast } from '@/components/Toast'
-import { CloseIcon, MenuIcon, SearchIcon } from '@/components/icons'
+import { cx } from '@/components/cx'
+import { CloseIcon, MenuIcon } from '@/components/icons'
+import { useDismissOnOutside } from '@/hooks/useDismissOnOutside'
 
 import styles from './AppHeader.module.css'
 
@@ -47,6 +47,15 @@ export interface NavItem {
    * Naming the catalogue is more useful than naming nothing.
    */
   owns?: readonly string[]
+  /**
+   * A nav item that is not one of the places you *browse*.
+   *
+   * Pedidos is a different kind of verb from Inicio and Explorar — it is where you ask for
+   * something the house does not have — and the owner wanted that legible at a glance rather
+   * than inferred from the word. Its own colour, not the accent, so it can never be confused
+   * with the "you are here" treatment sitting right beside it.
+   */
+  tone?: 'requests'
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
@@ -57,7 +66,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/search', labelKey: 'nav.search' },
   // Last, and deliberately after search: asking for something is what you do once looking for
   // it has failed, and putting it earlier would invite requests for things already on the NAS.
-  { href: '/requests', labelKey: 'nav.requests' },
+  { href: '/requests', labelKey: 'nav.requests', tone: 'requests' },
 ]
 
 /**
@@ -75,37 +84,6 @@ export function ownsLocation(item: NavItem, location: string): boolean {
   )
 }
 
-/** Closes a popup when a pointer lands outside it, or when focus moves out of it. */
-function useDismissOnOutside(
-  open: boolean,
-  close: () => void,
-  container: RefObject<HTMLElement | null>,
-): void {
-  useEffect(() => {
-    if (!open) return undefined
-
-    function isOutside(target: EventTarget | null): boolean {
-      const node = container.current
-      return node !== null && target instanceof Node && !node.contains(target)
-    }
-
-    function handlePointerDown(event: PointerEvent): void {
-      if (isOutside(event.target)) close()
-    }
-
-    function handleFocusIn(event: FocusEvent): void {
-      if (isOutside(event.target)) close()
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown)
-    document.addEventListener('focusin', handleFocusIn)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      document.removeEventListener('focusin', handleFocusIn)
-    }
-  }, [open, close, container])
-}
-
 function NavLinks({ linkClassName }: { linkClassName: string | undefined }) {
   const { t } = useTranslation()
   const [location] = useLocation()
@@ -116,60 +94,13 @@ function NavLinks({ linkClassName }: { linkClassName: string | undefined }) {
         <Link
           key={item.href}
           href={item.href}
-          className={linkClassName}
+          className={cx(linkClassName, item.tone === 'requests' && styles.navRequests)}
           aria-current={ownsLocation(item, location) ? 'page' : undefined}
         >
           {t(item.labelKey)}
         </Link>
       ))}
     </>
-  )
-}
-
-/** Search box that submits to /search?q=… and stays in step with the URL it navigates to. */
-function HeaderSearch({ className }: { className: string | undefined }) {
-  const { t } = useTranslation()
-  const [location, navigate] = useLocation()
-  const search = useSearch()
-  const inputId = useId()
-
-  const urlQuery = location === '/search' ? (new URLSearchParams(search).get('q') ?? '') : ''
-  const [value, setValue] = useState(urlQuery)
-  // Adjusting state during render rather than in an effect: landing on /search?q=x must show
-  // `x` in the field on the same paint, with no intermediate frame holding the old value.
-  const [lastUrlQuery, setLastUrlQuery] = useState(urlQuery)
-  if (urlQuery !== lastUrlQuery) {
-    setLastUrlQuery(urlQuery)
-    setValue(urlQuery)
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault()
-    const query = value.trim()
-    if (!query) return
-    navigate(`/search?q=${encodeURIComponent(query)}`)
-  }
-
-  return (
-    <form role="search" className={className} onSubmit={handleSubmit}>
-      <label htmlFor={inputId} className="sr-only">
-        {t('common.search')}
-      </label>
-      {/* Decoration, not a control: the field is already named by its label, and a magnifier
-          that could be clicked but does nothing is worse than one that plainly cannot. */}
-      <SearchIcon className={styles.searchIcon} aria-hidden="true" />
-      <Input
-        id={inputId}
-        name="q"
-        type="search"
-        autoComplete="off"
-        placeholder={t('search.placeholder')}
-        value={value}
-        onChange={(event) => {
-          setValue(event.target.value)
-        }}
-      />
-    </form>
   )
 }
 
@@ -300,6 +231,7 @@ export function AppHeader() {
   const { user, config } = useAuth()
   const [location] = useLocation()
   const [panelOpen, setPanelOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const headerRef = useRef<HTMLElement | null>(null)
   const toggleWrapRef = useRef<HTMLSpanElement | null>(null)
   const panelId = useId()
@@ -310,9 +242,22 @@ export function AppHeader() {
 
   useDismissOnOutside(panelOpen, closePanel, headerRef)
 
-  // Any navigation dismisses the collapsed panel; otherwise it hangs over the new page.
+  /**
+   * The two popovers are mutually exclusive, structurally rather than by luck.
+   *
+   * On a phone they occupy the same strip of screen, so both open at once is not a cosmetic
+   * problem — it is the state in which one Escape closes both and the user cannot tell what
+   * they dismissed.
+   */
+  const handleSearchOpenChange = useCallback((next: boolean) => {
+    setSearchOpen(next)
+    if (next) setPanelOpen(false)
+  }, [])
+
+  // Any navigation dismisses both; otherwise they hang over the new page.
   useEffect(() => {
     setPanelOpen(false)
+    setSearchOpen(false)
   }, [location])
 
   function handleHeaderKeyDown(event: KeyboardEvent<HTMLElement>): void {
@@ -343,6 +288,7 @@ export function AppHeader() {
             aria-controls={panelOpen ? panelId : undefined}
             onClick={() => {
               setPanelOpen((previous) => !previous)
+              setSearchOpen(false)
             }}
           >
             {panelOpen ? <CloseIcon /> : <MenuIcon />}
@@ -357,9 +303,13 @@ export function AppHeader() {
           <NavLinks linkClassName={styles.navLink} />
         </nav>
 
-        <HeaderSearch className={styles.search} />
-
         <span className={styles.spacer} />
+
+        {/* Immediately before the theme controls, which is where the owner asked for it. A
+            sibling of `.controls` rather than a child, so it never inherits that cluster's
+            `display: none` below the breakpoint — the magnifier is the one control that has to
+            survive on a phone. */}
+        <HeaderSearch open={searchOpen} onOpenChange={handleSearchOpenChange} />
 
         <div className={styles.controls}>
           <ThemeToggle />
@@ -374,7 +324,6 @@ export function AppHeader() {
           <nav className={styles.panelNav} aria-label={t('nav.menu')}>
             <NavLinks linkClassName={styles.navLink} />
           </nav>
-          <HeaderSearch className={styles.panelSearch} />
           <div className={styles.panelControls}>
             <ThemeToggle />
             <LocaleSelect />

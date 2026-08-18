@@ -118,7 +118,11 @@
     "matchedVia": "Coincide con «{{title}}»",
     "seriesSection": "Series",
     "episodesSection": "Episodios",
-    "tookMs": "{{ms}} ms"
+    "tookMs": "{{ms}} ms",
+    "searchAll": "Buscar «{{query}}»",
+    "suggestions": "Sugerencias",
+    "close": "Cerrar búsqueda",
+    "suggestionsError": "No pudimos cargar las sugerencias."
   },
   "requests": {
     "title": "Pedidos",

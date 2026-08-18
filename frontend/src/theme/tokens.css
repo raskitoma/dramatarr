@@ -32,6 +32,15 @@
   --accent: #5b5bd6;
   --accent-hover: #4a4ac4;
   --accent-soft: #ecebfd;
+
+  /* Pedidos in the header nav. Amber rather than the accent, so "this one is a different kind
+     of thing" can never be read as "you are here". Measured against the header's `--surface`:
+     5.93:1 in light and 8.33:1 in dark, against a text bar of 4.5. What separates it from the
+     accent is hue, not luminance — the two sit within 1.10:1 of each other, which is exactly
+     right for two links on one row and is why the difference had to be a different colour
+     rather than a lighter one. */
+  --nav-requests: #8a5a00;
+  --nav-requests-hover: #6f4700;
   --success: #1a7f4b;
   --success-soft: #e3f5eb;
   --warning: #9a6400;
@@ -129,6 +138,8 @@
     --accent: #8b8bf0;
     --accent-hover: #a0a0f5;
     --accent-soft: #1e1f3d;
+    --nav-requests: #e0a94a;
+    --nav-requests-hover: #f0c274;
     --success: #4ac98a;
     --success-soft: #10281d;
     --warning: #e0a94a;
@@ -169,6 +180,8 @@
   --accent: #8b8bf0;
   --accent-hover: #a0a0f5;
   --accent-soft: #1e1f3d;
+  --nav-requests: #e0a94a;
+  --nav-requests-hover: #f0c274;
   --success: #4ac98a;
   --success-soft: #10281d;
   --warning: #e0a94a;

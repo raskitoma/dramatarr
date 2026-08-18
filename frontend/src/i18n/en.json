@@ -118,7 +118,11 @@
     "matchedVia": "Matched “{{title}}”",
     "seriesSection": "Series",
     "episodesSection": "Episodes",
-    "tookMs": "{{ms}} ms"
+    "tookMs": "{{ms}} ms",
+    "searchAll": "Search “{{query}}”",
+    "suggestions": "Suggestions",
+    "close": "Close search",
+    "suggestionsError": "We couldn’t load suggestions."
   },
   "requests": {
     "title": "Requests",

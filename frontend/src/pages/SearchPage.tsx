@@ -9,7 +9,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ComponentProps } from
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useSearch as useLocationSearch } from 'wouter'
 
-import { useSearch } from '@/api/library'
+import { SEARCH_DEBOUNCE_MS, SEARCH_MIN_QUERY_LENGTH, useSearch } from '@/api/library'
 import type { EpisodeHit, SeriesHit } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -18,12 +18,11 @@ import { Field } from '@/components/Field'
 import { Input } from '@/components/Input'
 import { SeriesCard } from '@/components/SeriesCard'
 import { Spinner } from '@/components/Spinner'
+import { episodeHref, matchedVia } from '@/components/searchHits'
 import { SearchIcon } from '@/components/icons'
 
 import styles from './SearchPage.module.css'
 
-const DEBOUNCE_MS = 250
-const MIN_QUERY_LENGTH = 2
 
 /**
  * The query box with a magnifier laid over its leading edge.
@@ -41,14 +40,6 @@ function SearchInput(props: ComponentProps<typeof Input>) {
   )
 }
 
-/** The matched variant is only worth showing when it is not simply the title already on screen. */
-function matchedVia(matchedTitle: string, displayTitle: string): string | null {
-  const matched = matchedTitle.trim()
-  if (!matched) return null
-  if (matched.toLocaleLowerCase() === displayTitle.trim().toLocaleLowerCase()) return null
-  return matched
-}
-
 export function SearchPage() {
   const { t } = useTranslation()
   const [, navigate] = useLocation()
@@ -64,7 +55,7 @@ export function SearchPage() {
   const lastWritten = useRef(urlQuery)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setQuery(input.trim()), DEBOUNCE_MS)
+    const timer = window.setTimeout(() => setQuery(input.trim()), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [input])
 
@@ -83,7 +74,7 @@ export function SearchPage() {
   }, [urlQuery])
 
   const results = useSearch(query)
-  const active = query.length >= MIN_QUERY_LENGTH
+  const active = query.length >= SEARCH_MIN_QUERY_LENGTH
   /* `keepPreviousData` would otherwise leave the last full result set on screen while the
      query is too short to run — results that no longer match what the box says. */
   const data = active ? results.data : undefined
@@ -182,9 +173,10 @@ function EpisodeHitRow({ hit }: { hit: EpisodeHit }) {
 
   const title = episode.title ?? t('series.episodeNumber', { number: episode.episodeNumber })
   const alternate = matchedVia(hit.matchedTitle, title)
-  const href = episode.available
-    ? `/watch/${encodeURIComponent(episode.id)}`
-    : `/series/${encodeURIComponent(hit.seriesId)}`
+  // Shared with the header's dropdown, which is the point: it used to build this by hand and
+  // fall back to `seriesId`, which the `/series/:slug` route resolves too — so it worked by
+  // accident and put a hex string in the address bar.
+  const href = episodeHref(hit)
 
   return (
     <li className={styles.episode}>

@@ -1,0 +1,199 @@
+/* The header search, collapsed to a button and expanded to a field with results beneath it. */
+
+.wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Expanded, the wrapper claims room from the spacer beside it rather than from the nav. */
+.wrap[data-open='true'] {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  inline-size: 100%;
+  border-radius: var(--radius-full);
+  /* Animated on `background`/`border` rather than on width: the field's width comes from the
+     flex line, and transitioning a flex-basis on a bar that also holds the brand and the avatar
+     makes those jitter for the length of the animation. */
+  transition:
+    background var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+
+.wrap[data-open='true'] .field {
+  padding-inline-end: var(--space-1);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.trigger {
+  flex: none;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-block: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-family: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  /* Grows out of the button. Under reduced motion it simply appears — the information is the
+     field being there, and the animation was only ever how it got there. */
+  animation: grow var(--duration-base) var(--ease);
+}
+
+@keyframes grow {
+  from {
+    opacity: 0;
+    transform: scaleX(0.6);
+    transform-origin: left center;
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+.close {
+  flex: none;
+}
+
+/* --- The results ------------------------------------------------------------------------- */
+
+.list {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  z-index: var(--z-popover, 40);
+  inline-size: min(28rem, calc(100vw - var(--space-4) * 2));
+  max-block-size: min(28rem, 70vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg, var(--shadow-sm));
+}
+
+.groupLabel {
+  margin: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.option,
+.searchAll {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* Highlight follows `aria-activedescendant`, never `:focus` — focus stays in the input the
+   whole time, which is what lets someone keep typing while arrowing through the list. */
+.option[data-active='true'],
+.searchAll[data-active='true'],
+.option:hover,
+.searchAll:hover {
+  background: var(--accent-soft);
+}
+
+.thumb {
+  flex: none;
+  inline-size: 2.25rem;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.optionTitle {
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionMeta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fall-through. Smaller and set apart, because it is an escape hatch rather than a result. */
+.searchAll {
+  margin-block-start: var(--space-1);
+  padding-block: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  border-block-start: 1px solid var(--border);
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+
+.empty {
+  padding: var(--space-3) var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- Phones ------------------------------------------------------------------------------ */
+/*
+ * Below the header's own breakpoint the field has nowhere to grow: the bar is already carrying
+ * the disclosure button, the brand and the avatar. So the expanded state lays itself over the
+ * bar instead. Same component and same state — a second implementation for phones is how two
+ * behaviours drift apart.
+ */
+@media (max-width: 719px) {
+  .wrap[data-open='true'] {
+    position: static;
+  }
+
+  .wrap[data-open='true'] .field {
+    position: absolute;
+    inset-inline: var(--space-3);
+    inset-block-start: 50%;
+    translate: 0 -50%;
+    z-index: 1;
+    inline-size: auto;
+    background: var(--surface);
+    box-shadow:
+      inset 0 0 0 1px var(--border-strong),
+      var(--shadow-sm);
+  }
+
+  .list {
+    inset-inline: var(--space-3);
+    inline-size: auto;
+    inset-block-start: calc(100% + var(--space-1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field,
+  .input {
+    transition: none;
+    animation: none;
+  }
+}

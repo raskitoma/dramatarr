@@ -8,6 +8,8 @@
 }
 
 .inner {
+  /* Positioning context for the search field, which lays itself over this bar below 720px. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -75,6 +77,21 @@
  * The colour is what carries it now: `--accent` on the header surface is 5.37:1 in light and
  * 5.90:1 in dark, and it is a hue change rather than a shade of the same grey. The pill and the
  * weight stay as reinforcement, not as the message. */
+/* Pedidos, told apart from the places you browse.
+ *
+ * Its own token rather than `--warning`: asking for a title is not a warning, and a future
+ * change to the warning hue must not repaint the navigation. Declared before the
+ * `[aria-current]` rules so that an active Pedidos still takes the accent — "you are here" has
+ * to win over "this one is different", or the highlight the owner just asked for goes missing
+ * on exactly one item. */
+.navRequests {
+  color: var(--nav-requests);
+}
+
+.navRequests:hover {
+  color: var(--nav-requests-hover);
+}
+
 .navLink[aria-current='page'] {
   color: var(--accent);
   background: var(--accent-soft);
@@ -86,44 +103,6 @@
 .navLink[aria-current='page']:hover {
   color: var(--accent);
   background: var(--accent-soft);
-}
-
-/* --- Search ----------------------------------------------------------------------------- */
-
-.search {
-  display: none;
-  /* Grows faster than the spacer so it reaches its cap before the gap opens up. Basis 0 rather
-     than auto: an `auto` basis makes the field claim its own intrinsic width first, which — now
-     that the input has a magnifier's worth of extra padding — was enough to start eating into
-     the site name at tablet widths. */
-  flex: 2 1 0;
-  min-width: 0;
-  max-width: 28rem;
-  margin-inline: var(--space-2);
-}
-
-/* Both copies of the field — header cluster and collapsed panel — anchor the magnifier. */
-.search,
-.panelSearch {
-  position: relative;
-}
-
-/* Purely decorative, and explicitly not clickable: the field is named by its own label, so a
-   magnifier that looked pressable but did nothing would be the worse of the two options. */
-.searchIcon {
-  position: absolute;
-  inset-inline-start: var(--space-3);
-  inset-block-start: 50%;
-  translate: 0 -50%;
-  color: var(--text-subtle);
-  pointer-events: none;
-}
-
-.search input,
-.panelSearch input {
-  width: 100%;
-  /* Clears the glyph: gutter, icon, gutter. */
-  padding-inline-start: calc(var(--space-3) * 2 + 1.25em);
 }
 
 /* --- Right cluster ---------------------------------------------------------------------- */
@@ -288,10 +267,6 @@
   border-top: 1px solid var(--border);
 }
 
-.panelSearch {
-  display: block;
-}
-
 /* --- Breakpoint ------------------------------------------------------------------------- */
 
 @media (min-width: 720px) {
@@ -302,7 +277,6 @@
   }
 
   .nav,
-  .search,
   .controls {
     display: flex;
   }

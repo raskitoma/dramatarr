@@ -53,3 +53,18 @@ describe('header nav ownership', () => {
     expect(lit('/nope')).toBe('')
   })
 })
+
+describe('nav tones', () => {
+  it('marks Pedidos and nothing else as the different kind of destination', () => {
+    // A reorder is the way this drifts: the tone follows the item, so if it ever lands on
+    // Inicio or Explorar the whole point of the colour is inverted.
+    const toned = NAV_ITEMS.filter((item) => item.tone === 'requests')
+    expect(toned.length).toBe(1)
+    expect(toned[0]?.href).toBe('/requests')
+  })
+
+  it('still lights Pedidos as the current section when you are on it', () => {
+    // "This one is different" must not swallow "you are here".
+    expect(lit('/requests')).toBe('/requests')
+  })
+})
