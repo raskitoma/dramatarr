@@ -335,6 +335,10 @@ export interface SeriesHit {
 export interface EpisodeHit {
   episode: EpisodeSummary
   seriesId: string
+  /** The series' slug, which is what `/series/:slug` actually takes. On the wire all along —
+   *  `schemas/search.py` declares `series_slug` non-optional — and simply missing here, so
+   *  every caller reached for `seriesId` and built a link that worked by accident. */
+  seriesSlug: string
   seriesTitle: string
   score: number
   matchedTitle: string

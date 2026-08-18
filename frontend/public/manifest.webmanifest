@@ -1,6 +1,6 @@
 {
-  "name": "dramatarr",
-  "short_name": "dramatarr",
+  "name": "DramatArr",
+  "short_name": "DramatArr",
   "description": "Tu biblioteca de series, en casa",
   "start_url": "/",
   "scope": "/",

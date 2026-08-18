@@ -76,7 +76,17 @@ async def revoke_current_session(session: AsyncSession, request: Request, respon
         ).scalar_one_or_none()
         if row is not None:
             row.revoked_at = utcnow()
-    response.delete_cookie(settings.session_cookie_name, path="/")
+    # Every attribute `create_session` set, repeated. A browser matches a deletion on name,
+    # domain and path, so dropping `Secure` is not what ends a session — but the pair drifting
+    # apart is a trap for whoever next adds a `domain` or moves the path, and the failure mode
+    # is a cookie that looks cleared and is not.
+    response.delete_cookie(
+        settings.session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=settings.use_secure_cookie,
+        samesite="lax",
+    )
 
 
 # --- Current user --------------------------------------------------------------------------

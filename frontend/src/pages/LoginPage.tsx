@@ -123,6 +123,9 @@ export function LoginPage() {
     <main className={styles.page}>
       <div className={styles.card}>
         <header className={styles.header}>
+          {/* The mark, on the one screen that has no header to carry it. Decorative: the <h1>
+              beside it already names the app, so announcing it twice would only be noise. */}
+          <img className={styles.mark} src="/icon.svg" alt="" width={72} height={72} />
           <h1 className={styles.title}>{siteName}</h1>
           <p className={styles.tagline}>{t('app.tagline')}</p>
         </header>

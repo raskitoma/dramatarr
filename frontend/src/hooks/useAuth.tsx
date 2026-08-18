@@ -52,12 +52,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     try {
       await api.post('/auth/logout')
-    } finally {
-      // Clear everything: another household member may sign in on this same device, and
-      // stale cached library/progress data would briefly show them the previous user's state.
-      queryClient.clear()
-      await queryClient.invalidateQueries({ queryKey: ['session'] })
+    } catch {
+      // The session is over either way. A logout that 401s because the cookie had already
+      // expired is the *most* likely moment for somebody to press this, and rethrowing left
+      // the caller's `await` rejected — so the navigation to /login never ran.
     }
+
+    // Say what we already know, first and locally, so the redirect happens on the next render
+    // rather than waiting on a round trip that may not come.
+    queryClient.setQueryData<SessionResponse>(['session'], { user: null })
+
+    // Then drop every *other* member's cached data: someone else in the house may sign in on
+    // this same device, and stale library or progress rows would show them the previous user's
+    // state for a frame.
+    //
+    // Deliberately **not** `queryClient.clear()`, which is what this used to be and is the
+    // whole reason "al cerrar sesión se queda en la última pantalla" happened. `clear()` does
+    // not empty a query, it destroys it — and that orphans the mounted observer, which then
+    // renders its last result forever. The cache genuinely held `{ user: null }` while the
+    // component went on showing the signed-in user, so `ProtectedRoute` never redirected and
+    // `/login` bounced straight back out because it saw a user too. Verified in
+    // `useAuth.test.tsx`, which reproduces exactly that before the fix.
+    queryClient.removeQueries({
+      predicate: (query) => {
+        const root = query.queryKey[0]
+        return root !== 'session' && root !== 'public-config'
+      },
+    })
+
+    await queryClient.invalidateQueries({ queryKey: ['session'] })
   }, [queryClient])
 
   const patchUser = useCallback(
