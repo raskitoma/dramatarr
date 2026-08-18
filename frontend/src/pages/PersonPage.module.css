@@ -14,7 +14,14 @@
 .header {
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .name {
@@ -111,42 +118,50 @@
   color: var(--accent);
 }
 
-/* The actor's face, which is never a face.
+/* The portrait.
  *
- * DramaDex has no person images — its `PersonDetail` is id, name, bio, external_ids and
- * titles, and there is no route serving a portrait, because the platforms it scrapes publish
- * none. So this is not a placeholder standing in for a picture that will arrive later; it is
- * the finished treatment, exactly as it is for a household member who never uploaded an
- * avatar. Six tints keyed off the person id so one actor keeps one colour across the app.
+ * DramaDex holds **no person images** — `PersonDetail` is id, name, bio, external_ids, titles,
+ * and there is no route for a face the way there is `/titles/{id}/poster` for key art. So this
+ * is not a placeholder standing in for a picture that will arrive later; it is the finished
+ * treatment, exactly as it is for a household member who never uploaded an avatar.
+ *
+ * It is shaped and sized as a **portrait** rather than an avatar anyway: 2:3, the same
+ * proportion as a poster, at a size worth looking at. When the indexer starts serving a photo
+ * it fills this frame and nothing around it moves. Six tints keyed off the person id, so one
+ * actor keeps one colour here and on every series they are in.
  */
-.face {
+.portrait {
   display: grid;
   place-items: center;
-  inline-size: 4rem;
-  block-size: 4rem;
-  border-radius: var(--radius-full);
-  font-size: var(--text-xl);
+  flex: none;
+  inline-size: clamp(8rem, 22vw, 13rem);
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-3xl, var(--text-2xl));
   font-weight: var(--weight-semibold);
   color: var(--surface);
   background: var(--accent);
+  box-shadow: var(--shadow-sm);
 }
 
-.face[data-tint='1'] { background: #6c8cff; }
-.face[data-tint='2'] { background: #b06cff; }
-.face[data-tint='3'] { background: #2f9e78; }
-.face[data-tint='4'] { background: #d1743c; }
-.face[data-tint='5'] { background: #4aa3c7; }
+.portrait[data-tint='1'] { background: #6c8cff; }
+.portrait[data-tint='2'] { background: #b06cff; }
+.portrait[data-tint='3'] { background: #2f9e78; }
+.portrait[data-tint='4'] { background: #d1743c; }
+.portrait[data-tint='5'] { background: #4aa3c7; }
 
-/* The header stops being a plain column once it carries a face. */
-.header {
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.header > :not(.face) {
-  flex-basis: 100%;
+/* Portrait and text side by side once there is room.
+ *
+ * Behind a query rather than unconditional, which the previous rule was: on a phone a 13rem
+ * frame beside a biography leaves the biography about three words wide, and the column above
+ * is the correct layout there. 560px is where the two fit without squeezing either.
+ */
+@media (min-width: 560px) {
+  .header {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-5);
+  }
 }
 
 /* The whole owned card is one target, and it has to keep the card's own stacking rather than

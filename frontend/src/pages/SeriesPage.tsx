@@ -564,18 +564,20 @@ function NavArrow({
             <h2 className={styles.blockHeading} id="series-cast">
               {t('series.cast')}
             </h2>
-            {/* Each name is a link, and that is the feature: this genre has no cast data
-                anywhere else, so "what else is this actor in" had no answer until the
-                indexer existed.
+            {/* A strip of faces, not a row of chips.
+                Each is a link, and that is the feature: this genre has no cast data anywhere
+                else, so "what else is this actor in" had no answer until the indexer existed.
 
-                The disc beside the name is initials on a tint, not a photograph waiting to
-                load. DramaDex carries no person images at all — `PersonDetail` is id, name,
-                bio, external_ids, titles — so there is nothing to fetch and this is the
-                finished treatment rather than a placeholder. The tint is keyed off the person
-                id, so one actor keeps one colour here and on their own page. */}
+                The disc is initials on a tint because **DramaDex carries no person images** —
+                `PersonDetail` is id, name, bio, external_ids, titles, and there is no route
+                like `/titles/{id}/poster` for people. So this is the finished treatment rather
+                than a placeholder waiting on a download. The shape is built for the photograph
+                anyway: when the indexer starts serving one, it drops into the same disc and
+                nothing else here moves. The tint is keyed off the person id, so one performer
+                keeps one colour on this page and on their own. */}
             <ul className={styles.castList}>
               {(detail.cast ?? []).map((member) => (
-                <li key={member.dramadexPersonId}>
+                <li key={member.dramadexPersonId} className={styles.castItem}>
                   <Link
                     href={`/people/${member.dramadexPersonId}`}
                     className={styles.castLink}
@@ -588,6 +590,11 @@ function NavArrow({
                       {initialsOf(member.name, '?')}
                     </span>
                     <span className={styles.castName}>{member.name}</span>
+                    {/* Everything DramaDex has said so far is "actor", so a role line would be
+                        the same word under every face. It renders only when it says something. */}
+                    {member.role && member.role.toLowerCase() !== 'actor' ? (
+                      <span className={styles.castRole}>{member.role}</span>
+                    ) : null}
                   </Link>
                 </li>
               ))}

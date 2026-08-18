@@ -61,16 +61,23 @@ export function PersonPage() {
 
   return (
     <article className={styles.page}>
+      {/* Portrait beside the text, at a size worth looking at rather than an avatar tucked in
+          a corner. There is no photograph to put here — DramaDex has no person images at all —
+          so what fills the frame is initials on the same tint the series page uses for this
+          performer. The frame exists at portrait proportions regardless, because the day the
+          indexer serves one this is where it goes and nothing around it has to move. */}
       <header className={styles.header}>
-        <div className={styles.face} aria-hidden="true" data-tint={person.id % 6}>
+        <div className={styles.portrait} aria-hidden="true" data-tint={person.id % 6}>
           {initialsOf(person.name, '?')}
         </div>
-        <h1 className={styles.name}>{person.name}</h1>
-        <p className={styles.count}>
-          {t('person.creditCount', { count: person.credits.length })}
-          {owned.length > 0 ? ` · ${t('person.inLibraryCount', { count: owned.length })}` : ''}
-        </p>
-        {person.bio ? <p className={styles.bio}>{person.bio}</p> : null}
+        <div className={styles.headerText}>
+          <h1 className={styles.name}>{person.name}</h1>
+          <p className={styles.count}>
+            {t('person.creditCount', { count: person.credits.length })}
+            {owned.length > 0 ? ` · ${t('person.inLibraryCount', { count: owned.length })}` : ''}
+          </p>
+          {person.bio ? <p className={styles.bio}>{person.bio}</p> : null}
+        </div>
       </header>
 
       {person.credits.length === 0 ? <EmptyState title={t('person.noCredits')} /> : null}
