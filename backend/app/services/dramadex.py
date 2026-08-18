@@ -480,18 +480,32 @@ def hit_from(found: DramadexTitle, *, wanted: str = "", in_library: bool = False
 
 
 def _needs_poster(series: Any) -> bool:
-    """True when the series has no poster a browser could actually load.
+    """Whether this refresh should fetch DramaDex's key art for the series.
 
-    Asked of the filesystem rather than of the column, because those two disagree in a way that
-    shows up on screen. `images.poster_is_loadable` knows the three shapes this column holds
-    and how each is checked; the case that had gone unnoticed is a **wishlist poster** — a
-    series promoted from a request keeps `/api/stream/images/requests/<name>`, which starts
-    with a slash and therefore read as "remote, trust it" while the file behind it was never
-    on this host at all.
+    Two reasons to say yes, and the second is the one the owner reported.
+
+    **There is no poster a browser could load.** Asked of the filesystem rather than of the
+    column, because those two disagree in a way that shows up on screen — a wiped image cache,
+    a restore that missed `DATA_PATH`, one failed write. `images.poster_is_loadable` knows the
+    three shapes the column holds and checks each the right way.
+
+    **The poster is the wishlist thumbnail.** A series promoted from a request inherits the
+    picture the request card was showing, which is whatever illustrated the *ask* — and it then
+    outlived its purpose, because the row now has a real binding to an index that holds the
+    real key art. "Tampoco al usar dramadex utiliza la imagen que tiene" is exactly this: the
+    indexer's poster was never reaching the series, because the placeholder in the column was
+    loading fine and nothing asked whether it was the right picture.
+
+    What is deliberately **not** replaced is artwork an admin chose. That path sets
+    `metadata_locked` and stores under the series' own stem, and overruling somebody's explicit
+    choice on a schedule is how a feature stops being used.
     """
-    from app.services.images import poster_is_loadable
+    from app.services.images import is_request_poster, poster_is_loadable
 
-    return not poster_is_loadable(series.poster_path)
+    path = series.poster_path or ""
+    if not poster_is_loadable(path):
+        return True
+    return is_request_poster(path) and not series.metadata_locked
 
 
 async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:

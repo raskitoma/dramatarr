@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ProgressBar } from './ProgressBar'
@@ -48,6 +49,22 @@ export function Poster({
   className,
 }: PosterProps) {
   const { t } = useTranslation()
+  /**
+   * A URL that fails to load falls back to the same placeholder as no URL at all.
+   *
+   * Without this the placeholder only ever covered `src === null` — "we know there is no
+   * poster" — and left the other case, "there is an address and nothing behind it", rendering
+   * the browser's broken-image glyph with the alt text spilled beside it. That is what a
+   * series shows after its image cache is wiped, after a restore that missed `DATA_PATH`, or
+   * while a freshly promoted request is still being fetched, and it looks like the app is
+   * broken rather than like a picture is missing.
+   *
+   * Keyed by `src` so that changing the poster retries rather than staying stuck on the
+   * failure of the previous one.
+   */
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const usable = src !== null && failedSrc !== src ? src : null
+
   const percent =
     typeof progressPercent === 'number' && Number.isFinite(progressPercent)
       ? Math.min(100, Math.max(0, progressPercent))
@@ -55,7 +72,7 @@ export function Poster({
 
   return (
     <div className={cx(styles.poster, styles[size], fluid && styles.fluid, className)}>
-      {src === null ? (
+      {usable === null ? (
         <>
           <div className={styles.placeholder} aria-hidden="true">
             {firstGlyph(alt)}
@@ -66,11 +83,12 @@ export function Poster({
       ) : (
         <img
           className={styles.image}
-          src={src}
+          src={usable}
           alt={alt}
           loading="lazy"
           decoding="async"
           draggable={false}
+          onError={() => setFailedSrc(usable)}
         />
       )}
 

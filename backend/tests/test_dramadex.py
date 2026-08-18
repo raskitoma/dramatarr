@@ -659,7 +659,16 @@ async def test_a_wishlist_poster_whose_file_was_never_written_is_refetched(
     assert dramadex._needs_poster(series) is True
 
 
-async def test_a_wishlist_poster_that_is_on_disk_is_left_alone(db: AsyncSession, tmp_env) -> None:
+async def test_a_wishlist_thumbnail_is_replaced_by_the_indexers_key_art(
+    db: AsyncSession, tmp_env
+) -> None:
+    """The second half of "no usa la imagen que tiene DramaDex".
+
+    A series promoted from a request inherits whatever illustrated the *ask*. That picture
+    loads fine, so a check that only asked "is there a poster" kept it forever and the
+    indexer's real key art never reached the series. The file being on disk is exactly the case
+    that used to hide this.
+    """
     from app.services.images import _requests_dir, request_poster_url
 
     series = await make_series(db)
@@ -668,6 +677,48 @@ async def test_a_wishlist_poster_that_is_on_disk_is_left_alone(db: AsyncSession,
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_bytes(b"non-empty")
     series.poster_path = request_poster_url(name)
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is True
+
+
+async def test_artwork_an_admin_chose_is_never_overruled(db: AsyncSession, tmp_env) -> None:
+    """The line the previous test must not cross.
+
+    Choosing artwork sets `metadata_locked`, and replacing somebody's explicit choice on a
+    refresh is how a feature stops being used. A locked row keeps its picture even when that
+    picture came in through the wishlist.
+    """
+    from app.services.images import _requests_dir, request_poster_url
+
+    series = await make_series(db)
+    name = "chosen.webp"
+    directory = _requests_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_bytes(b"non-empty")
+    series.poster_path = request_poster_url(name)
+    series.metadata_locked = True
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is False
+
+
+async def test_a_cached_series_poster_that_is_there_is_left_alone(
+    db: AsyncSession, tmp_env
+) -> None:
+    """Artwork already stored under the series' own stem is the indexer's or the admin's.
+
+    Either way it is the right picture, and re-downloading it on every refresh would be the
+    worse bug.
+    """
+    from app.config import get_settings
+
+    series = await make_series(db)
+    relative = "series/abc/poster.webp"
+    target = get_settings().data_dir / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"non-empty")
+    series.poster_path = relative
     await db.flush()
 
     assert dramadex._needs_poster(series) is False
