@@ -991,7 +991,8 @@
     "DRAMADEX_POSTER_NOT_FOUND": "DramaDex no tiene póster guardado para ese título.",
     "DRAMADEX_TITLE_NOT_FOUND": "DramaDex ya no tiene ese título.",
     "DRAMADEX_UNAUTHORIZED": "DramaDex rechazó la clave.",
-    "DRAMADEX_UNREACHABLE": "No pudimos alcanzar DramaDex. Revisa la dirección y que el contenedor esté arriba."
+    "DRAMADEX_UNREACHABLE": "No pudimos alcanzar DramaDex. Revisa la dirección y que el contenedor esté arriba.",
+    "DRAMADEX_PERSON_PHOTO_NOT_FOUND": "DramaDex no tiene foto de esa persona."
   },
   "time": {
     "justNow": "hace un momento",

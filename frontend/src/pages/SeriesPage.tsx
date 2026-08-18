@@ -43,6 +43,7 @@ import { EpisodeGrid } from '@/components/EpisodeGrid'
 import { EpisodeRow, episodeLabelParts } from '@/components/EpisodeRow'
 import { IconButton } from '@/components/IconButton'
 import { PlatformMark } from '@/components/PlatformMark'
+import { PersonFace } from '@/components/PersonFace'
 import { Poster } from '@/components/Poster'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Spinner } from '@/components/Spinner'
@@ -63,7 +64,7 @@ import {
 } from '@/components/icons'
 import { useAuth } from '@/hooks/useAuth'
 import { useDismissOnOutside } from '@/hooks/useDismissOnOutside'
-import { declaredIsPlausible, formatTimecode, initialsOf } from '@/lib/format'
+import { declaredIsPlausible, formatTimecode } from '@/lib/format'
 
 import styles from './SeriesPage.module.css'
 
@@ -631,13 +632,13 @@ function NavArrow({
                 Each is a link, and that is the feature: this genre has no cast data anywhere
                 else, so "what else is this actor in" had no answer until the indexer existed.
 
-                The disc is initials on a tint because **DramaDex carries no person images** —
-                `PersonDetail` is id, name, bio, external_ids, titles, and there is no route
-                like `/titles/{id}/poster` for people. So this is the finished treatment rather
-                than a placeholder waiting on a download. The shape is built for the photograph
-                anyway: when the indexer starts serving one, it drops into the same disc and
-                nothing else here moves. The tint is keyed off the person id, so one performer
-                keeps one colour on this page and on their own. */}
+                The photograph is asked for by id, unconditionally: unlike the person page,
+                nothing here has fetched that performer's record, so there is no `photoUrl` to
+                consult and the only way to know is to try. The roughly one in four with no
+                picture 404s and falls back to their initials on a tint — the same fallback
+                `Avatar` has always used, and a finished treatment rather than a gap. The tint
+                is keyed off the person id, so one performer keeps one colour on this page and
+                on their own. */}
             <ul className={styles.castList}>
               {(detail.cast ?? []).map((member) => (
                 <li key={member.dramadexPersonId} className={styles.castItem}>
@@ -645,13 +646,12 @@ function NavArrow({
                     href={`/people/${member.dramadexPersonId}`}
                     className={styles.castLink}
                   >
-                    <span
+                    <PersonFace
                       className={styles.castFace}
-                      aria-hidden="true"
-                      data-tint={member.dramadexPersonId % 6}
-                    >
-                      {initialsOf(member.name, '?')}
-                    </span>
+                      name={member.name}
+                      photoUrl={`/api/library/dramadex/people/${member.dramadexPersonId}/photo`}
+                      tint={member.dramadexPersonId % 6}
+                    />
                     <span className={styles.castName}>{member.name}</span>
                     {/* Everything DramaDex has said so far is "actor", so a role line would be
                         the same word under every face. It renders only when it says something. */}

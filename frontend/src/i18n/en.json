@@ -991,7 +991,8 @@
     "DRAMADEX_POSTER_NOT_FOUND": "DramaDex has no poster stored for that title.",
     "DRAMADEX_TITLE_NOT_FOUND": "DramaDex no longer has that title.",
     "DRAMADEX_UNAUTHORIZED": "DramaDex rejected the API key.",
-    "DRAMADEX_UNREACHABLE": "Could not reach DramaDex. Check the address and that the container is up."
+    "DRAMADEX_UNREACHABLE": "Could not reach DramaDex. Check the address and that the container is up.",
+    "DRAMADEX_PERSON_PHOTO_NOT_FOUND": "DramaDex has no photo for that person."
   },
   "time": {
     "justNow": "just now",

@@ -787,12 +787,17 @@ async def dramadex_search(
 
 
 @router.get("/dramadex/titles/{title_id}/poster")
-async def dramadex_poster(session: SessionDep, admin: AdminUser, title_id: int) -> Response:
+async def dramadex_poster(session: SessionDep, user: CurrentUser, title_id: int) -> Response:
     """Proxy key art from DramaDex.
 
     Proxied rather than linked because the indexer requires an API key on every route, and
     that key must not reach a browser. DramaDex serves its own posters for the same reason
     dramatarr does — so rendering a page never leaks a viewer's IP to a platform CDN.
+
+    `CurrentUser`, not `AdminUser`. It began life inside the admin artwork picker, but `_hit`
+    now stamps this URL onto every credit on the member-facing person page and onto every
+    wishlist card — so while it was admin-only, every other member got a 403 and a blank
+    rectangle, with nothing on screen to say why.
     """
     client = await dramadex.require_client(session)
     fetched = await client.poster_bytes(title_id)
@@ -981,10 +986,37 @@ async def dramadex_person(
         id=person.id,
         name=person.name,
         bio=person.bio,
+        # `person.id`, not `person_id`: the indexer de-duplicated its people, so a request for
+        # an alias comes back as the canonical row. Building the URL from what it answered
+        # means two routes to the same actor share one browser cache entry.
+        photo_url=(
+            f"/api/library/dramadex/people/{person.id}/photo" if person.photo_url else None
+        ),
         credits=[
             _hit(
                 dramadex.hit_from(t, in_library=t.id in known, library_slug=known.get(t.id)), t
             )
             for t in person.titles
         ],
+    )
+
+
+@router.get("/dramadex/people/{person_id}/photo")
+async def dramadex_person_photo(
+    session: SessionDep, user: CurrentUser, person_id: int
+) -> Response:
+    """Proxy an actor's photo, for the same reason `dramadex_poster` proxies key art.
+
+    A person the indexer has no picture for is a 404 here, not an error worth logging: about
+    one credited performer in four has none, and the client falls back to their initials.
+    """
+    client = await dramadex.require_client(session)
+    fetched = await client.photo_bytes(person_id)
+    if fetched is None:
+        raise NotFound("Photo", "DRAMADEX_PERSON_PHOTO_NOT_FOUND")
+    raw, content_type = fetched
+    return Response(
+        content=raw,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=3600"},
     )

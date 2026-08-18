@@ -1108,6 +1108,10 @@ export interface PersonCredits {
   id: number
   name: string
   bio: string | null
+  /** This app's proxy path to the indexer's photograph, or null when it has none — which is
+   *  about one credited performer in four. Never DramaDex's own path: its routes need an API
+   *  key the browser must not hold. */
+  photoUrl: string | null
   credits: DramadexHit[]
 }
 

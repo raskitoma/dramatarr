@@ -339,6 +339,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "es": "DramaDex no tiene esa persona.",
         "en": "DramaDex has no such person.",
     },
+    "DRAMADEX_PERSON_PHOTO_NOT_FOUND": {
+        "es": "DramaDex no tiene foto de esa persona.",
+        "en": "DramaDex has no photo for that person.",
+    },
     "DRAMADEX_POSTER_NOT_FOUND": {
         "es": "DramaDex no tiene póster guardado para ese título.",
         "en": "DramaDex has no poster stored for that title.",

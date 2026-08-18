@@ -173,6 +173,12 @@ class Person:
     bio: str | None = None
     external_ids: dict[str, str] = field(default_factory=dict)
     titles: tuple[DramadexTitle, ...] = ()
+    #: DramaDex's own path (`/people/43/photo`), not a URL a browser may use — every route
+    #: there needs the API key. Its presence is the only signal that a photo exists at all;
+    #: measured 2026-08-18, 18 of this household's 24 credited people have one and 94.9% of
+    #: the indexer's 2188 canonical people do. Never `urljoin` it: the leading slash would
+    #: discard any base path prefix.
+    photo_url: str | None = None
 
 
 # --- Parsing ----------------------------------------------------------------------------
@@ -342,6 +348,9 @@ class DramadexClient:
             titles=tuple(
                 t for t in (_title(x) for x in raw.get("titles") or []) if t is not None
             ),
+            photo_url=(
+                (str(raw.get("photo_url")).strip() or None) if raw.get("photo_url") else None
+            ),
         )
 
     async def genres(self) -> tuple[tuple[str, str], ...]:
@@ -362,6 +371,25 @@ class DramadexClient:
         """Fetch key art. DramaDex serves it itself rather than hotlinking, which is also why
         dramatarr can cache it without leaking a viewer's IP to a platform CDN."""
         url = urljoin(self.base_url, f"titles/{int(title_id)}/poster")
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers={"X-API-Key": self.api_key})
+        except httpx.HTTPError:
+            return None
+        if response.status_code != 200 or not response.content:
+            return None
+        return response.content, response.headers.get("content-type", "image/webp")
+
+    async def photo_bytes(self, person_id: int) -> tuple[bytes, str] | None:
+        """Fetch an actor's photo, for the same reason `poster_bytes` exists: `_get` ends in
+        `response.json()` and raises `DRAMADEX_BAD_RESPONSE` the moment it is handed bytes.
+
+        The path is built here rather than taken from `Person.photo_url` — that value starts
+        with a slash, and `urljoin` would throw away any base path prefix the indexer picks
+        up the day it moves behind a gateway. A person with no photo answers 404 with a JSON
+        body, which the status check below absorbs.
+        """
+        url = urljoin(self.base_url, f"people/{int(person_id)}/photo")
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
                 response = await client.get(url, headers={"X-API-Key": self.api_key})

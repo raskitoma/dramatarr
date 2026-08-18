@@ -26,11 +26,11 @@ import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
+import { PersonFace } from '@/components/PersonFace'
 import { Poster } from '@/components/Poster'
 import { Spinner } from '@/components/Spinner'
 import { useToast } from '@/components/Toast'
 import { ExternalLinkIcon } from '@/components/icons'
-import { initialsOf } from '@/lib/format'
 
 import styles from './PersonPage.module.css'
 
@@ -75,14 +75,17 @@ export function PersonPage() {
   return (
     <article className={styles.page}>
       {/* Portrait beside the text, at a size worth looking at rather than an avatar tucked in
-          a corner. There is no photograph to put here — DramaDex has no person images at all —
-          so what fills the frame is initials on the same tint the series page uses for this
-          performer. The frame exists at portrait proportions regardless, because the day the
-          indexer serves one this is where it goes and nothing around it has to move. */}
+          a corner. The indexer serves a photograph for most performers — measured, about three
+          in four — and it fills this frame exactly as the frame was built for. For the rest it
+          is initials on the same tint the series page uses for this actor, which is a finished
+          treatment and not a gap waiting on a download. */}
       <header className={styles.header}>
-        <div className={styles.portrait} aria-hidden="true" data-tint={person.id % 6}>
-          {initialsOf(person.name, '?')}
-        </div>
+        <PersonFace
+          className={styles.portrait}
+          name={person.name}
+          photoUrl={person.photoUrl}
+          tint={person.id % 6}
+        />
         <div className={styles.headerText}>
           <h1 className={styles.name}>{person.name}</h1>
           <p className={styles.count}>

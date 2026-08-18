@@ -120,15 +120,17 @@
 
 /* The portrait.
  *
- * DramaDex holds **no person images** — `PersonDetail` is id, name, bio, external_ids, titles,
- * and there is no route for a face the way there is `/titles/{id}/poster` for key art. So this
- * is not a placeholder standing in for a picture that will arrive later; it is the finished
- * treatment, exactly as it is for a household member who never uploaded an avatar.
+ * Shaped as a **portrait** rather than an avatar: 2:3, the same proportion as a poster, at a
+ * size worth looking at. The indexer's photographs are squares of at most 320px, so they are
+ * cropped at the sides to fill this — `object-position: center top` in `PersonFace` is what
+ * keeps the face in frame while that happens.
  *
- * It is shaped and sized as a **portrait** rather than an avatar anyway: 2:3, the same
- * proportion as a poster, at a size worth looking at. When the indexer starts serving a photo
- * it fills this frame and nothing around it moves. Six tints keyed off the person id, so one
- * actor keeps one colour here and on every series they are in.
+ * About one performer in four has no photograph, and for those the tint below shows through
+ * with their initials on it. That is the finished treatment, exactly as it is for a household
+ * member who never uploaded an avatar — not a placeholder. Six tints keyed off the person id,
+ * so one actor keeps one colour here and on every series they are in.
+ *
+ * `overflow: hidden` is load-bearing: without it an `<img>` squares off the rounded corners.
  */
 .portrait {
   display: grid;
@@ -136,6 +138,7 @@
   flex: none;
   inline-size: clamp(8rem, 22vw, 13rem);
   aspect-ratio: 2 / 3;
+  overflow: hidden;
   border-radius: var(--radius-lg);
   font-size: var(--text-3xl, var(--text-2xl));
   font-weight: var(--weight-semibold);

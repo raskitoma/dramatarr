@@ -549,14 +549,15 @@
   color: var(--accent);
 }
 
-/* Initials on a tint — the finished treatment, not a gap. DramaDex has no person images at all,
-   so there is no photograph on its way. Sized and shaped for one anyway: the day the indexer
-   serves `/people/{id}/image`, it replaces the glyph inside this disc and nothing moves. */
+/* The indexer's photograph, cropped into this disc, or initials on a tint for the roughly one
+   performer in four it has none of — a finished treatment, not a gap. `overflow: hidden` is
+   what makes the circle a circle once there is an `<img>` inside it. */
 .castFace {
   display: grid;
   place-items: center;
   inline-size: 5rem;
   block-size: 5rem;
+  overflow: hidden;
   border-radius: var(--radius-full);
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);

@@ -1,0 +1,10 @@
+/* Fills whatever frame the caller gave it. `cover` rather than `contain` because these arrive
+   as squares (≤320px, a few KB of WebP) and the frames are a disc and a 2:3 portrait — letting
+   one letterbox would put bars inside a rounded shape. Cropping from the top keeps the face:
+   a publicity photo is rarely centred, but it is almost never in the bottom third. */
+.image {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: center top;
+}

@@ -739,6 +739,11 @@ class PersonCredits(APIModel):
     id: int
     name: str
     bio: str | None = None
+    #: This app's proxy path, never DramaDex's own — its routes need an API key a browser must
+    #: never hold, and its raw `/people/43/photo` would fall through to the SPA router and come
+    #: back as `index.html`. None when the indexer has no picture, which is about one credited
+    #: person in four; the tinted initials are the finished treatment for those, not a gap.
+    photo_url: str | None = None
     credits: list[DramadexHit] = Field(default_factory=list)
 
 
