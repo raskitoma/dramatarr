@@ -217,8 +217,8 @@
     "episodeView": "Episode layout",
     "viewGrid": "Grid",
     "viewList": "List",
-    "missingCount": "{{count}} episode missing",
-    "missingCount_other": "{{count}} episodes missing",
+    "missingCount": "{{count}} episode missing from the library",
+    "missingCount_other": "{{count}} episodes missing from the library",
     "watchElsewhere": "Watch on the original platform",
     "watchElsewhereTitle": "Platforms"
   },

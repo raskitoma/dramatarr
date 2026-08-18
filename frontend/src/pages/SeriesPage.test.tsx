@@ -196,6 +196,69 @@ describe('SeriesPage hero', () => {
   })
 })
 
+describe('SeriesPage — the episode counters', () => {
+  /* "My X-Ray Vision Sees Right Through You", measured: DramaDex declares 63, the library
+     holds 62 files numbered 1 to 62 with no gaps, and all 62 are watched. Both counters were
+     true and side by side they said something false — "62 de 62 vistos · falta 1 episodio"
+     reads as one still to watch. */
+
+  it('does not say an episode is left to watch when every one held is watched', () => {
+    seriesDetail.mockReturnValue({
+      data: detail({
+        availableEpisodeCount: 62,
+        watchedEpisodeCount: 62,
+        declaredEpisodeCount: 63,
+        progressPercent: 100,
+      }),
+      isLoading: false,
+      isError: false,
+    })
+
+    renderIn(<SeriesPage />)
+
+    expect(screen.getByText('62 de 62 vistos')).toBeTruthy()
+    // The shortfall names where the episode is missing from, which is the library, not the
+    // viewing. A bare "falta 1 episodio" is the sentence that was wrong.
+    expect(screen.getByText('falta 1 episodio en la biblioteca')).toBeTruthy()
+    expect(screen.queryByText('falta 1 episodio')).toBeNull()
+  })
+
+  it('says nothing about a shortfall when the library holds them all', () => {
+    seriesDetail.mockReturnValue({
+      data: detail({
+        availableEpisodeCount: 62,
+        watchedEpisodeCount: 30,
+        declaredEpisodeCount: 62,
+      }),
+      isLoading: false,
+      isError: false,
+    })
+
+    renderIn(<SeriesPage />)
+
+    expect(screen.getByText('30 de 62 vistos')).toBeTruthy()
+    expect(screen.queryByText(/en la biblioteca/)).toBeNull()
+  })
+
+  it('stays quiet when the declared total is not credible', () => {
+    /* A wrong match can claim one episode for a folder holding sixty-two. Printing that would
+       be the page asserting something plainly false to a viewer who cannot fix it. */
+    seriesDetail.mockReturnValue({
+      data: detail({
+        availableEpisodeCount: 62,
+        watchedEpisodeCount: 62,
+        declaredEpisodeCount: 1,
+      }),
+      isLoading: false,
+      isError: false,
+    })
+
+    renderIn(<SeriesPage />)
+
+    expect(screen.queryByText(/en la biblioteca/)).toBeNull()
+  })
+})
+
 describe('SeriesPage — moving between titles', () => {
   it('links each arrow at the neighbour the payload named, and names it out loud', async () => {
     seriesDetail.mockReturnValue({

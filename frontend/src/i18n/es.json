@@ -217,8 +217,8 @@
     "episodeView": "Vista de episodios",
     "viewGrid": "Cuadrícula",
     "viewList": "Lista",
-    "missingCount": "falta {{count}} episodio",
-    "missingCount_other": "faltan {{count}} episodios",
+    "missingCount": "falta {{count}} episodio en la biblioteca",
+    "missingCount_other": "faltan {{count}} episodios en la biblioteca",
     "watchElsewhere": "Ver en la plataforma original",
     "watchElsewhereTitle": "Plataformas"
   },

@@ -142,14 +142,6 @@
   text-decoration: none;
 }
 
-/* No cap of its own any more: the column it sits in is the cap, so the bar, the counts and the
-   buttons all end on the same line instead of at three different widths. */
-.progressLabel {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -238,26 +230,49 @@
 }
 
 /* The progress, on the episode heading's own line. */
-.episodeProgress {
+/* Heading, count, bar, shortfall — a left-aligned stack, not a row spanning the page. */
+.episodesHead {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex: 1 1 14rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
   min-width: 0;
 }
 
-.episodeProgress > :first-child {
-  flex: 1 1 auto;
+/* Baseline, so the count sits on the heading's line and the row is exactly the heading's
+   height rather than the taller of two boxes. */
+.episodesTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
   min-width: 0;
+}
+
+.watchedCount {
+  font-size: var(--text-sm);
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A reading, not a rule across the page. Long enough to judge a fraction by, and it stops. */
+.episodeBar {
+  inline-size: min(16rem, 100%);
 }
 
 .missing {
+  font-size: var(--text-xs);
+  line-height: 1;
   color: var(--warning, var(--text-muted));
+  font-variant-numeric: tabular-nums;
 }
 
+/* `flex-start`, because the left side is a stack now and centring it against a single row of
+   buttons would float the toggle into the middle of it. */
 .blockHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
   min-width: 0;

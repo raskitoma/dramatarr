@@ -691,36 +691,44 @@ function NavArrow({
 
         <section className={styles.block} aria-labelledby="series-episodes">
           <div className={styles.blockHeader}>
-            <h2 className={styles.blockHeading} id="series-episodes">
-              {t('series.episodes')}
-            </h2>
+            {/* The count reads as part of the heading, because it is: "Episodios 62 de 62".
+                The bar and the shortfall stack underneath it, narrow and quiet.
 
-            {/* The progress, on the same line as the heading it belongs to.
-                It used to sit in the hero's top-right, where it collided with the prev/next
-                pair and described the list from a card away. Here it reads as what it is: how
-                far through *these* you are. */}
-            <div className={styles.episodeProgress}>
+                They were all on one line, with the bar stretched across the width between the
+                heading and the view toggle. At that length the bar stopped being a reading and
+                became a rule across the page, and the two counts wrapped onto a second line
+                where they read as one contradictory sentence. */}
+            <div className={styles.episodesHead}>
+              <div className={styles.episodesTitleRow}>
+                <h2 className={styles.blockHeading} id="series-episodes">
+                  {t('series.episodes')}
+                </h2>
+                <p className={styles.watchedCount}>
+                  {t('series.watchedCount', {
+                    watched: detail.watchedEpisodeCount,
+                    total: detail.availableEpisodeCount,
+                  })}
+                </p>
+              </div>
+
               <ProgressBar
+                className={styles.episodeBar}
                 percent={detail.progressPercent}
                 tone={fullyWatched ? 'success' : 'accent'}
                 size="sm"
                 label={t('series.progressOverall')}
               />
-              <p className={styles.progressLabel}>
-                {t('series.watchedCount', {
-                  watched: detail.watchedEpisodeCount,
-                  total: detail.availableEpisodeCount,
-                })}
-                {/* Only the gap, and only while the declared total is credible. Printing "62 de
-                    63 disponibles" beside "62 de 62 vistos" gave two true lines with different
-                    denominators and read as a contradiction. */}
-                {missingEpisodes > 0 ? (
-                  <span className={styles.missing}>
-                    {' · '}
-                    {t('series.missingCount', { count: missingEpisodes })}
-                  </span>
-                ) : null}
-              </p>
+
+              {/* Its own line, and its own sentence. Beside "62 de 62 vistos" the old wording
+                  read as "one left to watch" when what it means is that the indexer knows of an
+                  episode this library does not hold — measured on this very series: declared
+                  63, sixty-two files, numbered 1 to 62 with no gaps. Both lines were true and
+                  together they said something false. */}
+              {missingEpisodes > 0 ? (
+                <p className={styles.missing}>
+                  {t('series.missingCount', { count: missingEpisodes })}
+                </p>
+              ) : null}
             </div>
 
             {/* Pressed state rides the design system's own filled/ghost pair rather than a
