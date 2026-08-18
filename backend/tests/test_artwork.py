@@ -924,3 +924,54 @@ async def test_artwork_routes_are_admin_only(
     )
     assert chosen.status_code == 403
 
+
+
+# --- What the browser is actually handed ---------------------------------------------------------
+
+
+def test_a_path_this_app_serves_is_passed_through(tmp_env) -> None:
+    """The bug that blanked every poster in the library at once.
+
+    `cache_dramadex_poster` and `cache_request_poster` both return an address this application
+    serves — `/api/stream/images/requests/<name>`. It starts with a slash, and so does a legacy
+    TMDB source path, so it fell into the TMDB branch and came back as
+    `https://image.tmdb.org/t/p/w500/api/stream/images/requests/…`, which has never existed.
+
+    One series carried that shape for weeks and nobody noticed. The day a refresh moved *every*
+    series onto DramaDex artwork, the whole catalogue went blank in one step.
+    """
+    from app.services.images import request_poster_url
+    from app.services.library import image_url
+
+    served = request_poster_url("63cdacea1f3ddfe566f851d51adecd1a-8e1598742ecd.webp")
+    assert image_url(served, "w500") == served
+
+
+def test_a_cache_relative_path_is_served_locally(tmp_env) -> None:
+    from app.services.library import image_url
+
+    url = image_url("images/abc123/poster.webp", "w500")
+    assert url is not None
+    assert url.startswith("/api/stream/images/")
+    assert "themoviedb" not in url and "tmdb" not in url
+
+
+def test_a_legacy_tmdb_source_path_still_points_at_the_cdn(tmp_env) -> None:
+    """Artwork written while TMDB was a source must not go blank because it was removed."""
+    from app.services.library import image_url
+
+    assert image_url("/abc.jpg", "w500") == "https://image.tmdb.org/t/p/w500/abc.jpg"
+
+
+def test_an_arbitrary_absolute_url_is_refused(tmp_env) -> None:
+    """The column is data. An arbitrary host in an `<img src>` is a beacon on every member."""
+    from app.services.library import image_url
+
+    assert image_url("https://tracker.example/pixel.png", "w500") is None
+
+
+def test_nothing_in_nothing_out(tmp_env) -> None:
+    from app.services.library import image_url
+
+    assert image_url(None, "w500") is None
+    assert image_url("", "w500") is None

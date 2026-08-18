@@ -14,6 +14,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -25,7 +26,14 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'wouter'
 
 import { useRefreshSeriesMetadata, useSeriesDetail, useSetSeriesWatched } from '@/api/library'
-import type { EpisodeSummary, SeasonGroup, SeriesDetail, SeriesStatus, SeriesTitleOut } from '@/api/types'
+import type {
+  EpisodeSummary,
+  SeasonGroup,
+  SeriesDetail,
+  SeriesLink,
+  SeriesStatus,
+  SeriesTitleOut,
+} from '@/api/types'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
 import { Dialog } from '@/components/Dialog'
@@ -34,6 +42,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { EpisodeGrid } from '@/components/EpisodeGrid'
 import { EpisodeRow, episodeLabelParts } from '@/components/EpisodeRow'
 import { IconButton } from '@/components/IconButton'
+import { PlatformMark } from '@/components/PlatformMark'
 import { Poster } from '@/components/Poster'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Spinner } from '@/components/Spinner'
@@ -53,6 +62,7 @@ import {
   UnwatchIcon,
 } from '@/components/icons'
 import { useAuth } from '@/hooks/useAuth'
+import { useDismissOnOutside } from '@/hooks/useDismissOnOutside'
 import { declaredIsPlausible, formatTimecode, initialsOf } from '@/lib/format'
 
 import styles from './SeriesPage.module.css'
@@ -302,6 +312,73 @@ export function SeriesPage() {
 
 
 /**
+ * Where to watch this outside the house.
+ *
+ * A button rather than a row of links, because the row wrapped: "Ver en ReelShort" beside four
+ * square icon buttons put two words on one line and one on the next, and the whole action row
+ * lost its alignment. The platforms move into a small panel anchored under the button.
+ *
+ * It is a **popover, not a dialog** — no scrim, no focus trap, and the page behind it stays
+ * live. What you are choosing between is two or three links; taking the whole screen hostage
+ * for that is heavier than the decision. Escape and a click outside both close it, which is the
+ * same contract the avatar menu and the header search already keep.
+ */
+function WatchElsewhere({ links }: { links: SeriesLink[] }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const panelId = useId()
+
+  const close = useCallback(() => setOpen(false), [])
+  useDismissOnOutside(open, close, wrapRef)
+
+  if (links.length === 0) return null
+
+  return (
+    <div
+      className={styles.watchWrap}
+      ref={wrapRef}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !open) return
+        event.preventDefault()
+        close()
+        triggerRef.current?.focus()
+      }}
+    >
+      <IconButton
+        ref={triggerRef}
+        className={styles.watchTrigger}
+        label={t('series.watchElsewhere')}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        <ExternalLinkIcon />
+      </IconButton>
+
+      {open ? (
+        <div id={panelId} className={styles.watchPanel} role="group" aria-label={t('series.watchElsewhereTitle')}>
+          {links.map((link) => (
+            <a
+              key={link.studioKey}
+              className={styles.watchLink}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={close}
+            >
+              <PlatformMark studioKey={link.studioKey} name={link.studioName} />
+              {t('series.watchOn', { studio: link.studioName })}
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
  * Step to the title before or after this one.
  *
  * The neighbours arrive **on the series payload**, so this renders correctly the first time
@@ -492,20 +569,10 @@ function NavArrow({
                 </>
               ) : null}
 
-              {/* In the same row as the rest: it is one more thing you can do with this title,
-                  and it was sitting apart from the controls it belongs with. */}
-              {(detail.links ?? []).map((link) => (
-                <a
-                  key={link.studioKey}
-                  className={styles.watchLink}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ExternalLinkIcon size="1em" aria-hidden="true" />
-                  {t('series.watchOn', { studio: link.studioName })}
-                </a>
-              ))}
+              {/* One control the width of the others, not a wrapping run of words. Green
+                  because it is the only thing here that takes you off this app, and the accent
+                  is already busy saying "you are here". */}
+              <WatchElsewhere links={detail.links ?? []} />
             </div>
 
             {next ? (

@@ -251,3 +251,57 @@ describe('SeriesPage — moving between titles', () => {
     expect(screen.getByText(/es el último título/i)).toBeTruthy()
   })
 })
+
+describe('SeriesPage — watching it somewhere else', () => {
+  const links = [
+    { studioKey: 'reelshort', studioName: 'ReelShort', url: 'https://www.reelshort.com/movie/a' },
+    { studioKey: 'dramabox', studioName: 'DramaBox', url: 'https://www.dramabox.com/drama/b' },
+  ]
+
+  it('offers one control rather than a run of wrapping text links', () => {
+    seriesDetail.mockReturnValue({ data: detail({ links }), isLoading: false, isError: false })
+    renderIn(<SeriesPage />)
+
+    // Closed, the platforms are not on screen at all — that is what stopped the action row
+    // wrapping mid-phrase.
+    expect(screen.queryByRole('link', { name: /ReelShort/i })).toBeNull()
+    const trigger = screen.getByRole('button', { name: /plataforma original/i })
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('opens every platform it has, each one leaving the app', () => {
+    seriesDetail.mockReturnValue({ data: detail({ links }), isLoading: false, isError: false })
+    renderIn(<SeriesPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /plataforma original/i }))
+
+    const reelshort = screen.getByRole('link', { name: /ReelShort/i })
+    expect(reelshort.getAttribute('href')).toBe('https://www.reelshort.com/movie/a')
+    // `noopener` is not decoration: `target="_blank"` hands the opened page a handle back to
+    // this one without it.
+    expect(reelshort.getAttribute('rel')).toContain('noopener')
+    expect(screen.getByRole('link', { name: /DramaBox/i })).toBeTruthy()
+  })
+
+  it('closes on Escape and gives focus back to the control that opened it', () => {
+    seriesDetail.mockReturnValue({ data: detail({ links }), isLoading: false, isError: false })
+    renderIn(<SeriesPage />)
+
+    const trigger = screen.getByRole('button', { name: /plataforma original/i })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('link', { name: /ReelShort/i })).toBeTruthy()
+
+    fireEvent.keyDown(trigger, { key: 'Escape' })
+
+    expect(screen.queryByRole('link', { name: /ReelShort/i })).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('shows nothing at all when the indexer knows of no platform', () => {
+    // Not an empty panel behind a button that opens onto nothing.
+    seriesDetail.mockReturnValue({ data: detail({ links: [] }), isLoading: false, isError: false })
+    renderIn(<SeriesPage />)
+
+    expect(screen.queryByRole('button', { name: /plataforma original/i })).toBeNull()
+  })
+})

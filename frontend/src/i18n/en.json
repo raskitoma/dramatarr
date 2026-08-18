@@ -214,7 +214,9 @@
     "viewGrid": "Grid",
     "viewList": "List",
     "missingCount": "{{count}} episode missing",
-    "missingCount_other": "{{count}} episodes missing"
+    "missingCount_other": "{{count}} episodes missing",
+    "watchElsewhere": "Watch on the original platform",
+    "watchElsewhereTitle": "Platforms"
   },
   "player": {
     "play": "Play",

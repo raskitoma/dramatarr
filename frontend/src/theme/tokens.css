@@ -39,6 +39,12 @@
      accent is hue, not luminance — the two sit within 1.10:1 of each other, which is exactly
      right for two links on one row and is why the difference had to be a different colour
      rather than a lighter one. */
+  /* "Watch on the original platform" — green because it is the one control that takes you off
+     this app, and the accent is already saying "you are here". Measured on the header/card
+     surface: 5.38:1 in light and 8.81:1 in dark, against a text bar of 4.5. */
+  --link-out: #0f7a4a;
+  --link-out-soft: #e6f4ec;
+
   --nav-requests: #8a5a00;
   --nav-requests-hover: #6f4700;
   --success: #1a7f4b;
@@ -138,6 +144,8 @@
     --accent: #8b8bf0;
     --accent-hover: #a0a0f5;
     --accent-soft: #1e1f3d;
+    --link-out: #3ecf8e;
+    --link-out-soft: #122a20;
     --nav-requests: #e0a94a;
     --nav-requests-hover: #f0c274;
     --success: #4ac98a;
@@ -180,6 +188,8 @@
   --accent: #8b8bf0;
   --accent-hover: #a0a0f5;
   --accent-soft: #1e1f3d;
+  --link-out: #3ecf8e;
+  --link-out-soft: #122a20;
   --nav-requests: #e0a94a;
   --nav-requests-hover: #f0c274;
   --success: #4ac98a;

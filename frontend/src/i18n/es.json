@@ -214,7 +214,9 @@
     "viewGrid": "Cuadrícula",
     "viewList": "Lista",
     "missingCount": "falta {{count}} episodio",
-    "missingCount_other": "faltan {{count}} episodios"
+    "missingCount_other": "faltan {{count}} episodios",
+    "watchElsewhere": "Ver en la plataforma original",
+    "watchElsewhereTitle": "Plataformas"
   },
   "player": {
     "play": "Reproducir",

@@ -438,24 +438,73 @@
   }
 }
 
-/* Where this came from. In the hero because it is part of what the show *is*, not an action —
-   and one per platform, since a title can sit on both. */
-.watchLinks {
+/* --- Watching it somewhere else ------------------------------------------------------------
+ *
+ * One control the same size as the others, with the platforms in a panel under it. As a row of
+ * text links "Ver en ReelShort" wrapped mid-phrase beside four square buttons and took the
+ * action row's alignment with it.
+ */
+.watchWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Green: the one control here that takes you off this app, and the accent is already spoken
+   for by "you are here". Bordered like its secondary neighbours so the row still reads as one
+   set of controls rather than three buttons and an ornament. */
+.watchTrigger.watchTrigger {
+  color: var(--link-out);
+  background: var(--link-out-soft);
+  border: 1px solid var(--link-out);
+}
+
+.watchTrigger.watchTrigger:hover {
+  color: var(--surface);
+  background: var(--link-out);
+}
+
+/* A popover, not a dialog: no scrim, no focus trap, the page behind stays live. You are
+   choosing between two or three links. */
+.watchPanel {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline-start: 0;
+  z-index: var(--z-popover, 40);
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: max-content;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg, var(--shadow-sm));
+}
+
+/* Anchored to the trailing edge near the viewport's edge, so the panel cannot open off-screen
+   on a phone where this button sits at the end of a full-width row. */
+@media (max-width: 599px) {
+  .watchPanel {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+  }
 }
 
 .watchLink {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text);
+  white-space: nowrap;
+  border-radius: var(--radius-md);
 }
 
 .watchLink:hover {
-  color: var(--accent);
+  color: var(--link-out);
+  background: var(--surface-sunken);
+  text-decoration: none;
 }
 
 /* Chips rather than a list: names are short, there are rarely more than a dozen, and each one

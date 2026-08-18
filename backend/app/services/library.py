@@ -217,14 +217,23 @@ def _cached_image_url(stored: str) -> str | None:
 def image_url(stored: str | None, size: str) -> str | None:
     """A URL the browser can fetch for a stored poster/backdrop/still, or None.
 
-    Three shapes reach this function, because the columns hold whatever the last job wrote:
+    Four shapes reach this function, because the columns hold whatever the last job wrote:
 
     * a DATA_DIR-relative path (`images/<series_id>/poster.jpg`) once `image_cache` has run —
       served locally;
-    * a bare TMDB source path (`/abc.jpg`) written by a metadata refresh that the cache job
-      has not caught up with — pointed at the TMDB CDN so the grid is not blank meanwhile;
+    * **a path this application already serves** (`/api/stream/images/requests/<name>`), which
+      is what `cache_dramadex_poster` and `cache_request_poster` both return. Passed through
+      untouched;
+    * a bare TMDB source path (`/abc.jpg`) written back when TMDB was a source — pointed at the
+      TMDB CDN so artwork from that era does not go blank;
     * an absolute URL. Only TMDB's image host is passed through: the value comes from the
       database, and an arbitrary absolute URL in an `<img src>` is a third-party beacon.
+
+    The second case is the one that was missing, and it emptied the whole catalogue. Both start
+    with a slash, so a served path fell into the TMDB branch and came back as
+    `https://image.tmdb.org/t/p/w500/api/stream/images/requests/…` — an address that has never
+    existed. One series had carried that shape for a while and nobody noticed; the day a refresh
+    moved *every* series onto DramaDex artwork, every poster in the library went blank at once.
 
     Null in, null out — never the string "null" and never a URL to nothing.
     """
@@ -232,6 +241,8 @@ def image_url(stored: str | None, size: str) -> str | None:
         return None
     if is_cached_path(stored):
         return _cached_image_url(stored)
+    if stored.startswith(f"{_IMAGES_ROUTE}/"):
+        return stored
     if stored.startswith(("http://", "https://")):
         host = (urlsplit(stored).hostname or "").lower()
         return stored if host == _TMDB_IMAGE_HOST else None
