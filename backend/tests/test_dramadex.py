@@ -779,3 +779,96 @@ async def test_a_poster_name_that_tries_to_escape_is_refused_rather_than_stat_ed
     await db.flush()
 
     assert dramadex._needs_poster(series) is True
+
+
+def cast_entry(person_id: int, name: str, billing: int | None):
+    """The shape `DramadexTitle.cast` carries, minus everything this rule does not read."""
+
+    class Entry:
+        def __init__(self) -> None:
+            self.person_id = person_id
+            self.name = name
+            self.role = "actor"
+            self.billing_order = billing
+
+    return Entry()
+
+
+def test_the_same_actor_twice_becomes_once() -> None:
+    """Straight from the NAS: DramaDex sends one person under two ids.
+
+    On `American Sniper: The Last Round` it returns Addison Bowman as person 273 *and* person
+    43, and Piper Jean Jones as 343 *and* 216 — so the series page rendered eight names for six
+    people. The ids genuinely differ, so nothing can dedupe on id.
+    """
+    collapsed = library_service._one_row_per_person(
+        [
+            cast_entry(273, "Addison Bowman", 0),
+            cast_entry(11, "Jesse Morales", 1),
+            cast_entry(343, "Piper Jean Jones", 5),
+            cast_entry(43, "Addison Bowman", None),
+            cast_entry(216, "Piper Jean Jones", None),
+        ]
+    )
+
+    assert [m.name for m in collapsed] == [
+        "Addison Bowman",
+        "Jesse Morales",
+        "Piper Jean Jones",
+    ]
+
+
+def test_the_billed_record_is_the_one_that_survives() -> None:
+    """Which of the pair wins is not arbitrary.
+
+    The strays arrive with no `billing_order` while the real entry carries its position, so the
+    complete record has to win — otherwise the list keeps the right names in the wrong order.
+    """
+    collapsed = library_service._one_row_per_person(
+        [
+            cast_entry(43, "Addison Bowman", None),
+            cast_entry(273, "Addison Bowman", 0),
+        ]
+    )
+
+    assert len(collapsed) == 1
+    assert collapsed[0].person_id == 273
+
+
+def test_a_credit_with_no_billing_is_still_a_credit() -> None:
+    """Dropping every unordered entry would lose real people, not just duplicates."""
+    collapsed = library_service._one_row_per_person(
+        [cast_entry(1, "Primero", 0), cast_entry(2, "Sin orden", None)]
+    )
+
+    assert [m.name for m in collapsed] == ["Primero", "Sin orden"]
+
+
+def test_billing_order_is_preserved_and_strays_follow() -> None:
+    collapsed = library_service._one_row_per_person(
+        [
+            cast_entry(3, "Tercero", 2),
+            cast_entry(1, "Primero", 0),
+            cast_entry(9, "Sin orden", None),
+            cast_entry(2, "Segundo", 1),
+        ]
+    )
+
+    assert [m.name for m in collapsed] == ["Primero", "Segundo", "Tercero", "Sin orden"]
+
+
+def test_names_differing_only_by_spacing_or_case_are_one_person() -> None:
+    collapsed = library_service._one_row_per_person(
+        [cast_entry(1, "Addison  Bowman", 0), cast_entry(2, "addison bowman", None)]
+    )
+
+    assert len(collapsed) == 1
+
+
+def test_an_entry_with_no_name_is_dropped_rather_than_grouped() -> None:
+    """Empty names would otherwise all collapse into a single nameless credit."""
+    collapsed = library_service._one_row_per_person(
+        [cast_entry(1, "", 0), cast_entry(2, "   ", 1), cast_entry(3, "Real", 2)]
+    )
+
+    assert [m.name for m in collapsed] == ["Real"]

@@ -452,7 +452,13 @@ __all__ = [
 # --- Presentation ---------------------------------------------------------------------------
 
 
-def hit_from(found: DramadexTitle, *, wanted: str = "", in_library: bool = False) -> dict[str, Any]:
+def hit_from(
+    found: DramadexTitle,
+    *,
+    wanted: str = "",
+    in_library: bool = False,
+    library_slug: str | None = None,
+) -> dict[str, Any]:
     """Flatten a title into the shape the UI chooses between.
 
     `matches` is computed here rather than in the client so that one rule serves the admin
@@ -473,6 +479,7 @@ def hit_from(found: DramadexTitle, *, wanted: str = "", in_library: bool = False
         "cast": [member.name for member in found.cast][:8],
         "matches": bool(wanted) and normalize_title(found.primary_title) == normalize_title(wanted),
         "in_library": in_library,
+        "library_slug": library_slug,
     }
 
 

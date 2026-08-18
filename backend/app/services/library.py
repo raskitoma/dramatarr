@@ -2382,6 +2382,52 @@ __all__ = [
 ]
 
 
+def _one_row_per_person(cast: Sequence[Any]) -> list[Any]:
+    """One entry per human, in billing order, from an indexer that sometimes sends two.
+
+    DramaDex has not finished de-duplicating people: on `American Sniper: The Last Round` it
+    returns Addison Bowman as both person 273 and person 43, and Piper Jean Jones as both 343
+    and 216. The ids genuinely differ, so nothing here can dedupe on id — the series page simply
+    rendered the same actor twice, which is what the owner saw.
+
+    Collapsed on the **name**, which is the risk worth naming: two different actors who share a
+    name would become one. Within a single title that is far rarer than the duplication actually
+    happening, and the cost of being wrong is one missing credit rather than a wrong one.
+
+    Which of the pair survives is not arbitrary. The duplicates arrive with `billing_order` of
+    None while the real entry carries its position, so the complete record wins and the stray
+    one is dropped — and an unordered entry with no counterpart is kept, since a credit with no
+    billing is still a credit.
+
+    Reported upstream; when the indexer stops sending pairs this becomes a no-op rather than a
+    behaviour to unwind.
+    """
+    best: dict[str, Any] = {}
+    for member in cast:
+        key = " ".join((member.name or "").split()).casefold()
+        if not key:
+            continue
+        current = best.get(key)
+        if current is None:
+            best[key] = member
+            continue
+        # A billed entry beats an unbilled one; between two billed, the earlier position wins.
+        if current.billing_order is None and member.billing_order is not None:
+            best[key] = member
+        elif (
+            current.billing_order is not None
+            and member.billing_order is not None
+            and member.billing_order < current.billing_order
+        ):
+            best[key] = member
+
+    # `None` sorts last, so the billed run keeps its order and stragglers follow.
+    return sorted(
+        best.values(),
+        key=lambda m: (m.billing_order is None, m.billing_order or 0, m.name or ""),
+    )
+
+
 async def apply_dramadex_title(
     session: AsyncSession,
     series: Series,
@@ -2465,7 +2511,7 @@ async def apply_dramadex_title(
 
     # --- The cached halves, replaced rather than merged ---------------------------------
     await session.execute(sql_delete(SeriesCast).where(SeriesCast.series_id == series.id))
-    for member in found.cast:
+    for member in _one_row_per_person(found.cast):
         session.add(
             SeriesCast(
                 series_id=series.id,

@@ -43,11 +43,14 @@
   position: relative;
   z-index: 1;
   display: flex;
-  gap: var(--space-5);
+  gap: var(--space-4);
   /* Top, not bottom. Bottom-aligning made sense when the text was four short lines; with a
      synopsis in it the poster floated away from the title it belongs to. */
   align-items: flex-start;
-  padding: var(--space-5) var(--space-5) var(--space-4);
+  /* Tighter than it was, and asymmetric on purpose: the extra room at the top is where the
+     prev/next pair sits, so the title clears it instead of colliding with it. */
+  padding: var(--space-4) var(--space-4) var(--space-4);
+  padding-inline-end: var(--space-5);
   min-width: 0;
 }
 
@@ -58,7 +61,10 @@
 /* Grows with the viewport instead of staying a thumbnail on a 27-inch screen, and stops before
    it starts competing with the title. */
 .heroPoster {
-  flex: 0 0 clamp(120px, 13vw, 190px);
+  /* A size smaller across the board. The poster is identification, not the subject — the
+     episode grid below repeats it sixty-four times — and the room it gives back is what lets
+     the title, the synopsis and the actions sit on fewer lines. */
+  flex: 0 0 clamp(104px, 11vw, 150px);
 }
 
 /* One column on a phone, two side by side once there is room. The split is what makes a wide
@@ -66,7 +72,7 @@
 .heroText {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4) var(--space-6);
+  gap: var(--space-3) var(--space-5);
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -453,8 +459,12 @@
 }
 
 .castLink {
-  display: inline-block;
-  padding: var(--space-1) var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Tighter on the leading edge than the trailing one: the disc brings its own visual weight,
+     so equal padding left the chip looking lopsided the other way. */
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
   font-size: var(--text-sm);
   color: var(--text-muted);
   background: var(--surface-sunken);
@@ -477,20 +487,25 @@
  *
  * Right-aligned because that is where the *next* arrow wants to be, and a pair reads as one
  * control when it sits together at one end rather than split across the width. */
+/* Pinned inside the hero's top-right corner, above the scrim.
+ *
+ * `z-index: 2` rather than 1: the hero's `::after` gradient is its last child and paints over
+ * anything at `auto`, which is what once swallowed every click on Play. `.heroInner` already
+ * sits at 1, so the arrows need to clear it too. */
 .titleNav {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
   display: flex;
-  justify-content: flex-end;
   gap: var(--space-2);
-  /* The hero already opens the page; this row should sit against it, not float in its own
-     band of whitespace. `.page` has a `--space-6` gap, so most of that is pulled back. */
-  margin-block-end: calc(var(--space-6) * -1 + var(--space-2));
 }
 
 .navArrow {
   display: grid;
   place-items: center;
-  inline-size: 40px;
-  block-size: 40px;
+  inline-size: 36px;
+  block-size: 36px;
   color: var(--text-muted);
   background: var(--surface-raised);
   border: 1px solid var(--border-strong);
@@ -531,4 +546,34 @@
     inline-size: 44px;
     block-size: 44px;
   }
+}
+
+/* --- A face for each name ------------------------------------------------------------------
+ *
+ * Initials on a tint, and that is the finished treatment rather than a placeholder: DramaDex
+ * has no person images anywhere, so there is no photograph on its way. Six tints keyed off the
+ * person id, matching the actor's own page, so one performer keeps one colour across the app.
+ */
+.castFace {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  color: var(--surface);
+  background: var(--accent);
+}
+
+.castFace[data-tint='1'] { background: #6c8cff; }
+.castFace[data-tint='2'] { background: #b06cff; }
+.castFace[data-tint='3'] { background: #2f9e78; }
+.castFace[data-tint='4'] { background: #d1743c; }
+.castFace[data-tint='5'] { background: #4aa3c7; }
+
+.castName {
+  min-width: 0;
 }

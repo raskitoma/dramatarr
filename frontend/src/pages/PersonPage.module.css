@@ -148,3 +148,20 @@
 .header > :not(.face) {
   flex-basis: 100%;
 }
+
+/* The whole owned card is one target, and it has to keep the card's own stacking rather than
+   turning into a run of inline text. */
+.ownedLink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: inherit;
+}
+
+.ownedLink:hover {
+  text-decoration: none;
+}
+
+.ownedLink:hover .cardTitle {
+  color: var(--accent);
+}

@@ -53,7 +53,7 @@ import {
   UnwatchIcon,
 } from '@/components/icons'
 import { useAuth } from '@/hooks/useAuth'
-import { declaredIsPlausible, formatTimecode } from '@/lib/format'
+import { declaredIsPlausible, formatTimecode, initialsOf } from '@/lib/format'
 
 import styles from './SeriesPage.module.css'
 
@@ -346,8 +346,6 @@ function NavArrow({
 
   return (
     <article className={styles.page}>
-      <TitleNav detail={detail} />
-
       <header
         className={styles.hero}
         style={
@@ -357,6 +355,13 @@ function NavArrow({
         }
         data-has-backdrop={detail.backdropUrl !== null ? 'true' : 'false'}
       >
+        {/* Inside the card rather than floating above it. As its own row it read as belonging
+            to the page instead of to this title, and it opened a band of whitespace between the
+            header and everything else. Absolutely positioned so it costs the hero no layout —
+            the two-column grid underneath is already carrying the poster, the counts and the
+            action row. */}
+        <TitleNav detail={detail} />
+
         <div className={styles.heroInner}>
           <div className={styles.heroPoster}>
             {/* The <h1> beside it already names the series, so this poster is decorative. */}
@@ -520,6 +525,92 @@ function NavArrow({
       </Dialog>
 
       <div className={styles.body}>
+        {/* The record, above the episode list.
+            It used to sit below, on the reasoning that somebody fifty episodes into a show
+            wants the grid and not the blurb. That holds for the person watching and not for the
+            person *deciding* — who is here to read the cast, the genres and what else the show
+            is called, and had to scroll past sixty-four numbered tiles to reach any of it.
+            Each section still disappears entirely when it is empty, rather than standing as a
+            heading with nothing under it. */}
+        {detail.originalTitle !== null || detail.genres.length > 0 ? (
+        <section className={styles.block} aria-labelledby="series-details">
+          <h2 className={styles.blockHeading} id="series-details">
+            {t('series.details')}
+          </h2>
+
+          {detail.originalTitle !== null ? (
+            <p className={styles.detailLine}>
+              <span className={styles.detailLabel}>{t('series.originalTitle')}</span>
+              <span>{detail.originalTitle}</span>
+            </p>
+          ) : null}
+
+          {detail.genres.length > 0 ? (
+            <ul className={styles.genres} aria-label={t('series.genres')}>
+              {detail.genres.map((genre) => (
+                <li key={genre}>
+                  <Link href={`/browse?genre=${encodeURIComponent(genre)}`} className={styles.genre}>
+                    {genre}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+        ) : null}
+
+        {(detail.cast ?? []).length > 0 ? (
+          <section className={styles.block} aria-labelledby="series-cast">
+            <h2 className={styles.blockHeading} id="series-cast">
+              {t('series.cast')}
+            </h2>
+            {/* Each name is a link, and that is the feature: this genre has no cast data
+                anywhere else, so "what else is this actor in" had no answer until the
+                indexer existed.
+
+                The disc beside the name is initials on a tint, not a photograph waiting to
+                load. DramaDex carries no person images at all — `PersonDetail` is id, name,
+                bio, external_ids, titles — so there is nothing to fetch and this is the
+                finished treatment rather than a placeholder. The tint is keyed off the person
+                id, so one actor keeps one colour here and on their own page. */}
+            <ul className={styles.castList}>
+              {(detail.cast ?? []).map((member) => (
+                <li key={member.dramadexPersonId}>
+                  <Link
+                    href={`/people/${member.dramadexPersonId}`}
+                    className={styles.castLink}
+                  >
+                    <span
+                      className={styles.castFace}
+                      aria-hidden="true"
+                      data-tint={member.dramadexPersonId % 6}
+                    >
+                      {initialsOf(member.name, '?')}
+                    </span>
+                    <span className={styles.castName}>{member.name}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {alsoKnownAs.length > 0 ? (
+          <section className={styles.block} aria-labelledby="series-aka">
+            <h2 className={styles.blockHeading} id="series-aka">
+              {t('series.alsoKnownAs')}
+            </h2>
+            <ul className={styles.akaList}>
+              {alsoKnownAs.map((entry) => (
+                <li key={entry.id} className={styles.akaItem}>
+                  <span>{entry.title}</span>
+                  {entry.language ? <span className={styles.akaLang}>{entry.language}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <section className={styles.block} aria-labelledby="series-episodes">
           <div className={styles.blockHeader}>
             <h2 className={styles.blockHeading} id="series-episodes">
@@ -596,74 +687,6 @@ function NavArrow({
           )}
         </section>
 
-        {/* What is left once the synopsis moved up: the facts nobody needs before pressing
-            play. The section disappears entirely when there are none, rather than standing as
-            an empty heading. */}
-        {detail.originalTitle !== null || detail.genres.length > 0 ? (
-        <section className={styles.block} aria-labelledby="series-details">
-          <h2 className={styles.blockHeading} id="series-details">
-            {t('series.details')}
-          </h2>
-
-          {detail.originalTitle !== null ? (
-            <p className={styles.detailLine}>
-              <span className={styles.detailLabel}>{t('series.originalTitle')}</span>
-              <span>{detail.originalTitle}</span>
-            </p>
-          ) : null}
-
-          {detail.genres.length > 0 ? (
-            <ul className={styles.genres} aria-label={t('series.genres')}>
-              {detail.genres.map((genre) => (
-                <li key={genre}>
-                  <Link href={`/browse?genre=${encodeURIComponent(genre)}`} className={styles.genre}>
-                    {genre}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-        ) : null}
-
-        {(detail.cast ?? []).length > 0 ? (
-          <section className={styles.block} aria-labelledby="series-cast">
-            <h2 className={styles.blockHeading} id="series-cast">
-              {t('series.cast')}
-            </h2>
-            {/* Each name is a link, and that is the feature: this genre has no cast data
-                anywhere else, so "what else is this actor in" had no answer until the
-                indexer existed. */}
-            <ul className={styles.castList}>
-              {(detail.cast ?? []).map((member) => (
-                <li key={member.dramadexPersonId}>
-                  <Link
-                    href={`/people/${member.dramadexPersonId}`}
-                    className={styles.castLink}
-                  >
-                    {member.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {alsoKnownAs.length > 0 ? (
-          <section className={styles.block} aria-labelledby="series-aka">
-            <h2 className={styles.blockHeading} id="series-aka">
-              {t('series.alsoKnownAs')}
-            </h2>
-            <ul className={styles.akaList}>
-              {alsoKnownAs.map((entry) => (
-                <li key={entry.id} className={styles.akaItem}>
-                  <span>{entry.title}</span>
-                  {entry.language ? <span className={styles.akaLang}>{entry.language}</span> : null}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
       </div>
     </article>
   )

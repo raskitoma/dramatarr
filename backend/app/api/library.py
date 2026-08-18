@@ -698,13 +698,19 @@ def _hit(payload: dict[str, Any], found: dramadex.DramadexTitle) -> DramadexHit:
     return DramadexHit(**payload)
 
 
-async def _known_dramadex_ids(session: AsyncSession, ids: list[int]) -> set[int]:
+async def _known_dramadex_slugs(session: AsyncSession, ids: list[int]) -> dict[int, str]:
+    """DramaDex id → the local series' slug, for the ones this household already has.
+
+    Was a `set` of ids, which answered "do we have it" and not "where is it" — so every screen
+    that flagged a hit as already-owned rendered a badge saying so above a card that led
+    nowhere. One query either way.
+    """
     if not ids:
-        return set()
+        return {}
     rows = await session.execute(
-        select(Series.dramadex_id).where(Series.dramadex_id.in_(ids))
+        select(Series.dramadex_id, Series.slug).where(Series.dramadex_id.in_(ids))
     )
-    return {row for row in rows.scalars() if row is not None}
+    return {int(dramadex_id): slug for dramadex_id, slug in rows.all() if dramadex_id is not None}
 
 
 @router.get("/dramadex/search", response_model=DramadexHits)
@@ -729,12 +735,17 @@ async def dramadex_search(
         return DramadexHits(configured=False, query=q)
 
     page = await client.search(q, limit=limit)
-    known = await _known_dramadex_ids(session, [t.id for t in page.items])
+    known = await _known_dramadex_slugs(session, [t.id for t in page.items])
     return DramadexHits(
         configured=True,
         query=q,
         items=[
-            _hit(dramadex.hit_from(t, wanted=q, in_library=t.id in known), t)
+            _hit(
+                dramadex.hit_from(
+                    t, wanted=q, in_library=t.id in known, library_slug=known.get(t.id)
+                ),
+                t,
+            )
             for t in page.items
         ],
     )
@@ -811,12 +822,15 @@ async def dramadex_person(
     if person is None:
         raise NotFound("Person", "DRAMADEX_PERSON_NOT_FOUND")
 
-    known = await _known_dramadex_ids(session, [t.id for t in person.titles])
+    known = await _known_dramadex_slugs(session, [t.id for t in person.titles])
     return PersonCredits(
         id=person.id,
         name=person.name,
         bio=person.bio,
         credits=[
-            _hit(dramadex.hit_from(t, in_library=t.id in known), t) for t in person.titles
+            _hit(
+                dramadex.hit_from(t, in_library=t.id in known, library_slug=known.get(t.id)), t
+            )
+            for t in person.titles
         ],
     )

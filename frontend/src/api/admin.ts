@@ -1428,6 +1428,14 @@ export interface DramadexHit {
    */
   matches: boolean
   inLibrary: boolean
+  /**
+   * Where it is, when `inLibrary`. Null otherwise.
+   *
+   * `inLibrary` alone was a claim with no address behind it, so the actor page rendered "Ya la
+   * tenemos" over a card that led nowhere — which is worse than not saying it. The slug, not
+   * the id, because the route is `/series/:slug`.
+   */
+  librarySlug: string | null
 }
 
 export interface DramadexHits {

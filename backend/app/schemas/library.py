@@ -623,6 +623,12 @@ class DramadexHit(APIModel):
     matches: bool = False
     #: Already in this household's catalogue, so the UI offers a link rather than an action.
     in_library: bool = False
+    #: The local series' slug when `in_library`, else null.
+    #:
+    #: Without it `in_library` was a claim with no address behind it: the actor page said
+    #: "Ya la tenemos" over a card that went nowhere, which is worse than not saying it. The
+    #: slug rather than the id because the route is `/series/:slug`.
+    library_slug: str | None = None
 
 
 class DramadexApplyIn(APIModel):

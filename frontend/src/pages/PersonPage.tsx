@@ -84,10 +84,18 @@ export function PersonPage() {
           <ul className={styles.grid}>
             {owned.map((credit) => (
               <li key={credit.id} className={styles.card}>
-                <Poster src={credit.posterUrl} alt="" size="md" fluid />
-                <p className={styles.cardTitle}>{credit.title}</p>
-                {credit.year === null ? null : <p className={styles.cardMeta}>{credit.year}</p>}
-                <Badge tone="success">{t('requests.inLibrary')}</Badge>
+                {/* The whole card is the link. Saying "we already have this" and then not
+                    taking you to it was the one thing this section could get wrong, and it did:
+                    `inLibrary` travelled without an address until `librarySlug` did too. */}
+                <Link
+                  href={credit.librarySlug ? `/series/${credit.librarySlug}` : '/browse'}
+                  className={styles.ownedLink}
+                >
+                  <Poster src={credit.posterUrl} alt="" size="md" fluid />
+                  <p className={styles.cardTitle}>{credit.title}</p>
+                  {credit.year === null ? null : <p className={styles.cardMeta}>{credit.year}</p>}
+                  <Badge tone="success">{t('requests.inLibrary')}</Badge>
+                </Link>
               </li>
             ))}
           </ul>
