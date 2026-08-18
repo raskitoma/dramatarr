@@ -5,7 +5,7 @@ import { Link } from 'wouter'
 
 import type { SeriesSummary } from '@/api/types'
 import { Poster } from '@/components/Poster'
-import { declaredIsPlausible } from '@/lib/format'
+import { missingFromLibrary } from '@/lib/format'
 
 import styles from './SeriesCard.module.css'
 
@@ -25,13 +25,11 @@ export function SeriesCard({ series, note, size = 'md' }: SeriesCardProps) {
      of nineteen series tip into it the moment their held files are watched. The card used to
      print a green tick and "Visto" on a title whose own page said an episode was missing, which
      is the same contradiction one screen earlier with the disclosure removed. */
-  const held = declaredIsPlausible(series.availableEpisodeCount, series.declaredEpisodeCount)
-    ? series.declaredEpisodeCount
-    : series.availableEpisodeCount
+  const missing = missingFromLibrary(series.availableEpisodeCount, series.declaredEpisodeCount)
   const fullyWatched =
     series.availableEpisodeCount > 0 &&
     series.watchedEpisodeCount >= series.availableEpisodeCount &&
-    series.availableEpisodeCount >= held
+    missing === 0
 
   return (
     <article className={styles.card}>
@@ -56,10 +54,10 @@ export function SeriesCard({ series, note, size = 'md' }: SeriesCardProps) {
               — the same sentence the series page shows — instead of a bare total that reads as
               the whole run. */}
           <span>
-            {series.availableEpisodeCount < held
+            {missing > 0
               ? t('series.availableOf', {
                   available: series.availableEpisodeCount,
-                  declared: held,
+                  declared: series.availableEpisodeCount + missing,
                 })
               : t('series.availableCount', { count: series.availableEpisodeCount })}
           </span>

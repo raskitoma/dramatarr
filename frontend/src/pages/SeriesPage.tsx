@@ -65,7 +65,7 @@ import {
 } from '@/components/icons'
 import { useAuth } from '@/hooks/useAuth'
 import { useDismissOnOutside } from '@/hooks/useDismissOnOutside'
-import { declaredIsPlausible, formatTimecode } from '@/lib/format'
+import { formatTimecode, missingFromLibrary } from '@/lib/format'
 
 import styles from './SeriesPage.module.css'
 
@@ -283,12 +283,10 @@ export function SeriesPage() {
    * can claim one episode for a folder holding sixty-six, and printing that would be the page
    * asserting something plainly false to a viewer who cannot fix it.
    */
-  const missingEpisodes = declaredIsPlausible(
+  const missingEpisodes = missingFromLibrary(
     detail.availableEpisodeCount,
     detail.declaredEpisodeCount,
   )
-    ? Math.max(0, (detail.declaredEpisodeCount ?? 0) - detail.availableEpisodeCount)
-    : 0
 
   const seriesWatchedLabel = fullyWatched
     ? t('series.markSeriesUnwatched')

@@ -202,7 +202,11 @@ describe('SeriesPage — the episode counters', () => {
      true and side by side they said something false — "62 de 62 vistos · falta 1 episodio"
      reads as one still to watch. */
 
-  it('does not say an episode is left to watch when every one held is watched', () => {
+  it('says nothing at all about a shortfall of one', () => {
+    /* The owner watched this series through and it was complete. Measured across the whole
+       catalogue: twelve of nineteen declare exactly one more than the library holds, none
+       declare two or more, all twelve are ReelShort-only, and every series is numbered 1..N
+       with no holes. One is the indexer's margin, not an episode. */
     seriesDetail.mockReturnValue({
       data: detail({
         availableEpisodeCount: 62,
@@ -217,10 +221,25 @@ describe('SeriesPage — the episode counters', () => {
     renderIn(<SeriesPage />)
 
     expect(screen.getByText('62 de 62 vistos')).toBeTruthy()
-    // The shortfall names where the episode is missing from, which is the library, not the
-    // viewing. A bare "falta 1 episodio" is the sentence that was wrong.
-    expect(screen.getByText('falta 1 episodio en la biblioteca')).toBeTruthy()
-    expect(screen.queryByText('falta 1 episodio')).toBeNull()
+    expect(screen.queryByText(/en la biblioteca/)).toBeNull()
+  })
+
+  it('states a shortfall the indexer margin cannot explain', () => {
+    seriesDetail.mockReturnValue({
+      data: detail({
+        availableEpisodeCount: 60,
+        watchedEpisodeCount: 60,
+        declaredEpisodeCount: 63,
+        progressPercent: 100,
+      }),
+      isLoading: false,
+      isError: false,
+    })
+
+    renderIn(<SeriesPage />)
+
+    // And when it does speak, it says where they are missing from.
+    expect(screen.getByText('faltan 3 episodios en la biblioteca')).toBeTruthy()
   })
 
   it('says nothing about a shortfall when the library holds them all', () => {

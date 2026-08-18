@@ -238,3 +238,31 @@ export function declaredIsPlausible(
 ): declared is number {
   return typeof declared === 'number' && declared >= available
 }
+
+/**
+ * How many episodes to say are missing from the library — which is not the arithmetic.
+ *
+ * A shortfall of exactly one is the indexer's own margin of error, not a missing episode.
+ * Measured across this whole catalogue on 2026-08-18: **twelve of nineteen series** declare one
+ * more than the library holds, **none** declare two or more, every one of the twelve is
+ * ReelShort-only, and all nineteen are numbered 1..N with not a single hole. Twelve independent
+ * shows each missing exactly their final episode, and never a middle one, is not what that
+ * looks like. The owner confirmed it from the other end: they watched one of them through and
+ * it was complete.
+ *
+ * So one is a number this app cannot stand behind, and saying it anyway is the same defect as
+ * printing "66 de 1 disponibles" above — an application repeating a claim it has no evidence
+ * for. Two or more is different: whatever the indexer's off-by-one, something beyond it is
+ * genuinely absent. A hole in the middle of the numbering surfaces here too, since the missing
+ * row drops `available` by one on top of the gap.
+ */
+export const INDEXER_SLACK = 1
+
+export function missingFromLibrary(
+  available: number,
+  declared: number | null | undefined,
+): number {
+  if (!declaredIsPlausible(available, declared)) return 0
+  const gap = declared - available
+  return gap > INDEXER_SLACK ? gap : 0
+}

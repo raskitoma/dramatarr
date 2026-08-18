@@ -43,12 +43,22 @@ beforeAll(async () => {
 afterEach(cleanup)
 
 describe('SeriesCard — finished means finished', () => {
-  it('does not call a series watched while the indexer knows of more', () => {
-    render(<SeriesCard series={series({ declaredEpisodeCount: 63 })} />)
+  it('does not call a series watched while episodes are genuinely absent', () => {
+    render(<SeriesCard series={series({ availableEpisodeCount: 60, declaredEpisodeCount: 63 })} />)
 
     expect(screen.queryByTitle('Visto')).toBeNull()
     // And it says both numbers, the same sentence the series page shows.
-    expect(screen.getByText('62 de 63 disponibles')).toBeTruthy()
+    expect(screen.getByText('60 de 63 disponibles')).toBeTruthy()
+  })
+
+  it('ignores a shortfall of one, which is the indexer margin', () => {
+    /* Twelve of nineteen series declare exactly one more than the library holds, none declare
+       two, and the owner watched one of them through and found it complete. Treating that as a
+       missing episode would put a wrong badge on most of the catalogue. */
+    render(<SeriesCard series={series({ declaredEpisodeCount: 63 })} />)
+
+    expect(screen.getByTitle('Visto')).toBeTruthy()
+    expect(screen.getByText('62 disponibles')).toBeTruthy()
   })
 
   it('calls it watched when the library holds the whole run', () => {
