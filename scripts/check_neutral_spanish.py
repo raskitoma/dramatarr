@@ -100,9 +100,72 @@ CONVERSIONS: dict[str, str] = {
     # `dale` is Rioplatense as an interjection but standard as "give it to him"; it never
     # appears in that second sense here, so it is listed and converted by hand where found.
     "dale": "adelante",
+    # --- Found by reading, not by this table, which is the point of the rule below ---
+    "sumá": "suma",
+    "salís": "sales",
+    "mové": "mueve",
+    "conectá": "conecta",
+    "revisá": "revisa",
+    "quedate": "quédate",
 }
 
 PATTERN = re.compile(r"\b(" + "|".join(sorted(CONVERSIONS, key=len, reverse=True)) + r")\b", re.I)
+
+#: The rule the table cannot be: a *shape* rather than a word.
+#:
+#: A word list is unbounded by construction, and this one proved it — five strings sat in the
+#: bundle for weeks reading "Sumá", "salís", "revisalos", "mové" and "Conectá" while the check
+#: reported OK, because none of those five happened to be listed.
+#:
+#: This catches the enclitic imperative, which is where most of the misses live. In tuteo,
+#: attaching a pronoun to an imperative makes the word esdrújula and the accent becomes
+#: **obligatory**: revísalos, míralo, ponte, quédate. So a word ending in one of these pronoun
+#: clusters with no accent anywhere is wrong in standard Spanish whatever dialect wrote it —
+#: either Rioplatense (revisalos) or simply a missing tilde. There is no correct spelling this
+#: rejects, which is what makes it safe to run over the whole bundle.
+#: Nine characters minimum, and that number is doing real work rather than being a guess.
+#: An enclitic imperative only *needs* the accent once the stress falls on the antepenultimate
+#: syllable, which in practice means a verb of two or more syllables plus the pronoun —
+#: "verifícalo", "desconéctala", "revísalos". Shorter words ending in the same letters are
+#: ordinary vocabulary that is correct unaccented: "invite", "aporte", "brote". Counting
+#: syllables properly would be the exact rule; the length floor is the cheap approximation that
+#: has no false positives on this bundle, and a miss here costs one unlinted string rather than
+#: a check nobody trusts.
+#: The letter before the pronoun is the whole discriminator.
+#:
+#: An imperative ends in a vowel — revisA+los, verificA+lo, reiniciA+la — so the cluster sits
+#: on an `a`, `e` or `i`. The two constructions that look identical and are perfectly correct
+#: do not: an infinitive puts an `r` there (conectaRnos, tomaRlo) and a preterite an `s`
+#: (configuraSte). Requiring the vowel excludes both without an allowlist, which the first two
+#: attempts at this rule needed and still got wrong.
+ENCLITIC = re.compile(
+    r"\b(?P<word>[a-z]{6,}[aei](?:l[oa]s?|me|te|nos))\b",
+    re.I,
+)
+
+#: Words that end in a pronoun-looking cluster and are simply nouns or adjectives. Kept short
+#: and explicit: a long allowlist would mean the rule is matching the wrong thing.
+ENCLITIC_SAFE = frozenset(
+    {
+        "paralelos", "capitulos", "articulos", "elementos", "documentos", "movimientos",
+        "conocimientos", "requisitos", "resultados", "identificados",
+    }
+)
+
+
+def enclitic_hits(text: str) -> list[str]:
+    """Enclitic imperatives written without their obligatory accent."""
+    out: list[str] = []
+    for match in ENCLITIC.finditer(text):
+        word = match.group("word")
+        low = word.lower()
+        if low in ENCLITIC_SAFE:
+            continue
+        # Correctly written ones carry the tilde somewhere; those are fine.
+        if any(ch in "áéíóú" for ch in low):
+            continue
+        out.append(word)
+    return out
 
 
 def strings(node: object, prefix: str = "") -> list[tuple[str, str]]:
@@ -129,7 +192,7 @@ def main() -> int:
     data = json.loads(SPANISH.read_text(encoding="utf-8"))
     found: list[tuple[str, str, list[str]]] = []
     for key, text in strings(data):
-        hits = PATTERN.findall(text)
+        hits = PATTERN.findall(text) + enclitic_hits(text)
         if hits:
             found.append((key, text, hits))
 
@@ -142,7 +205,15 @@ def main() -> int:
     for key, text, hits in found:
         print(f"  {key}")
         print(f"    {text[:100]}")
-        print(f"    -> {', '.join(f'{h} = {CONVERSIONS[h.lower()]}' for h in dict.fromkeys(hits))}")
+        print(
+            "    -> "
+            + ", ".join(
+                f"{h} = {CONVERSIONS[h.lower()]}"
+                if h.lower() in CONVERSIONS
+                else f"{h} — enclitic imperative, needs its accent (or is voseo)"
+                for h in dict.fromkeys(hits)
+            )
+        )
     return 1
 
 

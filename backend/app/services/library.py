@@ -758,7 +758,9 @@ async def series_detail(session: AsyncSession, series: Series, user_id: str) -> 
         backdrop_url=image_url(series.backdrop_path, BACKDROP_SIZE),
         tmdb_id=series.tmdb_id,
         imdb_id=series.imdb_id,
-        dramadex_id=series.dramadex_id,
+        # `dramadex_id` is deliberately absent: it comes through `base.model_dump()` now that
+        # `SeriesSummary` carries it, and passing it again is a duplicate keyword argument —
+        # a TypeError raised on every series detail, which is exactly what happened.
         cast=[
             CastMemberOut(
                 dramadex_person_id=member.dramadex_person_id,
