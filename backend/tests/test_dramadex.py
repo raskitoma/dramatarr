@@ -592,17 +592,19 @@ async def test_rows_written_before_the_dramadex_provenance_are_treated_as_a_pers
     assert series.overview == "Texto viejo, procedencia ambigua."
 
 
-def cast_entry(person_id: int, name: str, billing: int | None):
-    """The shape `DramadexTitle.cast` carries, minus everything this rule does not read."""
+def cast_entry(
+    person_id: int, name: str, billing: int | None, role: str = "actor"
+) -> dramadex.CastMember:
+    """The real type, not a stand-in.
 
-    class Entry:
-        def __init__(self) -> None:
-            self.person_id = person_id
-            self.name = name
-            self.role = "actor"
-            self.billing_order = billing
-
-    return Entry()
+    It used to be an ad-hoc class with the same four attributes, and that hid a defect the
+    moment the merge started writing to them: `CastMember` is a **frozen** dataclass, so
+    assignment raises `FrozenInstanceError` at call time while every test went on passing. Only
+    a live refresh on the NAS found it.
+    """
+    return dramadex.CastMember(
+        person_id=person_id, name=name, role=role, billing_order=billing
+    )
 
 
 def test_the_same_actor_twice_becomes_once() -> None:
@@ -693,8 +695,7 @@ def test_a_character_name_survives_whichever_record_carried_it() -> None:
     character name it must not be the one thrown away.
     """
     billed = cast_entry(273, "Addison Bowman", 0)
-    stray = cast_entry(43, "Addison Bowman", None)
-    stray.role = "Sheriff Dalton"
+    stray = cast_entry(43, "Addison Bowman", None, role="Sheriff Dalton")
 
     merged = library_service._one_row_per_person([billed, stray])
 
@@ -716,10 +717,8 @@ def test_the_earliest_billing_of_the_pair_wins() -> None:
 
 
 def test_a_generic_role_never_overwrites_a_real_one() -> None:
-    named = cast_entry(1, "Alguien", 0)
-    named.role = "Carl Oliver"
-    generic = cast_entry(2, "Alguien", 1)
-    generic.role = "actor"
+    named = cast_entry(1, "Alguien", 0, role="Carl Oliver")
+    generic = cast_entry(2, "Alguien", 1, role="actor")
 
     merged = library_service._one_row_per_person([named, generic])
 

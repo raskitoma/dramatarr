@@ -458,3 +458,12 @@
     block-size: 44px;
   }
 }
+
+/* Same call as the public page. Here they sit on the Back row rather than over the title, so
+   nothing collides — but two 44px targets beside a button on a 360px screen leaves the row
+   with nothing to spare, and the admin reached this screen from a list. */
+@media (max-width: 599px) {
+  .titleNav {
+    display: none;
+  }
+}

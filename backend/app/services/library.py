@@ -20,7 +20,7 @@ import re
 import shlex
 from collections import Counter
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Any, Literal
@@ -2429,11 +2429,13 @@ def _one_row_per_person(cast: Sequence[Any]) -> list[Any]:
         ]
         merged_role = roles[0] if roles else (current.role or member.role)
 
-        # Keep the record that carries the billing, so its person id is the one linked to.
+        # Keep the record that carries the billing, so its person id is the one linked to —
+        # and build a *new* one rather than assigning to it. `CastMember` is a frozen dataclass,
+        # so mutating it raises at call time while passing every test that used a stand-in
+        # object. `replace` also leaves the indexer's own record untouched, which is right: this
+        # function reads what the client parsed and must not edit it underneath.
         keep = current if current.billing_order is not None else member
-        keep.billing_order = merged_order
-        keep.role = merged_role
-        best[key] = keep
+        best[key] = replace(keep, billing_order=merged_order, role=merged_role)
 
     # `None` sorts last, so the billed run keeps its order and stragglers follow.
     return sorted(

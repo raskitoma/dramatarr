@@ -95,7 +95,8 @@
   font-size: var(--text-2xl);
   overflow-wrap: anywhere;
   /* Room for the prev/next pair pinned in the corner, so a long title wraps before it reaches
-     them instead of running underneath. */
+     them instead of running underneath. Only where that pair exists — see the phone rule
+     below, which hides it and takes this back. */
   padding-inline-end: 6rem;
 }
 
@@ -582,6 +583,24 @@
 .navArrow:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Gone on a phone.
+ *
+ * There is no corner to pin them to: the hero is one narrow column, and the pair sat on top of
+ * the title — which is a wrapped, three-line title on this screen, so it lost words underneath
+ * them. Stepping title by title is a desktop gesture anyway; on a phone you came from a list
+ * and Back is one thumb away. Hidden rather than shrunk, because 44px is the touch floor this
+ * app holds to and two of those plus a title do not fit in 360px.
+ */
+@media (max-width: 599px) {
+  .titleNav {
+    display: none;
+  }
+
+  .title {
+    padding-inline-end: 0;
+  }
 }
 
 /* At the ends of the catalogue. Kept in the layout, visibly inert: `pointer-events: none` is
