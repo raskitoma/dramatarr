@@ -34,6 +34,7 @@ import {
 import { Avatar } from '@/components/Avatar'
 import { Badge, type BadgeTone } from '@/components/Badge'
 import { Button } from '@/components/Button'
+import { CopyButton } from '@/components/CopyButton'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { IconButton } from '@/components/IconButton'
@@ -244,8 +245,18 @@ function RequestRow({ row }: { row: AdminSeriesRequest }) {
 
       <div className={styles.rowBody}>
         <p className={styles.rowTitle}>
-          {row.title}
+          <span data-selectable>{row.title}</span>
           {row.year ? <span className={styles.rowYear}>{row.year}</span> : null}
+          {/* The title is what an admin carries to a platform's search box to go and find the
+              thing. It is also the one string on this page that has to survive verbatim —
+              these shows are punctuated with fullwidth colons and stray capitals, and retyping
+              one from the screen is how a search comes back empty. */}
+          <CopyButton
+            className={styles.copyTitle}
+            size="sm"
+            value={row.title}
+            label={t('admin.requests.copyTitle')}
+          />
         </p>
 
         <div className={styles.rowMeta}>

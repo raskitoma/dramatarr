@@ -202,6 +202,13 @@ export const LinkIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const CopyIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+  </Icon>
+)
+
 export const ShieldIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z" />

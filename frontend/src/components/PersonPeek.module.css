@@ -1,0 +1,106 @@
+/* Fixed, because the coordinates come from `getBoundingClientRect` — which is viewport-relative
+   — and because the card is portaled out to the body, where the strip's `overflow` cannot reach
+   it. `translate` centres it under the face and `clamp` keeps it inside the viewport at the two
+   ends of the strip, where a centred card would otherwise hang off the edge. */
+.card {
+  position: fixed;
+  z-index: var(--z-popover, 60);
+  inline-size: min(22rem, calc(100vw - var(--space-4) * 2));
+  max-block-size: 60vh;
+  overflow-y: auto;
+  margin-block-start: var(--space-2);
+  padding: var(--space-3);
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg, var(--shadow-sm));
+  /* Not interactive and not a navigation target: it exists to be read, and swallowing a click
+     meant for the face underneath it would be worse than not being there. */
+  pointer-events: auto;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.face {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  color: var(--surface);
+  background: var(--accent);
+}
+
+.face[data-tint='1'] { background: #6c8cff; }
+.face[data-tint='2'] { background: #b06cff; }
+.face[data-tint='3'] { background: #2f9e78; }
+.face[data-tint='4'] { background: #d1743c; }
+.face[data-tint='5'] { background: #c2456b; }
+
+.headText {
+  min-inline-size: 0;
+}
+
+.name {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.count {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.bio {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+}
+
+.empty {
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+/* Holds the card's height steady between opening and the answer arriving, so it does not jump
+   under a pointer that is already moving toward it. Two lines is the shortest bio measured. */
+.skeleton {
+  block-size: 2.5rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 25%,
+    var(--border) 50%,
+    var(--surface-sunken) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

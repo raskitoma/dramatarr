@@ -22,6 +22,7 @@
     "userMenu": "Menú de la cuenta"
   },
   "common": {
+    "copyValue": "Copiar «{{value}}»",
     "loading": "Cargando…",
     "save": "Guardar",
     "saving": "Guardando…",
@@ -824,6 +825,7 @@
       "emptyFiltered": "No hay pedidos con ese estado.",
       "requesterNote": "Nota de quien pidió",
       "yourReply": "Tu respuesta",
+    "copyTitle": "Copiar el título",
       "alsoRequested": "+{{count}} más lo pidió",
       "alsoRequested_other": "+{{count}} más lo pidieron",
       "openSource": "Abrir la página",
@@ -1011,6 +1013,7 @@
     "inLibrary": "En tu biblioteca",
     "elsewhere": "Todo lo demás en lo que sale",
     "noCredits": "El indexador no tiene créditos de esta persona.",
+    "noBio": "El indexador no tiene biografía de esta persona.",
     "elsewhereHint": "Están en el índice pero no en tu NAS. Pedir uno lo pone en la lista del admin.",
     "watch": "Ver"
   }

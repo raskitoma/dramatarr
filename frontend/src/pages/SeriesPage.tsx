@@ -44,6 +44,7 @@ import { EpisodeRow, episodeLabelParts } from '@/components/EpisodeRow'
 import { IconButton } from '@/components/IconButton'
 import { PlatformMark } from '@/components/PlatformMark'
 import { PersonFace } from '@/components/PersonFace'
+import { PersonPeek } from '@/components/PersonPeek'
 import { Poster } from '@/components/Poster'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Spinner } from '@/components/Spinner'
@@ -642,23 +643,30 @@ function NavArrow({
             <ul className={styles.castList}>
               {(detail.cast ?? []).map((member) => (
                 <li key={member.dramadexPersonId} className={styles.castItem}>
-                  <Link
-                    href={`/people/${member.dramadexPersonId}`}
-                    className={styles.castLink}
+                  <PersonPeek
+                    personId={member.dramadexPersonId}
+                    name={member.name}
+                    tint={member.dramadexPersonId % 6}
                   >
-                    <PersonFace
-                      className={styles.castFace}
-                      name={member.name}
-                      photoUrl={`/api/library/dramadex/people/${member.dramadexPersonId}/photo`}
-                      tint={member.dramadexPersonId % 6}
-                    />
-                    <span className={styles.castName}>{member.name}</span>
-                    {/* Everything DramaDex has said so far is "actor", so a role line would be
-                        the same word under every face. It renders only when it says something. */}
-                    {member.role && member.role.toLowerCase() !== 'actor' ? (
-                      <span className={styles.castRole}>{member.role}</span>
-                    ) : null}
-                  </Link>
+                    <Link
+                      href={`/people/${member.dramadexPersonId}`}
+                      className={styles.castLink}
+                    >
+                      <PersonFace
+                        className={styles.castFace}
+                        name={member.name}
+                        photoUrl={`/api/library/dramadex/people/${member.dramadexPersonId}/photo`}
+                        tint={member.dramadexPersonId % 6}
+                      />
+                      <span className={styles.castName}>{member.name}</span>
+                      {/* Everything DramaDex has said so far is "actor", so a role line would
+                          be the same word under every face. It renders only when it says
+                          something. */}
+                      {member.role && member.role.toLowerCase() !== 'actor' ? (
+                        <span className={styles.castRole}>{member.role}</span>
+                      ) : null}
+                    </Link>
+                  </PersonPeek>
                 </li>
               ))}
             </ul>

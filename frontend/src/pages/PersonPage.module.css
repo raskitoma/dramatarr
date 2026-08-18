@@ -160,20 +160,21 @@
  * is the correct layout there. 560px is where the two fit without squeezing either.
  */
 @media (min-width: 560px) {
+  /* Portrait first, then the text, both starting at the same edge — the reading order the
+     markup already has, so nothing here fights a screen reader.
+     
+     It was `row-reverse` while the frame held initials, and on a 1200px page that put the
+     picture against the far edge with a screen of nothing between a biography and the face it
+     belongs to. A real photograph made that gap impossible to ignore. */
   .header {
-    /* Portrait on the trailing edge, name and biography leading. Reading order stays name →
-       credits → biography, because that is the order the markup is in; only the picture moves.
-       `row-reverse` rather than reordering the DOM, so a screen reader is unaffected. */
-    flex-direction: row-reverse;
+    flex-direction: row;
     align-items: flex-start;
     gap: var(--space-5);
   }
 
-  /* Beside the portrait rather than pushed away from it. `space-between` sent the two to
-     opposite edges of a 1200px page, which put half a screen of nothing between a biography
-     and the face it belongs to. The text takes the room it needs and stops. */
+  /* Takes the room it needs and stops, rather than stretching to the far edge. */
   .headerText {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     max-inline-size: 46rem;
   }
 }

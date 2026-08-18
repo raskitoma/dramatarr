@@ -43,6 +43,27 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* This is an application, not a document. Dragging across a poster grid or a cast strip
+     produced a blue smear of half-selected labels, and on a touch device a long press on a
+     title raised the copy callout instead of following the link. Anything actually worth
+     taking out of here gets a copy button — see the wishlist's, which exists precisely
+     because this rule is here. Fields and long-form text opt back in below. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Everything a person types, or would reasonably want to take with them. A disabled input is
+   still worth reading out of, so this is not scoped to :enabled. */
+input,
+textarea,
+[contenteditable],
+code,
+pre,
+kbd,
+samp,
+[data-selectable] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 img,

@@ -22,6 +22,7 @@
     "userMenu": "Account menu"
   },
   "common": {
+    "copyValue": "Copy “{{value}}”",
     "loading": "Loading…",
     "save": "Save",
     "saving": "Saving…",
@@ -824,6 +825,7 @@
       "emptyFiltered": "No requests with that status.",
       "requesterNote": "Requester's note",
       "yourReply": "Your reply",
+    "copyTitle": "Copy the title",
       "alsoRequested": "+{{count}} other person asked",
       "alsoRequested_other": "+{{count}} other people asked",
       "openSource": "Open the page",
@@ -1011,6 +1013,7 @@
     "inLibrary": "In your library",
     "elsewhere": "Everything else they are in",
     "noCredits": "The indexer has no credits for this person.",
+    "noBio": "The indexer has no biography for this person.",
     "elsewhereHint": "These are in the index but not on your NAS. Requesting one puts it on the admin's list.",
     "watch": "Watch"
   }

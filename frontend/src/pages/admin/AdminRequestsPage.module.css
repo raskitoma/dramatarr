@@ -153,6 +153,26 @@
   overflow-wrap: anywhere;
 }
 
+/* Sits with the title rather than out at the row's edge: it copies *this* string, and an
+   action parked far from what it acts on is a guess. Dimmed until the row is touched, so a
+   list of thirty is not a column of buttons. */
+.copyTitle {
+  opacity: 0.45;
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.row:hover .copyTitle,
+.copyTitle:focus-visible {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  /* Nothing hovers, so it is always legible. */
+  .copyTitle {
+    opacity: 1;
+  }
+}
+
 .rowYear {
   color: var(--text-subtle);
   font-size: var(--text-sm);
