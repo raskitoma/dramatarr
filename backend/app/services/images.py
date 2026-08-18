@@ -38,7 +38,7 @@ import stat as stat_module
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
-from urllib.parse import quote, urljoin, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -204,14 +204,49 @@ def _resolve_local(relative: str) -> Path | None:
 
 
 def cached_file(relative: str) -> Path | None:
-    """Public name for `_resolve_local`: the file a cached path points at, or None.
-
-    Exposed because "the column says there is a poster" and "a browser can load that poster"
-    are different questions, and callers outside this module have to be able to ask the second
-    one. `dramadex.refresh_series` is the first: it used to skip the artwork fetch whenever the
-    path was non-empty, which made a row pointing at a deleted file permanently broken.
-    """
+    """Public name for `_resolve_local`: the file a cached path points at, or None."""
     return _resolve_local(relative)
+
+
+def poster_is_loadable(value: str | None) -> bool:
+    """Whether a stored `poster_path` would actually render in a browser.
+
+    "The column has a value" and "there is a picture" are different questions, and the gap
+    between them is a broken image on the series page. This module writes three shapes into
+    that column and they have to be checked three different ways:
+
+      * a **cache-relative** path (`series/<id>/poster.webp`) — stat it. The image cache is
+        derived data and the database is not, so a wiped cache or a restore that skipped
+        `DATA_PATH` leaves rows pointing at files that are gone.
+      * a **served path from this app** (`/api/stream/images/requests/<name>`) — resolve it to
+        the file behind the route and stat that. This is the one that was being missed: it
+        starts with `/`, `is_cached_path` reads any leading slash as "not local", and so a
+        wishlist poster whose file had never been written looked like a remote URL to trust.
+      * anything **remote** (`https://…`, or a legacy TMDB source path) — trust it. There is
+        nothing local to stat, and re-fetching a working remote poster on every refresh would
+        be the worse mistake.
+    """
+    if not value:
+        return False
+    if is_request_poster(value):
+        # Resolved through the *same* helper the route that serves these files uses, rather
+        # than through a second filename check written here. `_safe_component` is the wrong
+        # tool and quietly gives the wrong answer: it strips everything outside `[A-Za-z0-9_-]`,
+        # so `abc.webp` becomes `abcwebp` and every wishlist poster reads as missing.
+        from app.services.streaming import safe_child_path
+
+        name = unquote(value.rsplit("/", 1)[-1])
+        try:
+            candidate = safe_child_path(get_settings().images_dir, REQUEST_POSTER_KIND, name)
+        except Exception:  # noqa: BLE001 - a refused name is "no usable poster", not an error
+            return False
+        try:
+            return candidate.is_file() and candidate.stat().st_size > 0
+        except OSError:
+            return False
+    if is_cached_path(value):
+        return cached_file(value) is not None
+    return True
 
 
 def _write_atomic(dest: Path, data: bytes) -> None:
@@ -1118,6 +1153,7 @@ __all__ = [
     "REQUEST_POSTER_KIND",
     "cache_request_poster",
     "cached_file",
+    "poster_is_loadable",
     "is_request_poster",
     "request_poster_url",
     "store_series_artwork",

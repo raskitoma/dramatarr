@@ -482,20 +482,16 @@ def hit_from(found: DramadexTitle, *, wanted: str = "", in_library: bool = False
 def _needs_poster(series: Any) -> bool:
     """True when the series has no poster a browser could actually load.
 
-    Checked against the filesystem rather than against the column, because those two disagree
-    in a way that shows up on screen: `poster_path` survives a wiped image cache, a restore
-    that missed `DATA_PATH`, or a failed write, and every one of those leaves a row pointing at
-    nothing. A remote path is taken on trust — there is nothing local to stat — which is right,
-    since re-fetching a working remote poster on every refresh would be the worse mistake.
+    Asked of the filesystem rather than of the column, because those two disagree in a way that
+    shows up on screen. `images.poster_is_loadable` knows the three shapes this column holds
+    and how each is checked; the case that had gone unnoticed is a **wishlist poster** — a
+    series promoted from a request keeps `/api/stream/images/requests/<name>`, which starts
+    with a slash and therefore read as "remote, trust it" while the file behind it was never
+    on this host at all.
     """
-    from app.services.images import cached_file, is_cached_path
+    from app.services.images import poster_is_loadable
 
-    path = series.poster_path or ""
-    if not path:
-        return True
-    if not is_cached_path(path):
-        return False
-    return cached_file(path) is None
+    return not poster_is_loadable(series.poster_path)
 
 
 async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:

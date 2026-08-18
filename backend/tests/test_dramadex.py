@@ -637,3 +637,53 @@ async def test_no_poster_at_all_is_the_obvious_case(db: AsyncSession, tmp_env) -
     await db.flush()
 
     assert dramadex._needs_poster(series) is True
+
+
+async def test_a_wishlist_poster_whose_file_was_never_written_is_refetched(
+    db: AsyncSession, tmp_env
+) -> None:
+    """The shape that actually broke on the NAS, and the one the first fix missed.
+
+    A series promoted from a wishlist request keeps the request's poster —
+    `/api/stream/images/requests/<name>`. That starts with a slash, `is_cached_path` reads any
+    leading slash as "not a local cache path", and so a file that had never been written on
+    this host looked like a remote URL worth trusting. The series rendered a broken image and
+    every refresh declined to fix it.
+    """
+    from app.services.images import request_poster_url
+
+    series = await make_series(db)
+    series.poster_path = request_poster_url("3fe5c8849c094c1ef71187ced26a8ae0.webp")
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is True
+
+
+async def test_a_wishlist_poster_that_is_on_disk_is_left_alone(db: AsyncSession, tmp_env) -> None:
+    from app.services.images import _requests_dir, request_poster_url
+
+    series = await make_series(db)
+    name = "abc123.webp"
+    directory = _requests_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_bytes(b"non-empty")
+    series.poster_path = request_poster_url(name)
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is False
+
+
+async def test_a_poster_name_that_tries_to_escape_is_refused_rather_than_stat_ed(
+    db: AsyncSession, tmp_env
+) -> None:
+    """`poster_path` is data, and the check reads a filename out of it.
+
+    A stored value ending in `../../etc/passwd` must not become a stat outside the images
+    directory. `_safe_component` refuses it, and refusing reads as "no usable poster", which is
+    the safe answer: the worst outcome is one unnecessary re-fetch.
+    """
+    series = await make_series(db)
+    series.poster_path = "/api/stream/images/requests/..%2F..%2Fetc%2Fpasswd"
+    await db.flush()
+
+    assert dramadex._needs_poster(series) is True
