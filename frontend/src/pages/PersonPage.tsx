@@ -46,6 +46,14 @@ export function PersonPage() {
     staleTime: 5 * 60_000,
   })
 
+  // Above every early return, and that is not style. These three used to sit below them, so the
+  // first render — the loading one — returned before reaching them and the second called three
+  // hooks more. React throws on the count changing, the boundary catches it, and every actor
+  // page showed "Algo salió mal" instead of a person.
+  const create = useCreateRequest()
+  const toast = useToast()
+  const [asking, setAsking] = useState<number | null>(null)
+
   if (!Number.isInteger(personId) || personId <= 0) {
     return <EmptyState title={t('errors.NOT_FOUND')} />
   }
@@ -59,10 +67,6 @@ export function PersonPage() {
   if (query.isError) {
     return <ErrorState error={query.error} onRetry={() => void query.refetch()} />
   }
-
-  const create = useCreateRequest()
-  const toast = useToast()
-  const [asking, setAsking] = useState<number | null>(null)
 
   const person = query.data
   const owned = person.credits.filter((credit) => credit.inLibrary)
