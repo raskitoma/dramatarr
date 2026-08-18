@@ -125,10 +125,20 @@ def _score(query: str, candidate: str) -> float:
     if candidate == query:
         return 100.0
     ratio = float(fuzz.WRatio(query, candidate))
+    # Both of these mean the candidate is at least as long as the query, so neither collides
+    # with the cap below.
     if candidate.startswith(query):
         return max(ratio, 94.0)
     if query in candidate:
         return max(ratio, 86.0)
+    # A candidate far shorter than the query cannot account for it, and WRatio's own length
+    # penalty stops well short of saying so: it scores the one-character romanization "n" at
+    # 90 against "cameron". This library has fifteen title rows two characters or shorter —
+    # every acronym of a CJK title is one — so before this cap, any query containing one of
+    # those letters put an unrelated show near the top of the results, labelled with the
+    # letter. It is what beat the actor a member had actually typed, by 0.7 points.
+    if len(candidate) < len(query):
+        ratio = min(ratio, 100.0 * len(candidate) / len(query))
     return ratio
 
 

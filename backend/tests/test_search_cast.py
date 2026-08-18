@@ -196,3 +196,61 @@ async def test_the_years_facet_lists_what_the_library_holds(db, cast_library) ->
 
     facets = await library_service.year_facets(db)
     assert [(f.year, f.count) for f in facets] == [(2026, 1), (2024, 2)]
+
+
+# --- What a short row may claim ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("query", "candidate", "ceiling"),
+    [
+        # The measured case: "n" is the romanized acronym of 你, and it scored 90 against a
+        # seven-letter query, outranking the actor by 0.7 points.
+        ("cameron", "n", 20.0),
+        ("addison", "ni", 40.0),
+    ],
+)
+def test_a_much_shorter_row_cannot_claim_a_long_query(
+    query: str, candidate: str, ceiling: float
+) -> None:
+    from app.services.search.service import _score
+
+    assert _score(query, candidate) < ceiling
+
+
+@pytest.mark.parametrize(("query", "candidate"), [("mq", "mq"), ("infat", "infatuation")])
+def test_the_cap_leaves_the_short_query_path_alone(query: str, candidate: str) -> None:
+    """Acronyms exist so that two characters can find a Chinese title; that must still work."""
+    from app.services.search.service import MIN_SCORE, _score
+
+    assert _score(query, candidate) >= MIN_SCORE
+
+
+async def test_the_actor_outranks_a_stray_acronym(db, cast_library) -> None:
+    """The whole point, end to end: the hit is explained by the name that was typed."""
+    from app.models import SeriesTitle, TitleKind, TitleSource
+    from app.schemas.search import MatchField
+    from app.services.search.index import reindex_series
+    from app.services.search.service import search_library
+
+    series = cast_library["first-frost"]
+    db.add(
+        SeriesTitle(
+            series_id=series.id,
+            language="",
+            title="n",
+            kind=TitleKind.ROMANIZATION,
+            source=TitleSource.MANUAL,
+            normalized="n",
+        )
+    )
+    await db.commit()
+    await reindex_series(db, series.id)
+    await db.commit()
+
+    # A one-word query, which is what a member types. The uncapped scores were 90 for the
+    # stray letter against 89.3 for the actor.
+    results = await search_library(db, "addison")
+    hit = next(h for h in results.series if h.series.slug == "first-frost")
+    assert hit.matched_field == MatchField.CAST
+    assert hit.matched_title == "Addison Bowman"
