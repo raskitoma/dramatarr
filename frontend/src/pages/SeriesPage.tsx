@@ -236,26 +236,47 @@ export function SeriesPage() {
   const fullyWatched =
     detail.availableEpisodeCount > 0 && detail.watchedEpisodeCount >= detail.availableEpisodeCount
 
-  const primaryLabel = next
-    ? next.resumePositionSeconds !== null
+  /**
+   * What Play starts, which must always be something.
+   *
+   * `nextEpisode` is the server's answer to "where were you", and it is deliberately null once
+   * there is nothing unwatched left — so the button vanished on exactly the series somebody has
+   * finished, which is the one they are most likely to want to watch again. Falling back to the
+   * first available episode makes Rewatch mean what it says.
+   */
+  const firstAvailable =
+    seasons.flatMap((season) => season.episodes).find((episode) => episode.available) ?? null
+  const playTarget = next ?? firstAvailable
+
+  const primaryLabel = !playTarget
+    ? null
+    : next && next.resumePositionSeconds !== null
       ? t('series.resumeFrom', { time: formatTimecode(next.resumePositionSeconds) })
       : fullyWatched
         ? t('series.rewatch')
         : t('series.play')
-    : null
 
   // "X of Y" only while Y is still a credible total. A wrong TMDB match can declare one
   // episode for a folder holding sixty-six, and printing that would be the page asserting
   // something plainly false to a viewer who cannot fix it.
-  const episodeCountText = declaredIsPlausible(
+  /**
+   * How many episodes are still missing, when that number is trustworthy.
+   *
+   * The header used to print "62 de 63 disponibles" directly above "62 de 62 vistos", and both
+   * were true: the first counts against what the platform *declares*, the second against what
+   * is on the NAS. Two lines, two denominators, both starting with the same number — the owner
+   * read it as a contradiction, and he was right to.
+   *
+   * Only the gap is worth stating, and only while the declared total is credible. A wrong match
+   * can claim one episode for a folder holding sixty-six, and printing that would be the page
+   * asserting something plainly false to a viewer who cannot fix it.
+   */
+  const missingEpisodes = declaredIsPlausible(
     detail.availableEpisodeCount,
     detail.declaredEpisodeCount,
   )
-    ? t('series.availableOf', {
-        available: detail.availableEpisodeCount,
-        declared: detail.declaredEpisodeCount,
-      })
-    : t('series.availableCount', { count: detail.availableEpisodeCount })
+    ? Math.max(0, (detail.declaredEpisodeCount ?? 0) - detail.availableEpisodeCount)
+    : 0
 
   const seriesWatchedLabel = fullyWatched
     ? t('series.markSeriesUnwatched')
@@ -368,73 +389,59 @@ function NavArrow({
             <Poster src={detail.posterUrl} alt="" size="lg" fluid />
           </div>
 
-          {/* Two columns on a wide screen: what the show *is* on the left, where you are in it
-              and what you can do about it on the right. As one column the hero left most of a
-              desktop's width empty, because a synopsis has to stop at a readable measure and
-              nothing was using the rest. */}
+          {/* One column, not two. The right-hand column carried the counts, the progress bar and
+              the action row; the counts and the bar have gone down to the episode list they
+              describe, and the actions belong under the paragraph that makes you press them. */}
           <div className={styles.heroText}>
-            <div className={styles.heroMain}>
-              <h1 className={styles.title}>{detail.title}</h1>
+            <h1 className={styles.title}>{detail.title}</h1>
 
-              <p className={styles.meta}>
-                {detail.year !== null ? <span>{detail.year}</span> : null}
-                {detail.network !== null ? <span>{detail.network}</span> : null}
-                {detail.contentRating !== null ? <span>{detail.contentRating}</span> : null}
-                <Badge tone={STATUS_TONE[detail.status]}>
-                  {t(STATUS_LABEL_KEY[detail.status])}
-                </Badge>
+            {/* Directly under the title, where a second name for the same show belongs. It was
+                filed under a heading below the episode list, which is where you look for it
+                only if you already know it is there. Suppressed when it merely repeats the
+                title, which for most of this library it does. */}
+            {detail.originalTitle !== null && detail.originalTitle !== detail.title ? (
+              <p className={styles.originalTitle}>{detail.originalTitle}</p>
+            ) : null}
+
+            <p className={styles.meta}>
+              {detail.year !== null ? <span>{detail.year}</span> : null}
+              {detail.network !== null ? <span>{detail.network}</span> : null}
+              {detail.contentRating !== null ? <span>{detail.contentRating}</span> : null}
+              <Badge tone={STATUS_TONE[detail.status]}>
+                {t(STATUS_LABEL_KEY[detail.status])}
+              </Badge>
+            </p>
+
+            {/* The one thing a person reads to decide whether to press play, immediately above
+                the controls that let them. */}
+            <div className={styles.overviewBlock}>
+              <p className={styles.heroOverview} ref={overviewRef}>
+                {detail.overview ?? t('series.noOverview')}
               </p>
-
-              {/* In the hero rather than in a section below the episode list. It is the one
-                  thing a person reads to decide whether to press play, and it was the only such
-                  thing that required scrolling past ninety episodes to reach. */}
-              <div className={styles.overviewBlock}>
-                <p className={styles.heroOverview} ref={overviewRef}>
-                  {detail.overview ?? t('series.noOverview')}
-                </p>
-                {/* Only when the clamp is actually hiding something — a button that opens a
-                    dialog showing the paragraph already on screen is worse than no button. */}
-                {overviewClipped ? (
-                  <IconButton
-                    // IconButton makes this both the accessible name and the tooltip, which is
-                    // the whole budget for explaining a control with no words on it.
-                    label={t('series.overviewFull')}
-                    className={styles.overviewMore}
-                    onClick={() => setOverviewOpen(true)}
-                  >
-                    <InfoIcon />
-                  </IconButton>
-                ) : null}
-              </div>
+              {/* Only when the clamp is actually hiding something — a button that opens a
+                  dialog showing the paragraph already on screen is worse than no button. */}
+              {overviewClipped ? (
+                <IconButton
+                  // IconButton makes this both the accessible name and the tooltip, which is
+                  // the whole budget for explaining a control with no words on it.
+                  label={t('series.overviewFull')}
+                  className={styles.overviewMore}
+                  onClick={() => setOverviewOpen(true)}
+                >
+                  <InfoIcon />
+                </IconButton>
+              ) : null}
             </div>
 
-            <div className={styles.heroSide}>
-            <p className={styles.counts}>{episodeCountText}</p>
-
-            <div className={styles.progress}>
-              <ProgressBar
-                percent={detail.progressPercent}
-                tone={fullyWatched ? 'success' : 'accent'}
-                size="md"
-                label={t('series.progressOverall')}
-              />
-              <p className={styles.progressLabel}>
-                {t('series.watchedCount', {
-                  watched: detail.watchedEpisodeCount,
-                  total: detail.availableEpisodeCount,
-                })}
-              </p>
-            </div>
-
-            {/* Glyphs only, at every width. Every one of these keeps its words in the
-                accessible name and in the tooltip — `.actionLabel` hides text from sight
-                without hiding it from a screen reader, which a bare icon would. */}
+            {/* Glyphs only, at every width. Every one keeps its words in the accessible name
+                and in the tooltip — `.actionLabel` hides text from sight without hiding it from
+                a screen reader, which a bare icon would. */}
             <div className={styles.actions}>
-              {next && primaryLabel ? (
+              {playTarget && primaryLabel ? (
                 <Button
                   variant="primary"
                   title={primaryLabel}
-                  onClick={() => navigate(`/watch/${encodeURIComponent(next.id)}`)}
+                  onClick={() => navigate(`/watch/${encodeURIComponent(playTarget.id)}`)}
                 >
                   <PlayIcon />
                   <span className={styles.actionLabel}>{primaryLabel}</span>
@@ -484,24 +491,22 @@ function NavArrow({
                   </Button>
                 </>
               ) : null}
-            </div>
 
-            {(detail.links ?? []).length > 0 ? (
-              <p className={styles.watchLinks}>
-                {(detail.links ?? []).map((link) => (
-                  <a
-                    key={link.studioKey}
-                    className={styles.watchLink}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLinkIcon size="1em" aria-hidden="true" />
-                    {t('series.watchOn', { studio: link.studioName })}
-                  </a>
-                ))}
-              </p>
-            ) : null}
+              {/* In the same row as the rest: it is one more thing you can do with this title,
+                  and it was sitting apart from the controls it belongs with. */}
+              {(detail.links ?? []).map((link) => (
+                <a
+                  key={link.studioKey}
+                  className={styles.watchLink}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLinkIcon size="1em" aria-hidden="true" />
+                  {t('series.watchOn', { studio: link.studioName })}
+                </a>
+              ))}
+            </div>
 
             {next ? (
               <p className={styles.nextUp}>
@@ -510,7 +515,6 @@ function NavArrow({
                 {next.title ?? t('series.episodeNumber', { number: next.episodeNumber })}
               </p>
             ) : null}
-            </div>
           </div>
         </div>
       </header>
@@ -532,18 +536,14 @@ function NavArrow({
             is called, and had to scroll past sixty-four numbered tiles to reach any of it.
             Each section still disappears entirely when it is empty, rather than standing as a
             heading with nothing under it. */}
-        {detail.originalTitle !== null || detail.genres.length > 0 ? (
+        {detail.genres.length > 0 ? (
         <section className={styles.block} aria-labelledby="series-details">
-          <h2 className={styles.blockHeading} id="series-details">
+          {/* The heading is for screen readers only. On screen "Ficha" was a word standing over
+              a row of genre chips that say what they are — and with the original title moved up
+              beside the main one, it was labelling a single list. */}
+          <h2 className="sr-only" id="series-details">
             {t('series.details')}
           </h2>
-
-          {detail.originalTitle !== null ? (
-            <p className={styles.detailLine}>
-              <span className={styles.detailLabel}>{t('series.originalTitle')}</span>
-              <span>{detail.originalTitle}</span>
-            </p>
-          ) : null}
 
           {detail.genres.length > 0 ? (
             <ul className={styles.genres} aria-label={t('series.genres')}>
@@ -623,6 +623,34 @@ function NavArrow({
             <h2 className={styles.blockHeading} id="series-episodes">
               {t('series.episodes')}
             </h2>
+
+            {/* The progress, on the same line as the heading it belongs to.
+                It used to sit in the hero's top-right, where it collided with the prev/next
+                pair and described the list from a card away. Here it reads as what it is: how
+                far through *these* you are. */}
+            <div className={styles.episodeProgress}>
+              <ProgressBar
+                percent={detail.progressPercent}
+                tone={fullyWatched ? 'success' : 'accent'}
+                size="sm"
+                label={t('series.progressOverall')}
+              />
+              <p className={styles.progressLabel}>
+                {t('series.watchedCount', {
+                  watched: detail.watchedEpisodeCount,
+                  total: detail.availableEpisodeCount,
+                })}
+                {/* Only the gap, and only while the declared total is credible. Printing "62 de
+                    63 disponibles" beside "62 de 62 vistos" gave two true lines with different
+                    denominators and read as a contradiction. */}
+                {missingEpisodes > 0 ? (
+                  <span className={styles.missing}>
+                    {' · '}
+                    {t('series.missingCount', { count: missingEpisodes })}
+                  </span>
+                ) : null}
+              </p>
+            </div>
 
             {/* Pressed state rides the design system's own filled/ghost pair rather than a
                 bespoke highlight, so it survives both themes without new colors. */}

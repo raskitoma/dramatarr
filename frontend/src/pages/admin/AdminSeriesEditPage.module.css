@@ -12,6 +12,8 @@
 
 .breadcrumb {
   display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .header {
@@ -399,4 +401,60 @@
 .castRole {
   color: var(--text-muted);
   font-size: var(--text-sm);
+}
+
+/* --- Stepping between titles ---------------------------------------------------------------
+ *
+ * The same pair the public series page carries, on the row with Back — because editing a
+ * catalogue is exactly the task that means opening one title after another, and going out to
+ * the list and back in for each one is the friction that stops it happening.
+ */
+.titleNav {
+  display: flex;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+.navArrow {
+  display: grid;
+  place-items: center;
+  inline-size: 36px;
+  block-size: 36px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  transition:
+    color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.navArrow:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.navArrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* At the ends of the catalogue: kept in place, visibly inert, and still able to say which end
+   it is on hover. A pair that loses a button shifts under the cursor. */
+.navArrowOff {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (pointer: coarse) {
+  .navArrow {
+    inline-size: 44px;
+    block-size: 44px;
+  }
 }

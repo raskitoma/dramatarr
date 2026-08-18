@@ -212,7 +212,9 @@
     "progressOverall": "Progreso de la serie",
     "episodeView": "Vista de episodios",
     "viewGrid": "Cuadrícula",
-    "viewList": "Lista"
+    "viewList": "Lista",
+    "missingCount": "falta {{count}} episodio",
+    "missingCount_other": "faltan {{count}} episodios"
   },
   "player": {
     "play": "Reproducir",

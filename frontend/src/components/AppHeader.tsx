@@ -296,7 +296,10 @@ export function AppHeader() {
         </span>
 
         <Link href="/" className={styles.brand}>
-          {siteName}
+          {/* Decorative: the site name is right beside it, and announcing the mark as well
+              would have a screen reader read the app's name twice on every page. */}
+          <img className={styles.mark} src="/icon.svg" alt="" width={28} height={28} />
+          <span className={styles.brandName}>{siteName}</span>
         </Link>
 
         <nav className={styles.nav} aria-label={t('nav.menu')}>

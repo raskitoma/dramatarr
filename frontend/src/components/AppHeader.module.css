@@ -24,13 +24,30 @@
 /* --- Brand ------------------------------------------------------------------------------ */
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
   color: var(--text);
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
+}
+
+/* Sized from the bar, not from a constant. `--header-height` is what sets the row's height, so
+   deriving the mark from it means the two can never drift — and the icon has its own dark tile
+   built in, so it needs the rounding rather than a background. */
+.mark {
+  flex: none;
+  inline-size: calc(var(--header-height) - var(--space-5));
+  block-size: calc(var(--header-height) - var(--space-5));
+  border-radius: var(--radius-md);
+}
+
+.brandName {
+  min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

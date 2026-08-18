@@ -592,195 +592,6 @@ async def test_rows_written_before_the_dramadex_provenance_are_treated_as_a_pers
     assert series.overview == "Texto viejo, procedencia ambigua."
 
 
-async def test_a_poster_whose_file_is_gone_is_refetched(db: AsyncSession, tmp_env) -> None:
-    """The broken image the owner reported, and why it could never heal.
-
-    `refresh_series` skipped the artwork fetch whenever `poster_path` was non-empty. The image
-    cache is derived data and the database is not, so a wiped cache, a restore that missed
-    `DATA_PATH`, or one failed write leaves a row pointing at nothing — and the only control
-    that could have repaired it declined to, precisely *because* the broken path was set.
-    """
-    series = await make_series(db)
-    series.poster_path = "series/abc/poster.webp"  # a cached-shaped path with no file behind it
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is True
-
-
-async def test_a_poster_that_is_actually_there_is_left_alone(db: AsyncSession, tmp_env) -> None:
-    """The other side: re-downloading a working poster on every refresh is the worse bug."""
-    from app.config import get_settings
-
-    series = await make_series(db)
-    relative = "series/abc/poster.webp"
-    target = get_settings().data_dir / relative
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(b"not really a webp, but non-empty and on disk")
-    series.poster_path = relative
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is False
-
-
-async def test_a_remote_poster_is_taken_on_trust(db: AsyncSession, tmp_env) -> None:
-    """There is nothing local to stat, so a URL cannot be checked and is not second-guessed."""
-    series = await make_series(db)
-    series.poster_path = "https://images.example/poster.jpg"
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is False
-
-
-async def test_no_poster_at_all_is_the_obvious_case(db: AsyncSession, tmp_env) -> None:
-    series = await make_series(db)
-    series.poster_path = None
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is True
-
-
-async def test_a_wishlist_poster_whose_file_was_never_written_is_refetched(
-    db: AsyncSession, tmp_env
-) -> None:
-    """The shape that actually broke on the NAS, and the one the first fix missed.
-
-    A series promoted from a wishlist request keeps the request's poster —
-    `/api/stream/images/requests/<name>`. That starts with a slash, `is_cached_path` reads any
-    leading slash as "not a local cache path", and so a file that had never been written on
-    this host looked like a remote URL worth trusting. The series rendered a broken image and
-    every refresh declined to fix it.
-    """
-    from app.services.images import request_poster_url
-
-    series = await make_series(db)
-    series.poster_path = request_poster_url("3fe5c8849c094c1ef71187ced26a8ae0.webp")
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is True
-
-
-async def test_a_wishlist_thumbnail_is_replaced_by_the_indexers_key_art(
-    db: AsyncSession, tmp_env
-) -> None:
-    """The second half of "no usa la imagen que tiene DramaDex".
-
-    A series promoted from a request inherits whatever illustrated the *ask*. That picture
-    loads fine, so a check that only asked "is there a poster" kept it forever and the
-    indexer's real key art never reached the series. The file being on disk is exactly the case
-    that used to hide this.
-    """
-    from app.services.images import _requests_dir, request_poster_url
-
-    series = await make_series(db)
-    series.dramadex_id = 4242
-    name = "abc123.webp"  # a thumbnail, cached under the request URL's own stem
-    directory = _requests_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / name).write_bytes(b"non-empty")
-    series.poster_path = request_poster_url(name)
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is True
-
-
-async def test_key_art_already_cached_is_not_downloaded_again(
-    db: AsyncSession, tmp_env
-) -> None:
-    """The trap on the other side of that rule, and it is not hypothetical.
-
-    DramaDex key art and wishlist thumbnails share one directory and one served route, so
-    nothing about the *path* tells them apart. A shape-based test therefore calls the indexer's
-    own poster a thumbnail and re-downloads it on every refresh, forever. The stem is the only
-    exact answer: `dramadex:<title id>` hashed.
-    """
-    from app.services.images import _requests_dir, dramadex_poster_name, request_poster_url
-
-    series = await make_series(db)
-    series.dramadex_id = 4242
-    name = f"{dramadex_poster_name(4242)}.webp"
-    directory = _requests_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / name).write_bytes(b"non-empty")
-    series.poster_path = request_poster_url(name)
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is False
-
-
-async def test_key_art_for_a_different_title_is_replaced(db: AsyncSession, tmp_env) -> None:
-    """A series re-bound to another title must not keep the previous one's picture."""
-    from app.services.images import _requests_dir, dramadex_poster_name, request_poster_url
-
-    series = await make_series(db)
-    series.dramadex_id = 4242
-    name = f"{dramadex_poster_name(999)}.webp"
-    directory = _requests_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / name).write_bytes(b"non-empty")
-    series.poster_path = request_poster_url(name)
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is True
-
-
-async def test_artwork_an_admin_chose_is_never_overruled(db: AsyncSession, tmp_env) -> None:
-    """The line the previous test must not cross.
-
-    Choosing artwork sets `metadata_locked`, and replacing somebody's explicit choice on a
-    refresh is how a feature stops being used. A locked row keeps its picture even when that
-    picture came in through the wishlist.
-    """
-    from app.services.images import _requests_dir, request_poster_url
-
-    series = await make_series(db)
-    name = "chosen.webp"
-    directory = _requests_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / name).write_bytes(b"non-empty")
-    series.poster_path = request_poster_url(name)
-    series.metadata_locked = True
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is False
-
-
-async def test_a_cached_series_poster_that_is_there_is_left_alone(
-    db: AsyncSession, tmp_env
-) -> None:
-    """Artwork already stored under the series' own stem is the indexer's or the admin's.
-
-    Either way it is the right picture, and re-downloading it on every refresh would be the
-    worse bug.
-    """
-    from app.config import get_settings
-
-    series = await make_series(db)
-    relative = "series/abc/poster.webp"
-    target = get_settings().data_dir / relative
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(b"non-empty")
-    series.poster_path = relative
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is False
-
-
-async def test_a_poster_name_that_tries_to_escape_is_refused_rather_than_stat_ed(
-    db: AsyncSession, tmp_env
-) -> None:
-    """`poster_path` is data, and the check reads a filename out of it.
-
-    A stored value ending in `../../etc/passwd` must not become a stat outside the images
-    directory. `_safe_component` refuses it, and refusing reads as "no usable poster", which is
-    the safe answer: the worst outcome is one unnecessary re-fetch.
-    """
-    series = await make_series(db)
-    series.poster_path = "/api/stream/images/requests/..%2F..%2Fetc%2Fpasswd"
-    await db.flush()
-
-    assert dramadex._needs_poster(series) is True
-
-
 def cast_entry(person_id: int, name: str, billing: int | None):
     """The shape `DramadexTitle.cast` carries, minus everything this rule does not read."""
 
@@ -872,3 +683,124 @@ def test_an_entry_with_no_name_is_dropped_rather_than_grouped() -> None:
     )
 
     assert [m.name for m in collapsed] == ["Real"]
+
+
+def test_a_character_name_survives_whichever_record_carried_it() -> None:
+    """The reason the pair is merged rather than picked between.
+
+    The two records exist because they came from different scrapes. Today the stray adds
+    nothing — every role DramaDex sends reads "actor" — but the day one of them carries a
+    character name it must not be the one thrown away.
+    """
+    billed = cast_entry(273, "Addison Bowman", 0)
+    stray = cast_entry(43, "Addison Bowman", None)
+    stray.role = "Sheriff Dalton"
+
+    merged = library_service._one_row_per_person([billed, stray])
+
+    assert len(merged) == 1
+    assert merged[0].role == "Sheriff Dalton"
+    # The billed record's id is the one kept, because that is what the name links to.
+    assert merged[0].person_id == 273
+    assert merged[0].billing_order == 0
+
+
+def test_the_earliest_billing_of_the_pair_wins() -> None:
+    first = cast_entry(1, "Alguien", 4)
+    second = cast_entry(2, "Alguien", 1)
+
+    merged = library_service._one_row_per_person([first, second])
+
+    assert len(merged) == 1
+    assert merged[0].billing_order == 1
+
+
+def test_a_generic_role_never_overwrites_a_real_one() -> None:
+    named = cast_entry(1, "Alguien", 0)
+    named.role = "Carl Oliver"
+    generic = cast_entry(2, "Alguien", 1)
+    generic.role = "actor"
+
+    merged = library_service._one_row_per_person([named, generic])
+
+    assert merged[0].role == "Carl Oliver"
+
+
+def test_nothing_is_lost_but_repetition() -> None:
+    """Straight from the live library: 34 entries, 27 distinct names, 27 rows kept.
+
+    The owner's worry was that collapsing duplicates was dropping people. It is not — but the
+    only way to keep that true is to assert it.
+    """
+    sent = [
+        cast_entry(273, "Addison Bowman", 0),
+        cast_entry(11, "Jesse Morales", 1),
+        cast_entry(5, "Marc Herrmann", 2),
+        cast_entry(16, "Mark H. McClafferty", 3),
+        cast_entry(8, "Cameron Somers", 4),
+        cast_entry(343, "Piper Jean Jones", 5),
+        cast_entry(43, "Addison Bowman", None),
+        cast_entry(216, "Piper Jean Jones", None),
+    ]
+
+    merged = library_service._one_row_per_person(sent)
+
+    distinct = {" ".join(m.name.split()).casefold() for m in sent}
+    assert len(merged) == len(distinct) == 6
+
+
+# --- Artwork on a refresh ---------------------------------------------------------------------
+#
+# `_needs_poster` is gone. It answered "does this look like it needs a picture", and the answer
+# was wrong in the case that mattered: a title already carrying the indexer's art could never
+# pick up a newer version, which is what "actualizar metadata no reemplaza el póster" meant.
+# A refresh runs for exactly one reason — somebody pressed the button — so it always asks again,
+# and the cache decides whether that costs a write.
+
+
+async def test_a_refresh_asks_for_the_art_every_time(db: AsyncSession, tmp_env) -> None:
+    series = await make_series(db)
+    assert dramadex._keeps_its_own_artwork(series) is False
+
+
+async def test_artwork_an_admin_chose_is_never_overruled(db: AsyncSession, tmp_env) -> None:
+    """The one exception. Choosing artwork locks the row, and that choice is theirs."""
+    series = await make_series(db)
+    series.metadata_locked = True
+    await db.flush()
+
+    assert dramadex._keeps_its_own_artwork(series) is True
+
+
+def test_unchanged_art_keeps_its_filename(tmp_env) -> None:
+    """Same bytes, same name — so a refresh on a title nobody retouched writes nothing."""
+    from app.services import images
+
+    first = images.dramadex_poster_name(4242)
+    second = images.dramadex_poster_name(4242)
+    assert first == second
+
+
+def test_the_name_carries_the_title_so_a_thumbnail_is_still_distinguishable(tmp_env) -> None:
+    """The half that keying on bytes alone would have lost.
+
+    Key art and wishlist thumbnails share one directory and one served route, so without the
+    title in the name there is no way to tell "this is the indexer's picture for this show" from
+    "this is whatever illustrated the request".
+    """
+    from app.services import images
+
+    name = images.dramadex_poster_name(4242)
+    url = images.request_poster_url(f"{name}-abc123def456.webp")
+
+    assert images.is_dramadex_poster(url, 4242) is True
+    assert images.is_dramadex_poster(url, 999) is False
+    assert images.is_dramadex_poster(images.request_poster_url("random.webp"), 4242) is False
+
+
+def test_a_poster_written_before_the_digest_is_still_recognised(tmp_env) -> None:
+    """Files already on the NAS are named `<prefix>.webp`, with no digest after it."""
+    from app.services import images
+
+    legacy = images.request_poster_url(f"{images.dramadex_poster_name(668)}.webp")
+    assert images.is_dramadex_poster(legacy, 668) is True

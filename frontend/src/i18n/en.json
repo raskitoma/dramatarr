@@ -212,7 +212,9 @@
     "progressOverall": "Series progress",
     "episodeView": "Episode layout",
     "viewGrid": "Grid",
-    "viewList": "List"
+    "viewList": "List",
+    "missingCount": "{{count}} episode missing",
+    "missingCount_other": "{{count}} episodes missing"
   },
   "player": {
     "play": "Play",

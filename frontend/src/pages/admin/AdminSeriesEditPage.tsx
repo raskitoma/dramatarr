@@ -7,7 +7,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'wouter'
 
@@ -32,6 +32,8 @@ import type {
   SeriesStatus,
   SeriesTitleOut,
 } from '@/api/types'
+import { cx } from '@/components/cx'
+import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons'
 import ArtworkPicker from '@/components/admin/ArtworkPicker'
 import RenamePanel from '@/components/admin/RenamePanel'
 import DramadexPanel from '@/components/admin/DramadexPanel'
@@ -424,6 +426,36 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
         <Button variant="ghost" size="sm" onClick={() => leave('/admin/library')}>
           {t('common.back')}
         </Button>
+
+        {/* The same pair the public page has, because editing a catalogue is exactly the task
+            that means opening one title after another. `leave()` rather than a bare link: it is
+            the guard that asks before abandoning unsaved edits, and stepping to the next series
+            is as much a way out of this form as the Back button above.
+
+            The neighbours ride on `SeriesDetail`, which this screen already has — the admin
+            route returns the same payload as the public one — so this costs no extra request. */}
+        <nav className={styles.titleNav} aria-label={t('series.titleNav')}>
+          <AdminNavArrow
+            slug={detail.previousSeriesSlug}
+            label={
+              detail.previousSeriesSlug === null
+                ? t('series.previousTitleNone')
+                : t('series.previousTitle', { title: detail.previousSeriesTitle ?? '' })
+            }
+            onGo={leave}
+            icon={<ChevronLeftIcon />}
+          />
+          <AdminNavArrow
+            slug={detail.nextSeriesSlug}
+            label={
+              detail.nextSeriesSlug === null
+                ? t('series.nextTitleNone')
+                : t('series.nextTitle', { title: detail.nextSeriesTitle ?? '' })
+            }
+            onGo={leave}
+            icon={<ChevronRightIcon />}
+          />
+        </nav>
       </div>
 
       <header className={styles.header}>
@@ -714,6 +746,39 @@ interface TitlesSectionProps {
  * next time somebody pressed the button above. The section says where it comes from instead,
  * and each name links to everything else that person is in.
  */
+/** One step to a neighbouring title, through the unsaved-changes guard. */
+function AdminNavArrow({
+  slug,
+  label,
+  onGo,
+  icon,
+}: {
+  slug: string | null
+  label: string
+  onGo: (href: string) => void
+  icon: ReactNode
+}) {
+  if (slug === null) {
+    return (
+      <span className={cx(styles.navArrow, styles.navArrowOff)} aria-disabled="true" title={label}>
+        {icon}
+        <span className="sr-only">{label}</span>
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={styles.navArrow}
+      title={label}
+      aria-label={label}
+      onClick={() => onGo(`/admin/library/${slug}`)}
+    >
+      {icon}
+    </button>
+  )
+}
+
 function CastSection({ detail }: { detail: SeriesDetail }) {
   const { t } = useTranslation()
   const cast = detail.cast ?? []

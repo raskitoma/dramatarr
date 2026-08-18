@@ -61,19 +61,22 @@
 /* Grows with the viewport instead of staying a thumbnail on a 27-inch screen, and stops before
    it starts competing with the title. */
 .heroPoster {
-  /* A size smaller across the board. The poster is identification, not the subject — the
-     episode grid below repeats it sixty-four times — and the room it gives back is what lets
-     the title, the synopsis and the actions sit on fewer lines. */
-  flex: 0 0 clamp(104px, 11vw, 150px);
+  /* Big enough to stand beside the whole column: title, second title, meta, synopsis and the
+     action row. It is the only image on the screen until the episode grid starts, and at
+     150px it read as a thumbnail bolted to a wall of text. */
+  flex: 0 0 clamp(140px, 18vw, 260px);
 }
 
-/* One column on a phone, two side by side once there is room. The split is what makes a wide
-   hero look filled rather than left-aligned into a lot of nothing. */
+/* One column now. It used to split in two so a wide hero did not look left-aligned into a lot
+   of nothing — but the right half held the counts, the progress bar and the actions, and those
+   have gone where they belong: the progress to the episode list it describes, the actions
+   directly under the paragraph that makes you press them. */
 .heroText {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
+  flex-direction: column;
+  gap: var(--space-3);
   min-width: 0;
+  flex: 1 1 0;
   flex: 1 1 auto;
 }
 
@@ -88,18 +91,19 @@
   max-width: 62ch;
 }
 
-/* Where you are in it, and what you can do. Never narrower than its progress bar wants. */
-.heroSide {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  flex: 1 1 18rem;
-  min-width: 0;
-  max-width: 30rem;
-}
-
 .title {
   font-size: var(--text-2xl);
+  overflow-wrap: anywhere;
+  /* Room for the prev/next pair pinned in the corner, so a long title wraps before it reaches
+     them instead of running underneath. */
+  padding-inline-end: 6rem;
+}
+
+/* The second name for the same show, right under the first. */
+.originalTitle {
+  margin-block-start: calc(var(--space-2) * -1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -137,20 +141,8 @@
   text-decoration: none;
 }
 
-.counts {
-  font-size: var(--text-sm);
-  color: var(--text);
-  font-weight: var(--weight-medium);
-}
-
 /* No cap of its own any more: the column it sits in is the cap, so the bar, the counts and the
    buttons all end on the same line instead of at three different widths. */
-.progress {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 .progressLabel {
   font-size: var(--text-xs);
   color: var(--text-muted);
@@ -242,6 +234,24 @@
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+}
+
+/* The progress, on the episode heading's own line. */
+.episodeProgress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.episodeProgress > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.missing {
+  color: var(--warning, var(--text-muted));
 }
 
 .blockHeader {

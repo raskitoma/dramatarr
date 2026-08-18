@@ -15,15 +15,20 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'wouter'
 
 import { adminKeys, dramadexPerson } from '@/api/admin'
+import { ApiRequestError } from '@/api/client'
+import { useCreateRequest } from '@/api/requests'
 import { Badge } from '@/components/Badge'
+import { Button } from '@/components/Button'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { Poster } from '@/components/Poster'
 import { Spinner } from '@/components/Spinner'
+import { useToast } from '@/components/Toast'
 import { ExternalLinkIcon } from '@/components/icons'
 import { initialsOf } from '@/lib/format'
 
@@ -54,6 +59,10 @@ export function PersonPage() {
   if (query.isError) {
     return <ErrorState error={query.error} onRetry={() => void query.refetch()} />
   }
+
+  const create = useCreateRequest()
+  const toast = useToast()
+  const [asking, setAsking] = useState<number | null>(null)
 
   const person = query.data
   const owned = person.credits.filter((credit) => credit.inLibrary)
@@ -124,14 +133,58 @@ export function PersonPage() {
                   {[credit.year, credit.studio].filter(Boolean).join(' · ')}
                 </p>
                 <div className={styles.cardActions}>
-                  {/* Straight to the wishlist with the title filled in — the request screen
-                      searches the same index, so it will find exactly this row. */}
-                  <Link
-                    href={`/requests?q=${encodeURIComponent(credit.title)}`}
-                    className={styles.request}
+                  {/* Asks, here, in one tap.
+                      It used to be a link to `/requests?q=<title>` — and that page has never
+                      read `?q=`, so it landed you on an empty wishlist search with nothing
+                      requested. A control labelled "Pedir" that only navigates is worse than no
+                      control: you leave believing you asked. Everything the endpoint needs is
+                      already on this card. */}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={create.isPending && asking === credit.id}
+                    onClick={() => {
+                      setAsking(credit.id)
+                      create.mutate(
+                        {
+                          title: credit.title,
+                          year: credit.year,
+                          posterUrl: credit.posterUrl,
+                          sourceUrl: credit.watchUrl,
+                        },
+                        {
+                          onSuccess: (row) =>
+                            toast.show(
+                              row.alreadyExisted
+                                ? t('requests.alreadyAsked', { title: credit.title })
+                                : t('requests.asked', { title: credit.title }),
+                              row.alreadyExisted ? 'info' : 'success',
+                            ),
+                          onError: (error) => {
+                            // The one refusal that is good news, and it deserves its own
+                            // sentence rather than the generic banner.
+                            const code =
+                              error instanceof ApiRequestError ? error.code : ''
+                            if (code === 'REQUEST_ALREADY_IN_LIBRARY') {
+                              toast.show(
+                                t('requests.alreadyInLibrary', { title: credit.title }),
+                                'info',
+                              )
+                              return
+                            }
+                            toast.show(
+                              code
+                                ? t(`errors.${code}`, { defaultValue: t('errors.generic') })
+                                : t('errors.generic'),
+                              'error',
+                            )
+                          },
+                        },
+                      )
+                    }}
                   >
                     {t('requests.ask')}
-                  </Link>
+                  </Button>
                   {credit.watchUrl ? (
                     <a
                       className={styles.watch}

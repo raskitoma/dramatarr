@@ -158,9 +158,17 @@
  */
 @media (min-width: 560px) {
   .header {
-    flex-direction: row;
+    /* Portrait on the trailing edge, name and biography leading. Reading order stays name →
+       credits → biography, because that is the order the markup is in; only the picture moves.
+       `row-reverse` rather than reordering the DOM, so a screen reader is unaffected. */
+    flex-direction: row-reverse;
     align-items: flex-start;
+    justify-content: space-between;
     gap: var(--space-5);
+  }
+
+  .headerText {
+    flex: 1 1 auto;
   }
 }
 

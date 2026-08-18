@@ -486,46 +486,14 @@ def hit_from(
 # --- The refresh job ------------------------------------------------------------------------
 
 
-def _needs_poster(series: Any) -> bool:
-    """Whether this refresh should fetch DramaDex's key art for the series.
+def _keeps_its_own_artwork(series: Any) -> bool:
+    """True when this series' picture is somebody's explicit choice, not the indexer's.
 
-    Two reasons to say yes, and the second is the one the owner reported.
-
-    **There is no poster a browser could load.** Asked of the filesystem rather than of the
-    column, because those two disagree in a way that shows up on screen — a wiped image cache,
-    a restore that missed `DATA_PATH`, one failed write. `images.poster_is_loadable` knows the
-    three shapes the column holds and checks each the right way.
-
-    **The poster is the wishlist thumbnail.** A series promoted from a request inherits the
-    picture the request card was showing, which is whatever illustrated the *ask* — and it then
-    outlived its purpose, because the row now has a real binding to an index that holds the
-    real key art. "Tampoco al usar dramadex utiliza la imagen que tiene" is exactly this: the
-    indexer's poster was never reaching the series, because the placeholder in the column was
-    loading fine and nothing asked whether it was the right picture.
-
-    What is deliberately **not** replaced is artwork an admin chose. That path sets
-    `metadata_locked` and stores under the series' own stem, and overruling somebody's explicit
-    choice on a schedule is how a feature stops being used.
+    Choosing artwork in the picker sets `metadata_locked` and stores the file under the series'
+    own stem. Overruling that on a refresh is how a feature stops being used, so it is the one
+    case a refresh leaves alone.
     """
-    from app.services.images import (
-        dramadex_poster_name,
-        is_request_poster,
-        poster_is_loadable,
-    )
-
-    path = series.poster_path or ""
-    if not poster_is_loadable(path):
-        return True
-    if series.metadata_locked or not is_request_poster(path):
-        return False
-    # Cached under this title's own DramaDex stem? Then it already *is* the indexer's art.
-    # This has to be exact rather than shape-based: key art and wishlist thumbnails share one
-    # directory and one served route, so a path-shaped test calls DramaDex's own poster a
-    # thumbnail and re-downloads it on every single refresh.
-    if series.dramadex_id is None:
-        return False
-    stored = path.rsplit("/", 1)[-1].split(".", 1)[0]
-    return stored != dramadex_poster_name(series.dramadex_id)
+    return bool(series.metadata_locked)
 
 
 async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:
@@ -574,18 +542,26 @@ async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = No
 
     # Artwork last, and never fatally.
     #
-    # The condition is "no usable poster", not "no poster path". A row can carry a path whose
-    # file is not on disk — the image cache is derived data and the database is not — and the
-    # earlier `if not series.poster_path` made that state permanent: the series rendered a
-    # broken image, and the one control that could have repaired it skipped the fetch every
-    # time precisely because the broken path was set.
-    if _needs_poster(series):
+    # **Re-fetched every time**, not only when the poster looks missing. This function runs for
+    # exactly one reason — somebody pressed "Actualizar metadata" — and the whole point of that
+    # button is to go and ask again. The previous rule fetched only when the stored picture was
+    # unloadable or was a wishlist thumbnail, so a title already carrying the indexer's art
+    # could never pick up a newer version, and the owner reported precisely that: the refresh
+    # did not replace the poster.
+    #
+    # It is cheap to be right here. `cache_dramadex_poster` names the file after a digest of the
+    # encoded bytes, so unchanged art resolves to the file already on disk and writes nothing —
+    # and *changed* art gets a new name, which is what makes the browser show it instead of the
+    # copy it already had.
+    #
+    # The one exception is artwork an admin chose, which is theirs.
+    if not _keeps_its_own_artwork(series):
         fetched = await client.poster_bytes(found.id)
         if fetched is not None:
             from app.services.images import cache_dramadex_poster
 
             stored = await cache_dramadex_poster(fetched[0], title_id=found.id)
-            if stored:
+            if stored and stored != series.poster_path:
                 series.poster_path = stored
                 await session.commit()
                 filled.append("poster_path")

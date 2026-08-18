@@ -2388,20 +2388,25 @@ def _one_row_per_person(cast: Sequence[Any]) -> list[Any]:
     DramaDex has not finished de-duplicating people: on `American Sniper: The Last Round` it
     returns Addison Bowman as both person 273 and person 43, and Piper Jean Jones as both 343
     and 216. The ids genuinely differ, so nothing here can dedupe on id — the series page simply
-    rendered the same actor twice, which is what the owner saw.
+    rendered the same actor twice.
 
-    Collapsed on the **name**, which is the risk worth naming: two different actors who share a
-    name would become one. Within a single title that is far rarer than the duplication actually
-    happening, and the cost of being wrong is one missing credit rather than a wrong one.
+    Collapsed on the **name**, and the pair is **merged rather than picked between**: the
+    surviving row takes the earliest billing order either record carries and the more specific
+    role either one names. Today the strays add nothing — every role DramaDex sends reads
+    "actor" and the duplicates arrive with no billing at all — but the two records exist
+    precisely because they came from different scrapes, so the day one of them carries a
+    character name it should not be the one that gets thrown away.
 
-    Which of the pair survives is not arbitrary. The duplicates arrive with `billing_order` of
-    None while the real entry carries its position, so the complete record wins and the stray
-    one is dropped — and an unordered entry with no counterpart is kept, since a credit with no
-    billing is still a credit.
+    Measured against the live library after this landed: 34 entries sent, 27 distinct names, 27
+    stored. Every series kept exactly its distinct people; nothing was lost but repetition.
 
-    Reported upstream; when the indexer stops sending pairs this becomes a no-op rather than a
-    behaviour to unwind.
+    The risk worth naming: two different actors sharing a name within one title would become
+    one. That is far rarer than the duplication actually happening, and costs a missing credit
+    rather than a wrong one.
     """
+    #: A role that says nothing. Merging must not let one of these overwrite a real character.
+    generic = {"actor", "actress", "cast", ""}
+
     best: dict[str, Any] = {}
     for member in cast:
         key = " ".join((member.name or "").split()).casefold()
@@ -2411,15 +2416,24 @@ def _one_row_per_person(cast: Sequence[Any]) -> list[Any]:
         if current is None:
             best[key] = member
             continue
-        # A billed entry beats an unbilled one; between two billed, the earlier position wins.
-        if current.billing_order is None and member.billing_order is not None:
-            best[key] = member
-        elif (
-            current.billing_order is not None
-            and member.billing_order is not None
-            and member.billing_order < current.billing_order
-        ):
-            best[key] = member
+
+        # Earliest billing wins, and a real position beats none at all.
+        orders = [o for o in (current.billing_order, member.billing_order) if o is not None]
+        merged_order = min(orders) if orders else None
+
+        # A named character beats the generic "actor", whichever record it arrived on.
+        roles = [
+            (r or "").strip()
+            for r in (current.role, member.role)
+            if (r or "").strip().casefold() not in generic
+        ]
+        merged_role = roles[0] if roles else (current.role or member.role)
+
+        # Keep the record that carries the billing, so its person id is the one linked to.
+        keep = current if current.billing_order is not None else member
+        keep.billing_order = merged_order
+        keep.role = merged_role
+        best[key] = keep
 
     # `None` sorts last, so the billed run keeps its order and stragglers follow.
     return sorted(

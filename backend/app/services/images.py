@@ -1154,6 +1154,7 @@ __all__ = [
     "cache_request_poster",
     "cached_file",
     "dramadex_poster_name",
+    "is_dramadex_poster",
     "poster_is_loadable",
     "is_request_poster",
     "request_poster_url",
@@ -1162,40 +1163,50 @@ __all__ = [
 
 
 def dramadex_poster_name(title_id: int) -> str:
-    """The cache stem `cache_dramadex_poster` stores a title's key art under.
+    """The filename **prefix** a title's key art is stored under.
 
-    Exposed because "is this poster the indexer's art for *this* title?" cannot be answered
-    from the path. DramaDex key art and wishlist thumbnails share one directory and one served
-    route, so they are indistinguishable by shape — the stem is the only thing that tells them
-    apart, and getting this wrong in either direction is a real bug: treat key art as a
-    thumbnail and every refresh re-downloads it forever, treat a thumbnail as key art and the
-    indexer's picture never arrives.
+    Exposed because "is this poster the indexer's art for *this* title?" cannot be answered from
+    the path. DramaDex key art and wishlist thumbnails share one directory and one served route,
+    so they are indistinguishable by shape — the prefix is the only thing that tells them apart,
+    and getting it wrong in either direction is a real bug: treat key art as a thumbnail and
+    every refresh re-downloads it forever, treat a thumbnail as key art and the indexer's
+    picture never arrives.
     """
     return _poster_stem(f"dramadex:{int(title_id)}")
+
+
+def is_dramadex_poster(value: str | None, title_id: int | None) -> bool:
+    """Whether a stored `poster_path` is the indexer's art for that particular title."""
+    if not value or title_id is None:
+        return False
+    name = value.rsplit("/", 1)[-1]
+    prefix = dramadex_poster_name(title_id)
+    return name == prefix or name.startswith(f"{prefix}.") or name.startswith(f"{prefix}-")
 
 
 async def cache_dramadex_poster(raw: bytes, *, title_id: int) -> str | None:
     """Store key art fetched from DramaDex. Returns its served URL, or None.
 
-    A separate entry point from `cache_request_poster` because DramaDex's poster route needs
-    the API key in a header — the bytes are already in hand by the time they get here, so this
-    takes them rather than a URL it could not fetch.
+    A separate entry point from `cache_request_poster` because DramaDex's poster route needs the
+    API key in a header — the bytes are already in hand by the time they get here, so this takes
+    them rather than a URL it could not fetch.
 
-    Keyed by title id rather than by URL: DramaDex serves every poster from the same path per
-    title and re-encodes in place when a source rotates its art, so the URL is not a content
-    key and hashing it would pin the first version forever.
+    **The filename carries the title id and a digest of the bytes**, and the second half is not
+    decoration. Keying on the title alone gave one filename per title, so a refresh that fetched
+    genuinely new art wrote it to the same path and served it at the same URL — and every
+    browser that had already seen the old picture went on showing it. The poster was replaced on
+    disk and unchanged on screen, which is exactly what the owner reported when a refresh
+    "didn't replace the poster". Keying on the bytes alone would lose the ability to tell this
+    title's art from a wishlist thumbnail. Both, then.
+
+    Art that has not changed re-uses its file rather than rewriting it, so a refresh on a title
+    nobody has retouched costs one encode and no write.
 
     None on every failure, like its sibling: a card with no picture is still a card, and a
     poster that will not decode must not turn a working metadata fill into an error.
     """
     if not raw:
         return None
-
-    stem = dramadex_poster_name(title_id)
-    directory = _requests_dir()
-    existing = await asyncio.to_thread(_find_existing, directory, stem)
-    if existing is not None:
-        return request_poster_url(existing.name)
 
     try:
         encoded, suffix = await reencode(
@@ -1208,6 +1219,11 @@ async def cache_dramadex_poster(raw: bytes, *, title_id: int) -> str | None:
         log.warning("dramadex poster failed for title %s", title_id, exc_info=True)
         return None
 
-    dest = directory / f"{stem}{suffix}"
-    await asyncio.to_thread(_write_atomic, dest, encoded)
+    # Digest the *encoded* bytes, not the source: two source encodings of one picture should
+    # land on one file, and what is served is what was encoded.
+    digest = hashlib.sha256(encoded).hexdigest()[:12]
+    directory = _requests_dir()
+    dest = directory / f"{dramadex_poster_name(title_id)}-{digest}{suffix}"
+    if not await asyncio.to_thread(lambda: dest.is_file() and dest.stat().st_size > 0):
+        await asyncio.to_thread(_write_atomic, dest, encoded)
     return request_poster_url(dest.name)
