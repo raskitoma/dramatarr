@@ -125,6 +125,13 @@ function ResumeCard({ item }: { item: ContinueWatchingItem }) {
   const label = t('series.episodeLabel', episodeLabelParts(episode))
   const title = episode.title ?? t('series.episodeNumber', { number: episode.episodeNumber })
 
+  /* Two different rows share this component. `continue_watching` falls back to "the next
+     episode never finished", which arrives at 0 % with no resume point — so the arithmetic
+     below produced the whole runtime and the copy announced "quedan 2min 20s" for an episode
+     nobody had opened. The 0 % bar does not give it away either: a genuine resume in a
+     72-second episode sits at 1–2 %. */
+  const started = episode.percent > 0 || episode.resumePositionSeconds !== null
+
   /* Time left is the useful number when deciding what to finish tonight. Position is
      authoritative when the server offered a resume point; otherwise derive it from percent. */
   const remainingSeconds =
@@ -150,11 +157,20 @@ function ResumeCard({ item }: { item: ContinueWatchingItem }) {
           <span className={styles.resumeCode}>{label}</span>
           <span className={styles.resumeTitle}>{title}</span>
         </span>
-        <ProgressBar percent={episode.percent} tone="accent" size="sm" label={t('series.inProgress')} />
+        <ProgressBar
+          percent={episode.percent}
+          tone="accent"
+          size="sm"
+          label={started ? t('series.inProgress') : t('series.notStarted')}
+        />
         <span className={styles.resumeRemaining}>
-          {remainingSeconds !== null
-            ? t('time.remaining', { time: formatDuration(remainingSeconds) })
-            : t('series.percentWatched', { percent: Math.round(episode.percent) })}
+          {remainingSeconds === null
+            ? t('series.percentWatched', { percent: Math.round(episode.percent) })
+            : started
+              ? t('time.remaining', { time: formatDuration(remainingSeconds) })
+              : /* Its whole length, said as a length. "quedan" is a claim about where you
+                   left off, and there is no such place. */
+                t('time.runtime', { time: formatDuration(remainingSeconds) })}
         </span>
       </Link>
     </li>

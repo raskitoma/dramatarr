@@ -60,6 +60,7 @@ function candidate(overrides: Partial<RequestCandidate> = {}): RequestCandidate 
     provider: 'themoviedb.org',
     snippet: 'Un drama corto',
     matchedPerson: '',
+    matchedByCast: false,
     ids: { tmdbId: 1396, tmdbKind: 'tv' },
     inLibrary: false,
     inLibrarySlug: null,

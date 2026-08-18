@@ -169,9 +169,15 @@ def _aggregate_select(user_id: str) -> Select[Any]:
             func.coalesce(func.sum(case((_present_file(), 1), else_=0)), 0).label(
                 "available_count"
             ),
-            func.coalesce(func.sum(case((WatchProgress.completed.is_(True), 1), else_=0)), 0).label(
-                "watched_count"
-            ),
+            # Same gate as `_progress_from_pairs`: a completed episode whose file has gone
+            # missing is not one of the available ones, and counting it there makes the card
+            # claim more watched than it has.
+            func.coalesce(
+                func.sum(
+                    case((and_(_present_file(), WatchProgress.completed.is_(True)), 1), else_=0)
+                ),
+                0,
+            ).label("watched_count"),
             func.max(WatchProgress.last_played_at).label("last_played_at"),
         )
         .select_from(Episode)
@@ -456,7 +462,13 @@ def _progress_from_pairs(
     for episode, progress in pairs:
         is_available = episode.is_available
         available += 1 if is_available else 0
-        if progress is not None and progress.completed:
+        # Gated on availability, so the numerator can never outrun its own denominator. A file
+        # leaving the NAS plus a rescan flips the status and never touches WatchProgress, which
+        # produced "62 de 61 vistos" with the bar pinned at 100 % — and it persists until an
+        # admin runs cleanup by hand. `watch.py` already skips unavailable episodes when marking
+        # a whole series for exactly this reason; the missing-file path broke the invariant from
+        # the other side.
+        if is_available and progress is not None and progress.completed:
             watched += 1
         if (
             is_available
@@ -757,10 +769,7 @@ async def series_neighbours(
     ).first()
     next_row = (
         await session.execute(
-            select(Series.slug, Series.title)
-            .where(after())
-            .order_by(first, second, third)
-            .limit(1)
+            select(Series.slug, Series.title).where(after()).order_by(first, second, third).limit(1)
         )
     ).first()
 
@@ -824,9 +833,7 @@ async def series_detail(session: AsyncSession, series: Series, user_id: str) -> 
             for member in series.cast
         ],
         links=[
-            SeriesLinkOut(
-                studio_key=link.studio_key, studio_name=link.studio_name, url=link.url
-            )
+            SeriesLinkOut(studio_key=link.studio_key, studio_name=link.studio_name, url=link.url)
             for link in series.links
         ],
         library_path=series.library_path,
@@ -2630,6 +2637,13 @@ async def plan_dramadex_title(
                 select(func.count(func.distinct(Episode.id)))
                 .select_from(Episode)
                 .join(MediaFile, MediaFile.episode_id == Episode.id)
+                # PRESENT only. Without it this counts episodes whose file the scanner has
+                # already marked missing, so the sentence "DramaDex dice 40 y en el NAS hay 62"
+                # overstates the NAS — and the same query gates the write, silently refusing a
+                # correct declared count on a number that is too big. The frontend's rule for
+                # the same question (`declaredIsPlausible`) is present-only, so these had to
+                # agree. Both copies must stay identical or the preview and the writer diverge.
+                .where(MediaFile.status == MediaStatus.PRESENT)
                 .where(Episode.series_id == series.id)
             )
         ).scalar_one()
@@ -2690,9 +2704,7 @@ async def plan_dramadex_title(
             )
         ).scalars()
     )
-    incoming_links = sorted(
-        {link.name for link in found.studios if link.is_watchable}
-    )
+    incoming_links = sorted({link.name for link in found.studios if link.is_watchable})
     if incoming_links:
         rows.append(
             FieldChange(
@@ -2795,11 +2807,7 @@ async def apply_dramadex_title(
     take_overview = (
         wanted("overview")
         and bool(found.synopsis)
-        and (
-            not series.overview
-            or (only is not None)
-            or (overwrite and overview_is_ours)
-        )
+        and (not series.overview or (only is not None) or (overwrite and overview_is_ours))
     )
     if take_overview:
         if series.overview != found.synopsis:
@@ -2822,6 +2830,13 @@ async def apply_dramadex_title(
                 select(func.count(func.distinct(Episode.id)))
                 .select_from(Episode)
                 .join(MediaFile, MediaFile.episode_id == Episode.id)
+                # PRESENT only. Without it this counts episodes whose file the scanner has
+                # already marked missing, so the sentence "DramaDex dice 40 y en el NAS hay 62"
+                # overstates the NAS — and the same query gates the write, silently refusing a
+                # correct declared count on a number that is too big. The frontend's rule for
+                # the same question (`declaredIsPlausible`) is present-only, so these had to
+                # agree. Both copies must stay identical or the preview and the writer diverge.
+                .where(MediaFile.status == MediaStatus.PRESENT)
                 .where(Episode.series_id == series.id)
             )
         ).scalar_one()

@@ -112,6 +112,12 @@ export function RequestsPage() {
 
   /** True once the query has been answered and there is genuinely nothing to show. */
   const emptyAnswer = active && !search.isFetching && !search.isError && results.length === 0
+  /* Configured but nobody answered. `providers` names who actually replied, so an empty list
+     beside a configured indexer is an outage — a dead container, a rotated key, a 5xx. It used
+     to render as "no encontramos nada, prueba con otra grafía", which blames the member's
+     spelling for a title the household may already own. */
+  const indexerSilent = emptyAnswer && (search.data?.configured ?? false) &&
+    (search.data?.providers.length ?? 0) === 0
 
   const ask = (body: Parameters<typeof create.mutate>[0], label: string) => {
     create.mutate(body, {
@@ -210,7 +216,12 @@ export function RequestsPage() {
           </ul>
         ) : null}
 
-        {emptyAnswer ? (
+        {indexerSilent ? (
+          <EmptyState
+            title={t('requests.indexerSilent')}
+            description={t('requests.indexerSilentHint')}
+          />
+        ) : emptyAnswer ? (
           <EmptyState
             title={t('requests.noResults', { query })}
             description={t('requests.noResultsHint')}
@@ -314,10 +325,15 @@ function CandidateCard({ candidate, busy, onAsk }: CandidateCardProps) {
 
         {/* A card whose title resembles nothing that was typed is noise unless it says why it
             is here. The indexer was asked by person as well as by title, and this is the only
-            place that difference is visible. */}
-        {candidate.matchedPerson ? (
+            place that difference is visible. It names the actor when the query resolved to one
+            person, and says only that the cast matched when it resolved to several — the old
+            version echoed the search box back, so twelve cards read "Reparto: «herr»" when the
+            actor was Marc Herrmann. */}
+        {candidate.matchedByCast ? (
           <p className={styles.matchedPerson}>
-            {t('requests.matchedCast', { name: candidate.matchedPerson })}
+            {candidate.matchedPerson
+              ? t('requests.matchedCast', { name: candidate.matchedPerson })
+              : t('requests.matchedCastUnnamed')}
           </p>
         ) : null}
 

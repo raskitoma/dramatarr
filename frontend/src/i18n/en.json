@@ -122,7 +122,13 @@
     "seriesSection": "Series",
     "episodesSection": "Episodes",
     "tookMs": "{{ms}} ms",
+    "seriesCount": "{{count}} series",
+    "seriesCount_other": "{{count}} series",
+    "episodeCount": "{{count}} episode",
+    "episodeCount_other": "{{count}} episodes",
     "searchAll": "Search “{{query}}”",
+    "suggestionCount": "{{count}} suggestion",
+    "suggestionCount_other": "{{count}} suggestions",
     "suggestions": "Suggestions",
     "close": "Close search",
     "suggestionsError": "We couldn’t load suggestions."
@@ -136,6 +142,8 @@
     "noProviders": "DramaDex is not connected yet, so we can't show you results. You can still request a series by typing its title below.",
     "noResults": "Nothing found for “{{query}}”.",
     "noResultsHint": "Try another spelling, or request it by title below.",
+    "indexerSilent": "We could not reach the indexer.",
+    "indexerSilentHint": "DramaDex is configured but did not answer. You can still ask for the title by name below.",
     "ask": "Request",
     "asked": "Requested “{{title}}”.",
     "alreadyAsked": "“{{title}}” was already on your list.",
@@ -143,6 +151,7 @@
     "inLibrary": "Already here",
     "openSource": "Open on {{provider}}",
     "matchedCast": "Cast: “{{name}}”",
+    "matchedCastUnnamed": "Matched by cast",
     "byNameTitle": "Can't find it?",
     "byNameHint": "Request it anyway with the title you typed: “{{query}}”.",
     "askByName": "Request by title",
@@ -209,6 +218,7 @@
     "episodeNumber": "Episode {{number}}",
     "watched": "Watched",
     "inProgress": "In progress",
+    "notStarted": "Not started",
     "percentWatched": "{{percent}}% watched",
     "percentShort": "{{percent}}%",
     "playedTimes": "Watched {{count}} time",
@@ -1004,7 +1014,8 @@
     "hoursAgo_other": "{{count}} hours ago",
     "daysAgo": "{{count}} day ago",
     "daysAgo_other": "{{count}} days ago",
-    "remaining": "{{time}} left"
+    "remaining": "{{time}} left",
+    "runtime": "{{time}} long"
   },
   "person": {
     "creditCount": "{{count}} credit",

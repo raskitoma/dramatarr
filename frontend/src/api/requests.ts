@@ -59,9 +59,12 @@ export interface RequestCandidate {
   provider: string
   /** The engine's extract. Display only; never stored on the request. */
   snippet: string
-  /** Set when the card is here because of somebody in the cast rather than the title. Empty
-   *  for a title match, which is what lets the card say why it is on screen. */
+  /** The actor's real name, when the query resolved to exactly one person. Empty when several
+   *  matched — the indexer's `?person=` never says which one a title was, so naming one would
+   *  be a guess. */
   matchedPerson: string
+  /** True whenever the cast search reached this card, named or not. */
+  matchedByCast: boolean
   ids: RequestIds
   inLibrary: boolean
   inLibrarySlug: string | null

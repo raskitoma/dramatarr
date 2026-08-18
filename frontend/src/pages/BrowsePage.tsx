@@ -69,6 +69,15 @@ export function BrowsePage() {
 
   const genres = useGenres()
   const years = useYears()
+
+  /* Both facet endpoints tally the whole `series` table — no q, no sibling filter, no
+     availableOnly — so a count is only true while it is the only thing narrowing the grid.
+     With two filters active, 23 of this catalogue's 45 genre×year pairs put a non-zero count
+     above an empty grid. Being right when alone is what teaches the reader to trust it, so
+     the number goes away rather than becoming a number that is sometimes wrong. */
+  const narrowed = [genre, status, year ? String(year) : '', availableOnly ? '1' : ''].filter(
+    Boolean,
+  ).length > 1
   const list = useSeriesList({
     genre: genre || undefined,
     status,
@@ -109,7 +118,7 @@ export function BrowsePage() {
             <option value="">{t('common.all')}</option>
             {(genres.data ?? []).map((facet) => (
               <option key={facet.genre} value={facet.genre}>
-                {`${facet.genre} (${facet.count})`}
+                {narrowed ? facet.genre : `${facet.genre} (${facet.count})`}
               </option>
             ))}
           </Select>
@@ -124,7 +133,7 @@ export function BrowsePage() {
             <option value="">{t('common.all')}</option>
             {(years.data ?? []).map((facet) => (
               <option key={facet.year} value={String(facet.year)}>
-                {`${facet.year} (${facet.count})`}
+                {narrowed ? String(facet.year) : `${facet.year} (${facet.count})`}
               </option>
             ))}
           </Select>

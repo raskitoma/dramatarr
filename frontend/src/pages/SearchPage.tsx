@@ -132,7 +132,10 @@ export function SearchPage() {
   const data = active ? results.data : undefined
   const seriesHits = data?.series ?? []
   const episodeHits = data?.episodes ?? []
-  const total = seriesHits.length + episodeHits.length
+  /* Two populations, counted separately and named. Added together they were a third number
+     that counts nothing: an episode hit belongs to a series that is nearly always already on
+     screen, so "24 resultados" appeared over a library of nineteen. */
+  const anyHits = seriesHits.length > 0 || episodeHits.length > 0
 
   return (
     <div className={styles.page}>
@@ -160,9 +163,13 @@ export function SearchPage() {
             onChange={(event) => update({ genre: event.target.value })}
           >
             <option value="">{t('common.all')}</option>
+            {/* No count. These tally the whole catalogue, not this query — "Romance (5)" over
+                "no encontramos nada para «genius»" promised five matches being withheld. The
+                number is only meaningful next to an unfiltered list, which Explorar is and
+                this is not. */}
             {(genres.data ?? []).map((facet) => (
               <option key={facet.genre} value={facet.genre}>
-                {`${facet.genre} (${facet.count})`}
+                {facet.genre}
               </option>
             ))}
           </Select>
@@ -177,7 +184,7 @@ export function SearchPage() {
             <option value="">{t('common.all')}</option>
             {(years.data ?? []).map((facet) => (
               <option key={facet.year} value={String(facet.year)}>
-                {`${facet.year} (${facet.count})`}
+                {String(facet.year)}
               </option>
             ))}
           </Select>
@@ -213,7 +220,10 @@ export function SearchPage() {
           <>
             <span>{t('search.resultsFor', { query: data.query || query })}</span>
             <span className={styles.statusMeta}>
-              {t('common.results', { count: total })}
+              {t('search.seriesCount', { count: seriesHits.length })}
+              {episodeHits.length > 0
+                ? ` · ${t('search.episodeCount', { count: episodeHits.length })}`
+                : ''}
               {' · '}
               {t('search.tookMs', { ms: Math.round(data.tookMs) })}
             </span>
@@ -227,7 +237,7 @@ export function SearchPage() {
         <div className={styles.centered}>
           <Spinner size="lg" label={t('common.loading')} />
         </div>
-      ) : active && data && total === 0 ? (
+      ) : active && data && !anyHits ? (
         <EmptyState
           title={t('search.noResults', { query })}
           description={t('search.noResultsHint')}

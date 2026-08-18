@@ -122,7 +122,13 @@
     "seriesSection": "Series",
     "episodesSection": "Episodios",
     "tookMs": "{{ms}} ms",
+    "seriesCount": "{{count}} serie",
+    "seriesCount_other": "{{count}} series",
+    "episodeCount": "{{count}} episodio",
+    "episodeCount_other": "{{count}} episodios",
     "searchAll": "Buscar «{{query}}»",
+    "suggestionCount": "{{count}} sugerencia",
+    "suggestionCount_other": "{{count}} sugerencias",
     "suggestions": "Sugerencias",
     "close": "Cerrar búsqueda",
     "suggestionsError": "No pudimos cargar las sugerencias."
@@ -136,6 +142,8 @@
     "noProviders": "DramaDex todavía no está conectado, así que no podemos mostrarte resultados. Igual puedes pedir una serie escribiendo su título abajo.",
     "noResults": "No encontramos nada para «{{query}}».",
     "noResultsHint": "Prueba con otra grafía, o pídela por título abajo.",
+    "indexerSilent": "No pudimos consultar el indexador.",
+    "indexerSilentHint": "DramaDex está configurado pero no respondió. Puedes pedir el título por nombre aquí abajo.",
     "ask": "Pedir",
     "asked": "Pedimos «{{title}}».",
     "alreadyAsked": "«{{title}}» ya estaba en tu lista.",
@@ -143,6 +151,7 @@
     "inLibrary": "Ya la tenemos",
     "openSource": "Abrir en {{provider}}",
     "matchedCast": "Reparto: «{{name}}»",
+    "matchedCastUnnamed": "Coincide por reparto",
     "byNameTitle": "¿No la encontrás?",
     "byNameHint": "Pídela igual con el título que escribiste: «{{query}}».",
     "askByName": "Pedir por título",
@@ -209,6 +218,7 @@
     "episodeNumber": "Episodio {{number}}",
     "watched": "Visto",
     "inProgress": "En curso",
+    "notStarted": "Sin empezar",
     "percentWatched": "{{percent}} % visto",
     "percentShort": "{{percent}} %",
     "playedTimes": "Visto {{count}} vez",
@@ -1004,7 +1014,8 @@
     "hoursAgo_other": "hace {{count}} horas",
     "daysAgo": "hace {{count}} día",
     "daysAgo_other": "hace {{count}} días",
-    "remaining": "quedan {{time}}"
+    "remaining": "quedan {{time}}",
+    "runtime": "dura {{time}}"
   },
   "person": {
     "creditCount": "{{count}} crédito",

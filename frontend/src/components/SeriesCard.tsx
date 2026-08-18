@@ -5,6 +5,7 @@ import { Link } from 'wouter'
 
 import type { SeriesSummary } from '@/api/types'
 import { Poster } from '@/components/Poster'
+import { declaredIsPlausible } from '@/lib/format'
 
 import styles from './SeriesCard.module.css'
 
@@ -18,8 +19,19 @@ interface SeriesCardProps {
 export function SeriesCard({ series, note, size = 'md' }: SeriesCardProps) {
   const { t } = useTranslation()
 
+  /* Finished means finished, which needs both numbers on the payload rather than the nearer
+     one. Watching every file the library holds is not the same as watching the series when the
+     indexer knows of one more — and that is the ordinary case here, not the exotic one: twelve
+     of nineteen series tip into it the moment their held files are watched. The card used to
+     print a green tick and "Visto" on a title whose own page said an episode was missing, which
+     is the same contradiction one screen earlier with the disclosure removed. */
+  const held = declaredIsPlausible(series.availableEpisodeCount, series.declaredEpisodeCount)
+    ? series.declaredEpisodeCount
+    : series.availableEpisodeCount
   const fullyWatched =
-    series.availableEpisodeCount > 0 && series.watchedEpisodeCount >= series.availableEpisodeCount
+    series.availableEpisodeCount > 0 &&
+    series.watchedEpisodeCount >= series.availableEpisodeCount &&
+    series.availableEpisodeCount >= held
 
   return (
     <article className={styles.card}>
@@ -40,7 +52,17 @@ export function SeriesCard({ series, note, size = 'md' }: SeriesCardProps) {
         </span>
         <span className={styles.meta}>
           {series.year !== null ? <span>{series.year}</span> : null}
-          <span>{t('series.availableCount', { count: series.availableEpisodeCount })}</span>
+          {/* When the indexer knows of more than the library holds, the card says both numbers
+              — the same sentence the series page shows — instead of a bare total that reads as
+              the whole run. */}
+          <span>
+            {series.availableEpisodeCount < held
+              ? t('series.availableOf', {
+                  available: series.availableEpisodeCount,
+                  declared: held,
+                })
+              : t('series.availableCount', { count: series.availableEpisodeCount })}
+          </span>
         </span>
         {note ? <span className={styles.note}>{note}</span> : null}
       </Link>

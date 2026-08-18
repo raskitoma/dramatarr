@@ -364,6 +364,10 @@ export interface SearchResults {
   query: string
   series: SeriesHit[]
   episodes: EpisodeHit[]
+  /** Series that matched, which is not `series.length` once `limit` truncates the page — and
+   *  is emphatically not `series.length + episodes.length`, because an episode hit belongs to
+   *  a series that is usually already on screen. It was on the wire all along. */
+  total: number
   tookMs: number
 }
 

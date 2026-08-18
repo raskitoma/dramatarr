@@ -185,7 +185,12 @@ export function HeaderSearch({ open, onOpenChange }: HeaderSearchProps) {
     : search.isError
       ? t('search.suggestionsError')
       : answered
-        ? t('common.results', { count: seriesHits.length + episodeHits.length })
+        ? /* Suggestions, not results — these arrays were already cut to MAX_SERIES and
+             MAX_EPISODES, so "N resultados" here has a ceiling of eight whatever the library
+             holds. A sighted user sees five rows and a "Buscar «x»" escape hatch and is not
+             misled; this live region is the whole output for somebody who cannot, and it was
+             the only place in the app fed a truncated length instead of a real total. */
+          t('search.suggestionCount', { count: seriesHits.length + episodeHits.length })
         : t('common.loading')
 
   return (

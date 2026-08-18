@@ -217,7 +217,9 @@ def _title(raw: Any) -> DramadexTitle | None:
             person_id=int(p["id"]),
             name=str(p.get("name") or "").strip(),
             role=(str(p.get("role")).strip() or None) if p.get("role") else None,
-            billing_order=p.get("billing_order") if isinstance(p.get("billing_order"), int) else None,
+            billing_order=p.get("billing_order")
+            if isinstance(p.get("billing_order"), int)
+            else None,
         )
         for p in raw.get("cast") or []
         if isinstance(p, dict) and isinstance(p.get("id"), int) and p.get("name")
@@ -329,7 +331,9 @@ class DramadexClient:
             return SearchPage()
         items = [t for t in (_title(x) for x in payload.get("items") or []) if t is not None]
         cursor_out = payload.get("next_cursor")
-        return SearchPage(items=items, next_cursor=cursor_out if isinstance(cursor_out, str) else None)
+        return SearchPage(
+            items=items, next_cursor=cursor_out if isinstance(cursor_out, str) else None
+        )
 
     async def title(self, title_id: int) -> DramadexTitle | None:
         return _title(await self._get(f"titles/{int(title_id)}"))
@@ -342,16 +346,32 @@ class DramadexClient:
             id=int(raw["id"]),
             name=str(raw.get("name") or "").strip(),
             bio=(str(raw.get("bio")).strip() or None) if raw.get("bio") else None,
-            external_ids={
-                str(k): str(v) for k, v in (raw.get("external_ids") or {}).items()
-            },
-            titles=tuple(
-                t for t in (_title(x) for x in raw.get("titles") or []) if t is not None
-            ),
+            external_ids={str(k): str(v) for k, v in (raw.get("external_ids") or {}).items()},
+            titles=tuple(t for t in (_title(x) for x in raw.get("titles") or []) if t is not None),
             photo_url=(
                 (str(raw.get("photo_url")).strip() or None) if raw.get("photo_url") else None
             ),
         )
+
+    async def people(self, query: str, *, limit: int = 10) -> tuple[Person, ...]:
+        """Who the indexer knows by that name. Answers a bare list, not a page.
+
+        `?q=` is the parameter that filters; `?name=` is accepted and ignored, which returns
+        the whole roster alphabetically and looks exactly like a match. The rows are shallow —
+        id, name, and sometimes a photo — with no bio and no titles, which is all this is for:
+        turning what somebody typed into whose name it actually was.
+        """
+        raw = await self._get("people", {"q": query.strip(), "limit": max(1, min(limit, 50))})
+        if not isinstance(raw, list):
+            return ()
+        found = []
+        for row in raw:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), int):
+                continue
+            name = str(row.get("name") or "").strip()
+            if name:
+                found.append(Person(id=int(row["id"]), name=name))
+        return tuple(found)
 
     async def genres(self) -> tuple[tuple[str, str], ...]:
         raw = await self._get("genres")
@@ -430,9 +450,7 @@ class DramadexClient:
 def _valid_base_url(value: str) -> str:
     parts = urlsplit(value)
     if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise AppError(
-            "DRAMADEX_BAD_URL", "The DramaDex URL must be http(s) with a host", 400
-        )
+        raise AppError("DRAMADEX_BAD_URL", "The DramaDex URL must be http(s) with a host", 400)
     return value
 
 

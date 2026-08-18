@@ -111,22 +111,28 @@ export function MetadataDialog({ open, onClose, detail, onApplied }: MetadataDia
     return new Set((data?.rows ?? []).filter((row) => row.defaultChecked).map((row) => row.field))
   }, [checked, data])
 
+  /* What the writer will actually accept. `declared_episode_count` below the file count is
+     refused whatever the checkbox says — the row carries `fewerEpisodes` to explain it — so
+     both the button and the toast count from here. The toast already did; the button did not,
+     and offered "Aplicar 8 cambios" for seven, which is the same defect the toast was fixed
+     for, forty lines up. */
+  const refused = useMemo(
+    () =>
+      (data?.rows ?? []).filter((row) => row.note === 'fewerEpisodes' && ticks.has(row.field))
+        .length,
+    [data, ticks],
+  )
+  const willWrite = Math.max(0, ticks.size - refused)
+
   const apply = useMutation({
     mutationFn: () =>
       applyDramadex(detail.id, { dramadexId: candidate, fields: [...ticks] }),
     onSuccess: (fresh) => {
       queryClient.setQueryData(adminKeys.seriesDetail(detail.id), fresh)
       void queryClient.invalidateQueries({ queryKey: adminKeys.series() })
-      // Counts what will actually be written, not what is ticked. `declared_episode_count`
-      // below the file count is refused by the writer whatever the checkbox says — the row
-      // carries `fewerEpisodes` to say so — and "actualizamos 2 campos" when one was declined
-      // is the screen asserting something it did not do.
-      const refused = (data?.rows ?? []).filter(
-        (row) => row.note === 'fewerEpisodes' && ticks.has(row.field),
-      ).length
       show(
         t('admin.library.metadataApplied', {
-          count: Math.max(0, ticks.size - refused),
+          count: willWrite,
           title: detail.title,
         }),
         'success',
@@ -179,7 +185,7 @@ export function MetadataDialog({ open, onClose, detail, onApplied }: MetadataDia
               // exactly that case, and disabling here reintroduced it on the client.
               onClick={() => apply.mutate()}
             >
-              {t('admin.library.metadataApply', { count: ticks.size })}
+              {t('admin.library.metadataApply', { count: willWrite })}
             </Button>
           ) : null}
         </>

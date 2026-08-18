@@ -254,7 +254,9 @@ async def _mark_requested(
             card.request_status = status  # type: ignore[assignment]
 
 
-def _candidate_from(found: dramadex.DramadexTitle, *, person: str = "") -> RequestCandidate:
+def _candidate_from(
+    found: dramadex.DramadexTitle, *, person: str = "", by_cast: bool = False
+) -> RequestCandidate:
     watch = next((s for s in found.studios if s.is_watchable), None)
     return RequestCandidate(
         key=f"dramadex:{found.id}",
@@ -269,24 +271,37 @@ def _candidate_from(found: dramadex.DramadexTitle, *, person: str = "") -> Reque
         # safe to store on the request.
         snippet=(found.synopsis or "")[:400],
         matched_person=person,
+        matched_by_cast=by_cast or bool(person),
     )
 
 
 async def _dramadex_page(
     client: dramadex.DramadexClient, limit: int, **params: Any
-) -> list[dramadex.DramadexTitle]:
-    """One call, empty on failure.
+) -> list[dramadex.DramadexTitle] | None:
+    """One call. `None` on failure, which is *not* the same as an empty page.
 
-    Empty rather than raising: a member typing a title should never meet a stack trace because
-    a container is restarting. The reason a search came back empty is reported through
-    `providers`, not through an error.
+    Not an exception, because a member typing a title should never meet a stack trace because a
+    container is restarting. But not `[]` either: that made a dead indexer, a rotated key and a
+    5xx all indistinguishable from "no such show", and the screen then told the member to check
+    their spelling for a title the household already owns.
     """
     try:
         page = await client.search(limit=limit, **params)
     except AppError as exc:
         log.info("dramadex wishlist search failed (%s)", exc.code)
-        return []
+        return None
     return page.items
+
+
+async def _dramadex_people(
+    client: dramadex.DramadexClient, text: str
+) -> tuple[dramadex.Person, ...]:
+    """Who the typed text is the name of, or nothing. Empty on failure, like its siblings."""
+    try:
+        return await client.people(text, limit=5)
+    except AppError as exc:
+        log.info("dramadex people lookup failed (%s)", exc.code)
+        return ()
 
 
 #: The share of a wishlist page that cast matches may claim when there are any. Half, because
@@ -295,7 +310,9 @@ async def _dramadex_page(
 PERSON_SHARE = 2
 
 
-async def _dramadex_search(session: AsyncSession, text: str, limit: int) -> list[RequestCandidate]:
+async def _dramadex_search(
+    session: AsyncSession, text: str, limit: int
+) -> tuple[list[RequestCandidate], bool]:
     """Wishlist cards from the household's own indexer, or an empty list.
 
     Asked **twice**: once as a title and once as a person. DramaDex indexes the cast of ~2300
@@ -310,30 +327,51 @@ async def _dramadex_search(session: AsyncSession, text: str, limit: int) -> list
     """
     client = await dramadex.try_client(session)
     if client is None:
-        return []
+        return [], False
 
-    by_title, by_person = await asyncio.gather(
+    # Three calls, raced. The third is what stops the card lying about whose name it is: the
+    # indexer's `?person=` takes a *partial* name and never says which person it matched, so
+    # echoing the query back printed "Reparto: «herr»" on twelve cards whose actual actor was
+    # Marc Herrmann every time. `GET /people?q=` resolves that, and only when it resolves to
+    # exactly one person is anybody named — with several, the card says it matched the cast and
+    # stops, because attributing one of them per title would be a guess.
+    by_title, by_person, named = await asyncio.gather(
         _dramadex_page(client, limit, query=text),
         _dramadex_page(client, limit, person=text),
+        _dramadex_people(client, text),
     )
+    person_name = named[0].name if len(named) == 1 else ""
+
+    # Answered at all? `try_client` only reads two settings rows — it never opens a socket — so
+    # without this the screen could say "we looked and found nothing" while nothing had been
+    # asked. Either title search reaching the indexer is enough to call it reachable; the name
+    # lookup is not, because an indexer with no `/people` route would read as an outage.
+    reached = by_title is not None or by_person is not None
+    by_title = by_title or []
+    by_person = by_person or []
 
     # A title the *person* search also returned is marked even though the title search reached
     # it first. Measured on "Adam Daniel": seven cards came back by title, five of them his and
     # two coincidental, and without this the two look exactly as relevant as the five.
     confirmed = {found.id for found in by_person}
     titled = [
-        _candidate_from(found, person=text if found.id in confirmed else "") for found in by_title
+        _candidate_from(
+            found,
+            person=person_name if found.id in confirmed else "",
+            by_cast=found.id in confirmed,
+        )
+        for found in by_title
     ]
     seen = {card.key for card in titled}
     credited = [
-        _candidate_from(found, person=text)
+        _candidate_from(found, person=person_name, by_cast=True)
         for found in by_person
         if f"dramadex:{found.id}" not in seen
     ]
 
     # Titles first, but never so many that the cast matches fall off the page entirely.
     room = limit - min(len(credited), limit // PERSON_SHARE)
-    return [*titled[:room], *credited][:limit]
+    return [*titled[:room], *credited][:limit], reached
 
 
 async def search(
@@ -369,7 +407,7 @@ async def search(
     # they are what this screen did before an index existed, and mixing a real record with
     # search-engine guesses gives a member two cards for one show and no way to tell which is
     # the show.
-    dramadex_cards = await _dramadex_search(session, text, limit)
+    dramadex_cards, reached = await _dramadex_search(session, text, limit)
     if dramadex_cards:
         await _mark_in_library(session, dramadex_cards)
         await _mark_requested(session, user.id, dramadex_cards)
@@ -387,10 +425,14 @@ async def search(
     # between them they resolved two of this library's seventeen series, where DramaDex
     # resolves all seventeen. An empty answer is now an honest one, and asking by name is the
     # path that never needed a provider at all.
+    # `providers` names who actually *answered*, not who is configured. An indexer that is set
+    # up but unreachable reports an empty list, which is how the page tells "we asked and there
+    # is nothing" apart from "we could not ask" — the two used to render as the same sentence,
+    # the one that blames the member's spelling.
     connected = await dramadex.try_client(session) is not None
     return RequestSearchResults(
         query=text,
-        providers=["dramadex"] if connected else [],
+        providers=["dramadex"] if reached else [],
         configured=connected,
         results=[],
     )
