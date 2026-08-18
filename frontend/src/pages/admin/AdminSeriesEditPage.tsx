@@ -22,7 +22,6 @@ import {
   getVocabulary,
   patchEpisode,
   patchSeries,
-  refreshSeries,
   type ContentRatingGroup,
   type SeriesPatch,
 } from '@/api/admin'
@@ -36,7 +35,7 @@ import { cx } from '@/components/cx'
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons'
 import ArtworkPicker from '@/components/admin/ArtworkPicker'
 import RenamePanel from '@/components/admin/RenamePanel'
-import DramadexPanel from '@/components/admin/DramadexPanel'
+import MetadataDialog from '@/components/admin/MetadataDialog'
 import { TocLayout } from '@/components/admin/TocLayout'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -284,6 +283,7 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
   const [baseline, setBaseline] = useState<SeriesForm>(EMPTY_FORM)
   const [genreDraft, setGenreDraft] = useState('')
   const [showArtwork, setShowArtwork] = useState(false)
+  const [showMetadata, setShowMetadata] = useState(false)
   const [zoomOpen, setZoomOpen] = useState(false)
   const [leaveTo, setLeaveTo] = useState<string | null>(null)
   const [touched, setTouched] = useState(false)
@@ -342,12 +342,6 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
       queryClient.setQueryData(adminKeys.seriesDetail(seriesId), updated)
       await queryClient.invalidateQueries({ queryKey: adminKeys.series() })
     },
-  })
-
-  const refresh = useMutation({
-    mutationFn: () => refreshSeries(seriesId),
-    onSuccess: () => show(t('admin.library.refreshQueued'), 'success'),
-    onError: () => show(t('errors.generic'), 'error'),
   })
 
   const yearNumber = form.year === '' ? null : Number.parseInt(form.year, 10)
@@ -482,7 +476,10 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
           <p className={styles.path}>{detail.libraryPath}</p>
         </div>
         <div className={styles.headerActions}>
-          <Button onClick={() => refresh.mutate()} loading={refresh.isPending}>
+          {/* Opens the diff. It used to enqueue a job and hand back a toast, so the only
+              account of what changed was the queue log — and the one thing an admin most wants
+              to decide, the poster, was not in it at all. */}
+          <Button onClick={() => setShowMetadata(true)}>
             {t('admin.library.refreshMetadata')}
           </Button>
           <Button onClick={() => setShowArtwork(true)}>{t('admin.library.artworkAction')}</Button>
@@ -546,18 +543,6 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
                 onChange={(event) => setForm({ ...form, overview: event.target.value })}
               />
             </Field>
-            {/* The only finder on this screen. The web-search panel that used to sit beneath
-                it, and the TMDB match dialog above, are gone from the UI: DramaDex now
-                resolves all 17 series in this library where between them they resolved two,
-                and offering three finders invites picking the wrong one. The code behind them
-                is still in the repository — this is a removal from the interface, not a
-                deletion — so the settings that configure them stay meaningful for anyone who
-                needs to go back. */}
-            <DramadexPanel
-              seriesId={detail.id}
-              seriesTitle={detail.title}
-              onApplied={() => setSeed(null)}
-            />
           </div>
 
           <Field label={t('series.year')} htmlFor="series-year" error={yearError}>
@@ -678,8 +663,14 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
           onClose={() => setShowArtwork(false)}
           seriesId={detail.id}
           seriesTitle={detail.title}
+          dramadexId={detail.dramadexId}
+          artworkLocked={detail.artworkLocked}
           onChanged={() => void detailQuery.refetch()}
         />
+      ) : null}
+
+      {showMetadata ? (
+        <MetadataDialog open onClose={() => setShowMetadata(false)} detail={detail} />
       ) : null}
 
       {/* The poster at the size the decision needs. `lg` rather than a bare `<img>` so it

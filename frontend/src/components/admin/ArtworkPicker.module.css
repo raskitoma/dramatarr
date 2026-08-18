@@ -232,3 +232,57 @@
 .fileInput:not(:disabled)::file-selector-button:hover {
   background: var(--surface-sunken);
 }
+
+/* --- Already pinned ------------------------------------------------------------------------- */
+
+.pinned {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  background: var(--accent-soft);
+  border-radius: var(--radius-lg);
+}
+
+/* --- DramaDex's own artwork ------------------------------------------------------------------ */
+
+.sourceLabel {
+  margin-block-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* The bound record's own art, larger than the neighbours': it is the one most likely to be
+   right, so it should not have to be picked out of a grid of equals. */
+.boundArt {
+  display: block;
+  inline-size: min(11rem, 45%);
+  text-align: center;
+  border-radius: var(--radius-lg);
+}
+
+.boundArt:hover .useThis,
+.boundArt:focus-visible .useThis {
+  color: var(--accent);
+}
+
+.useThis {
+  display: block;
+  padding-block-start: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.cardTitle {
+  display: block;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

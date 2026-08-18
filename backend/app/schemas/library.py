@@ -243,6 +243,8 @@ class SeriesDetail(SeriesSummary):
     # Null at each end of the catalogue, and the UI disables rather than hides — a control that
     # vanishes at the last title makes the pair jump.
 
+    #: Set when an admin picked the artwork by hand. Refreshes leave that picture alone.
+    artwork_locked: bool = False
     #: Slug of the title before this one, or null when this is the first.
     previous_series_slug: str | None = None
     #: Its title, so the control can name where it goes instead of saying only "previous".
@@ -808,6 +810,8 @@ class SeriesPatch(APIModel):
     imdb_id: str | None = Field(default=None, max_length=32)
     #: Sent on its own to hand a series back to the metadata jobs.
     metadata_locked: bool | None = None
+    #: Sent on its own to let refreshes change the artwork again.
+    artwork_locked: bool | None = None
 
 
 class SeriesBulkPatch(APIModel):

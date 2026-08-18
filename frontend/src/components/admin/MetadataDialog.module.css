@@ -1,0 +1,231 @@
+/* The metadata dialog: a diff you agree to, not a job you set off. */
+
+.subject {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.screenTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-lg);
+}
+
+.note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* --- The record this is coming from --------------------------------------------------------- */
+
+.source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.sourceMeta {
+  color: var(--text-muted);
+}
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--link-out);
+}
+
+/* --- The rows -------------------------------------------------------------------------------- */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-lg);
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.check {
+  display: inline-flex;
+  /* A 44px target around a 16px control: this checkbox is the whole decision the dialog exists
+     to collect, and it is the smallest thing on the screen. */
+  padding: var(--space-2);
+  margin: calc(var(--space-2) * -1);
+  cursor: pointer;
+}
+
+.rowLabel {
+  font-weight: var(--weight-semibold);
+}
+
+/* Side by side once there is room, stacked on a phone — where two columns of a synopsis are
+   two columns of nothing. */
+.pair {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .pair {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sideLabel {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.text {
+  overflow-wrap: anywhere;
+}
+
+/* Long text is clamped rather than left to grow: a synopsis is the one row that would otherwise
+   push every other row off the screen, and the point of this list is comparison. */
+.longText {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+  font-size: var(--text-sm);
+}
+
+.empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+/* The poster row is bigger than the rest, because it is the one you judge by looking. */
+.imageRow .pair {
+  grid-template-columns: 1fr 1fr;
+}
+
+.imageValue {
+  display: block;
+  inline-size: min(9rem, 40%);
+}
+
+.rowNote {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* --- Picking a different record -------------------------------------------------------------- */
+
+.searchForm {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.searchField {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-lg);
+}
+
+.hitPoster {
+  flex: none;
+  inline-size: 3rem;
+}
+
+.hitBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hitTitle {
+  font-weight: var(--weight-medium);
+}
+
+.hitMeta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.rebind {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}

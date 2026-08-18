@@ -489,6 +489,24 @@ function NavArrow({
               </Badge>
             </p>
 
+            {/* In the card, under the facts they belong with. They were filed in a section of
+                their own below the episode list, under a heading that said "Ficha" — which is
+                a word standing over a row of chips that already say what they are. */}
+            {detail.genres.length > 0 ? (
+              <ul className={styles.genres} aria-label={t('series.genres')}>
+                {detail.genres.map((genre) => (
+                  <li key={genre}>
+                    <Link
+                      href={`/browse?genre=${encodeURIComponent(genre)}`}
+                      className={styles.genre}
+                    >
+                      {genre}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
             {/* The one thing a person reads to decide whether to press play, immediately above
                 the controls that let them. */}
             <div className={styles.overviewBlock}>
@@ -603,28 +621,6 @@ function NavArrow({
             is called, and had to scroll past sixty-four numbered tiles to reach any of it.
             Each section still disappears entirely when it is empty, rather than standing as a
             heading with nothing under it. */}
-        {detail.genres.length > 0 ? (
-        <section className={styles.block} aria-labelledby="series-details">
-          {/* The heading is for screen readers only. On screen "Ficha" was a word standing over
-              a row of genre chips that say what they are — and with the original title moved up
-              beside the main one, it was labelling a single list. */}
-          <h2 className="sr-only" id="series-details">
-            {t('series.details')}
-          </h2>
-
-          {detail.genres.length > 0 ? (
-            <ul className={styles.genres} aria-label={t('series.genres')}>
-              {detail.genres.map((genre) => (
-                <li key={genre}>
-                  <Link href={`/browse?genre=${encodeURIComponent(genre)}`} className={styles.genre}>
-                    {genre}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-        ) : null}
 
         {(detail.cast ?? []).length > 0 ? (
           <section className={styles.block} aria-labelledby="series-cast">

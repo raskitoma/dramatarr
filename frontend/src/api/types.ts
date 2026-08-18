@@ -248,6 +248,8 @@ export interface SeriesDetail extends SeriesSummary, OverviewProvenance {
    * reachable from home, browse, search and the wishlist and the URL is identical in all four.
    * Null at each end — the control disables rather than disappears.
    */
+  /** Set when an admin picked the artwork by hand. Refreshes leave that picture alone. */
+  artworkLocked: boolean
   previousSeriesSlug: string | null
   previousSeriesTitle: string | null
   nextSeriesSlug: string | null

@@ -78,27 +78,6 @@ export interface AdminEpisodeDetail extends EpisodeDetail {
   mediaFile?: AdminMediaFile | null
 }
 
-export interface TmdbSearchResult {
-  tmdbId: number
-  name: string
-  originalName: string | null
-  overview: string | null
-  firstAirDate: string | null
-  year: number | null
-  posterUrl: string | null
-  /**
-   * How many people voted on TMDB. Optional because older builds of the proxy omit it.
-   *
-   * It is on the card because it is the one number that separates the real show from the
-   * fan-made entry with the same title: three votes and 4 000 votes look identical in a list
-   * of names, and picking wrong binds the whole series to the wrong metadata.
-   */
-  voteCount?: number | null
-  voteAverage?: number | null
-  /** BCP-47 of the original production, so a cross-language hit can explain itself. */
-  originalLanguage?: string | null
-}
-
 export interface SeriesPatch {
   title?: string
   originalTitle?: string | null
@@ -110,6 +89,8 @@ export interface SeriesPatch {
   contentRating?: string | null
   /** Sent on its own to hand a series back to the metadata jobs. */
   metadataLocked?: boolean
+  /** Sent on its own to let refreshes change the artwork again. */
+  artworkLocked?: boolean
 }
 
 export interface EpisodePatch {
@@ -477,31 +458,6 @@ export function applyImdbMetadata(
   )
 }
 
-export function matchSeries(id: string, tmdbId: number): Promise<JobRef> {
-  return api.post<JobRef>(`/library/series/${id}/match`, { tmdbId })
-}
-
-/** What forgetting a wrong match actually did. */
-export interface SeriesUnlinked {
-  seriesId: string
-  /** The id that was cleared, so the dialog can say what it had been bound to. */
-  previousTmdbId: number | null
-  /** Always true: an unlink also locks the row, or the next refresh would re-match it. */
-  metadataLocked: boolean
-}
-
-/**
- * Breaks the TMDB link, leaving the metadata that was already fetched in place.
- *
- * Unlinking is not a delete: the titles, overview and images the series already has are what
- * the household sees tonight, and throwing them away to punish a bad match would be worse than
- * the bad match. What it does stop is the next automatic refresh writing that wrong entry back
- * — which is why the server locks the row at the same time, and why the dialog says so.
- */
-export function unlinkSeries(id: string): Promise<SeriesUnlinked> {
-  return api.post<SeriesUnlinked>(`/library/series/${id}/unlink`)
-}
-
 // --- Artwork --------------------------------------------------------------------------------
 
 /** Which slot an image fills. */
@@ -567,317 +523,6 @@ export function assignUnmatched(
   body: { seriesId: string; seasonNumber: number; episodeNumber: number },
 ): Promise<void> {
   return api.post<void>(`/library/unmatched/${fileId}/assign`, body)
-}
-
-/**
- * Proxy TMDB's search.
- *
- * `language` is the search language, not the display one: a Chinese drama is findable by its
- * Chinese title only when TMDB is asked in `zh`, and the household's UI language has nothing to
- * do with which alphabet the admin is typing. Omitted, the server uses its configured default.
- */
-export async function searchTmdb(
-  q: string,
-  year?: number | null,
-  language?: string | null,
-): Promise<TmdbSearchResult[]> {
-  const data = await api.get<TmdbSearchResult[] | { results: TmdbSearchResult[] }>(
-    '/library/tmdb/search',
-    { q, year: year ?? undefined, language: language || undefined },
-  )
-  return Array.isArray(data) ? data : data.results
-}
-
-/** Exactly one of the two ids. IMDb ids keep their `tt` prefix. */
-export interface TmdbLookupParams {
-  tmdbId?: number | null
-  imdbId?: string | null
-}
-
-/**
- * Resolves a series from an id typed straight in, skipping the search entirely.
- *
- * This is the escape hatch for everything search cannot do: a show whose title is ambiguous in
- * every language, a remake that outranks the original, a title TMDB stores under a
- * transliteration nobody would guess. The admin already has the page open — pasting the id is
- * both faster and exact.
- *
- * The server answers with a list (of one, for a TMDB id) so the dialog renders it with the same
- * card it renders search results with. An id that is well-formed but unknown comes back as an
- * empty list, or as a TMDB 404 — both mean "nothing with that id", which is a sentence rather
- * than a red box, so the 404 is folded into the empty list here.
- */
-export async function lookupTmdb(params: TmdbLookupParams): Promise<TmdbSearchResult[]> {
-  try {
-    return await api.get<TmdbSearchResult[]>('/library/tmdb/lookup', {
-      tmdbId: params.tmdbId ?? undefined,
-      imdbId: params.imdbId || undefined,
-    })
-  } catch (error) {
-    const missing =
-      error instanceof ApiRequestError &&
-      (error.code === 'TMDB_NOT_FOUND' || (error.status === 404 && error.code === 'NOT_FOUND'))
-    if (missing) return []
-    throw error
-  }
-}
-
-/**
- * The languages the match dialog offers, as BCP-47 codes TMDB accepts.
- *
- * Labels come from `Intl.DisplayNames` at the call site rather than from the locale files —
- * a language name is data the platform already has in every locale (§ AccountPage).
- */
-export const TMDB_SEARCH_LANGUAGES: readonly string[] = [
-  'es',
-  'en',
-  'ko',
-  'ja',
-  'zh',
-  'pt',
-  'fr',
-  'de',
-  'it',
-  'tr',
-  'th',
-  'hi',
-  'ru',
-  'ar',
-]
-
-// --- Web discovery --------------------------------------------------------------------------
-//
-// TMDB's title search cannot find a short-form Asian drama often enough to be relied on, and the
-// admin is then left holding a folder name. A plain web search does find it — not as prose, but
-// as a *pointer*: the first page of hits is usually the show's TMDB, IMDb, Wikipedia or
-// MyDramaList entry. So this is a way to LOCATE the authoritative record, and nothing else.
-//
-// A search result is `title / url / content / engine`, where `content` is a truncated extract of
-// someone else's page, frequently cut mid-sentence and sometimes carrying navigation furniture.
-// That is exactly good enough for a human choosing between six links and nowhere near good
-// enough to store: an overview comes from TMDB or from Wikipedia, both of which publish
-// structured text meant to be consumed this way. `snippet` is therefore display-only and no code
-// path sends it back.
-
-/** One hit, already reduced to the four things a choice is made on. */
-export interface DiscoveryResult {
-  title: string
-  /** Guaranteed `http(s)` — see `toDiscoveryResult`. */
-  url: string
-  /** The host without `www.`, which is what actually tells the admin whose page this is. */
-  domain: string
-  /**
-   * The engine's extract of the page. **Never stored.** Shown quoted and muted so it cannot be
-   * mistaken for the synopsis the app keeps.
-   */
-  snippet: string
-  /** Which engine of the metasearch found it, when the provider names one. */
-  engine: string | null
-  /**
-   * The ids the server read out of the result's own URL, and the whole point of this list: a row
-   * carrying one resolves through the existing TMDB lookup and binds the series in one action.
-   * Null on a row that is only a lead.
-   */
-  tmdbId: number | null
-  imdbId: string | null
-  /**
-   * The platform that published the page, when its host is one the household configured.
-   *
-   * The one fact a platform result carries that is safe to write into the catalogue. Its
-   * snippet is someone else's prose cut mid-sentence and is never stored; its host, by
-   * contrast, *is* the network — no inference involved. Null on reference databases and on
-   * anything unrecognized, because a wrong network is worse than an empty one.
-   */
-  network: string | null
-}
-
-export interface Discovery {
-  /** What was actually searched for, which may not be what was typed. */
-  query: string
-  /** Which implementation answered — `searxng`, `google_cse`, or `''` for none. */
-  provider: string
-  /**
-   * False when no search provider is set up. Not an error: a fresh install ships this way, and
-   * the panel answers with the one sentence that fixes it instead of an empty list.
-   */
-  configured: boolean
-  /**
-   * True when the query was restricted to the configured platform domains.
-   *
-   * It is the difference between "your platforms have nothing about this" and "the web has
-   * nothing about this", which are two different things to tell an admin. The search no longer
-   * widens itself when the narrow one is empty, so this is how the screen explains an empty
-   * list instead of leaving it looking broken.
-   */
-  narrowed: boolean
-  /**
-   * Engines the instance reported as failing for this query.
-   *
-   * Load-bearing for how an empty list is read. This household ran for days on an instance
-   * where only two of fourteen general engines answered — Google was returning a JavaScript
-   * interstitial that parses as zero results and raises no error — and read the emptiness as
-   * "this content is not on the web". It was not. The instance knew; the app was discarding
-   * the answer.
-   */
-  unresponsiveEngines: string[]
-  results: DiscoveryResult[]
-}
-
-interface WireDiscoveryResult {
-  title?: string | null
-  url?: string | null
-  /** The server calls this `sourceDomain`; `domain` is accepted as the shorter spelling. */
-  sourceDomain?: string | null
-  domain?: string | null
-  /** SearXNG's own name for the extract; `snippet` is what a normalized server would send. */
-  content?: string | null
-  snippet?: string | null
-  engine?: string | null
-  /**
-   * The server groups every identifier a result URL carries under `ids`, because one URL can
-   * hold several and they are read out together. Flat `tmdbId`/`imdbId` are still accepted so
-   * this parser does not depend on which of the two shapes answered.
-   */
-  ids?: {
-    tmdbId?: number | string | null
-    imdbId?: string | null
-  } | null
-  tmdbId?: number | string | null
-  imdbId?: string | null
-  network?: string | null
-}
-
-interface WireDiscovery {
-  query?: string | null
-  provider?: string | null
-  configured?: boolean
-  narrowed?: boolean
-  unresponsiveEngines?: string[]
-  results?: WireDiscoveryResult[]
-}
-
-/** The host a URL points at, minus `www.`, or `''` when it is not a URL at all. */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./i, '').toLowerCase()
-  } catch {
-    return ''
-  }
-}
-
-/**
- * The other half of the trust split the artwork path already draws (§3).
- *
- * The configured SearXNG instance is trusted; what its results *point at* is not, and here the
- * exposure is an href. A `javascript:` or `data:` URL in a result title would run in the admin's
- * session, so a row whose URL is not plain http(s) is dropped rather than rendered inert — it
- * was never a usable lead anyway.
- */
-function isBrowsableUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-/** `tt` + digits, lowercased; anything else is not an IMDb id and must not reach the lookup. */
-function toImdbId(value: unknown): string | null {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  return /^tt\d{5,12}$/.test(raw) ? raw : null
-}
-
-/** A positive integer id from either a number or its decimal string. Null for anything else. */
-function toPositiveInt(value: unknown): number | null {
-  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-function toDiscoveryResult(row: WireDiscoveryResult): DiscoveryResult | null {
-  const url = String(row.url ?? '').trim()
-  if (!isBrowsableUrl(url)) return null
-  const domain = (row.sourceDomain ?? row.domain ?? '').trim() || hostOf(url)
-  return {
-    // A hit with no title still has a domain and a link, so it stays usable.
-    title: String(row.title ?? '').trim() || domain,
-    url,
-    domain,
-    snippet: String(row.snippet ?? row.content ?? '').trim(),
-    engine: (row.engine ?? '').trim() || null,
-    // The ids are what make a row one click from a match, so both shapes are read. Missing
-    // them silently would turn every result into an unlinkable lead — the one failure this
-    // panel cannot afford, because it looks exactly like "the web found nothing useful".
-    tmdbId: toPositiveInt(row.tmdbId ?? row.ids?.tmdbId),
-    imdbId: toImdbId(row.imdbId ?? row.ids?.imdbId),
-    // Resolved server-side against the household's own provider list, so the spelling here
-    // already matches what the network picker offers.
-    network: String(row.network ?? '').trim() || null,
-  }
-}
-
-function isSearchUnconfigured(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.code === 'SEARCH_NOT_CONFIGURED'
-}
-
-/**
- * Searches the web for the record behind a title the metadata provider cannot find.
- *
- * An unconfigured provider comes back as `configured: false` rather than as a throw, the same
- * way `lookupTmdb` folds a 404 into an empty list: a feature nobody has switched on yet is an
- * ordinary state with a specific repair, not a failure to report in red. The server may say so
- * either in the payload or with `SEARCH_NOT_CONFIGURED`; both land in the same place.
- *
- * Read-only. Nothing here writes to the series — matching is a separate, explicit act.
- */
-export async function discoverSeries(
-  seriesId: string,
-  q: string,
-  platforms = false,
-): Promise<Discovery> {
-  const query = q.trim()
-  try {
-    const data = await api.get<WireDiscovery | WireDiscoveryResult[]>(
-      `/library/series/${seriesId}/discover`,
-      // Omitted rather than sent false, so the default search keeps its existing URL.
-      { q: query, platforms: platforms || undefined },
-    )
-    const payload: WireDiscovery = Array.isArray(data) ? { results: data } : data
-    const rows = Array.isArray(payload.results) ? payload.results : []
-    return {
-      query: (payload.query ?? '').trim() || query,
-      provider: (payload.provider ?? '').trim(),
-      // Absent means configured: an empty list from a working instance is "no results", and
-      // reading it as "not configured" would send the admin to fix something that is not broken.
-      configured: payload.configured !== false,
-      narrowed: payload.narrowed === true,
-      unresponsiveEngines: Array.isArray(payload.unresponsiveEngines)
-        ? payload.unresponsiveEngines.map(String)
-        : [],
-      results: rows
-        .map(toDiscoveryResult)
-        .filter((row): row is DiscoveryResult => row !== null),
-    }
-  } catch (error) {
-    if (isSearchUnconfigured(error)) {
-      return {
-        query,
-        provider: '',
-        configured: false,
-        narrowed: false,
-        unresponsiveEngines: [],
-        results: [],
-      }
-    }
-    throw error
-  }
-}
-
-/** Whichever id the row carries, in the shape `lookupTmdb` takes. Null when it carries neither. */
-export function discoveryLookup(result: DiscoveryResult): TmdbLookupParams | null {
-  if (result.tmdbId !== null) return { tmdbId: result.tmdbId, imdbId: null }
-  if (result.imdbId !== null) return { tmdbId: null, imdbId: result.imdbId }
-  return null
 }
 
 // --- Bulk import ----------------------------------------------------------------------------
@@ -1267,6 +912,10 @@ export const adminKeys = {
   /* Effectively static — it changes only when the server does — so the editor caches it hard
    * rather than refetching a constant on every visit to a series. */
   vocabulary: () => [...adminKeys.all, 'vocabulary'] as const,
+  /* Keyed by the record being previewed as well as the series: previewing a *different*
+     DramaDex title is how rebinding works, and each answer is only about the pair. */
+  metadataPreview: (seriesId: string, dramadexId: number | null) =>
+    [...adminKeys.series(), 'metadata-preview', seriesId, dramadexId] as const,
   dramadex: (q: string) => [...adminKeys.all, 'dramadex', q] as const,
   dramadexPerson: (id: number) => [...adminKeys.all, 'dramadex-person', id] as const,
   series: () => [...adminKeys.all, 'series'] as const,
@@ -1466,15 +1115,90 @@ export function searchDramadex(q: string, limit = 20): Promise<DramadexHits> {
   return api.get<DramadexHits>('/library/dramadex/search', { q, limit })
 }
 
-/** Fill a series from a DramaDex title and bind the two. Blanks only unless `overwrite`. */
+/**
+ * One field a DramaDex record would change, as the dialog shows it.
+ *
+ * Computed by the same server function that performs the write, which is the property the whole
+ * dialog rests on: a preview that decided separately from the writer would disagree with it
+ * eventually, and the disagreement is invisible — four boxes ticked, three edits made.
+ */
+export interface MetadataDiffRow {
+  field: string
+  /** `text` | `long_text` | `number` | `list` | `image`. `image` holds URLs. */
+  kind: string
+  /** Rendered values. `[]` means empty — never `['']`, which would draw a blank chip. */
+  current: string[]
+  incoming: string[]
+  changed: boolean
+  /** Ticked on open: changed, minus what the application will not presume on. */
+  defaultChecked: boolean
+  /** i18n key stem for a refusal or caveat, or null. */
+  note: string | null
+  noteArgs: Record<string, string>
+}
+
+/**
+ * What "Actualizar metadata" would do, before it does any of it.
+ *
+ * Every not-ready state is a flag on a 200, never an error: not connected, not bound, and the
+ * record having disappeared upstream are three ordinary situations with three different
+ * repairs, and one red box for all of them makes the admin guess which.
+ */
+export interface MetadataPreview {
+  configured: boolean
+  bound: boolean
+  found: boolean
+  dramadexId: number | null
+  dramadexTitle: string | null
+  dramadexYear: number | null
+  dramadexEpisodeCount: number | null
+  watchUrl: string | null
+  watchStudio: string | null
+  rows: MetadataDiffRow[]
+  changedCount: number
+}
+
+/** Read-only. Pass `dramadexId` to preview a different record than the one bound. */
+export function metadataPreview(
+  seriesId: string,
+  dramadexId?: number | null,
+): Promise<MetadataPreview> {
+  return api.get<MetadataPreview>(
+    `/library/series/${encodeURIComponent(seriesId)}/metadata/preview`,
+    { dramadexId: dramadexId ?? undefined },
+  )
+}
+
+/**
+ * Write the rows the admin left ticked.
+ *
+ * `fields` comes straight from the preview they were looking at. Omitting it applies everything
+ * that changed, which is what a plain refresh means.
+ */
 export function applyDramadex(
   seriesId: string,
-  dramadexId: number,
-  overwrite = false,
+  body: { dramadexId?: number | null; fields?: string[] } = {},
 ): Promise<SeriesDetail> {
   return api.post<SeriesDetail>(
     `/library/series/${encodeURIComponent(seriesId)}/metadata/dramadex`,
-    { dramadexId, overwrite },
+    { dramadexId: body.dramadexId ?? undefined, fields: body.fields },
+  )
+}
+
+/**
+ * Take a DramaDex title's key art.
+ *
+ * Sends the *title id*, not a URL: the indexer's poster route wants an API key in a header, so
+ * the fetch happens on the server and that key never reaches a page.
+ */
+export function chooseDramadexArtwork(
+  seriesId: string,
+  titleId: number,
+  kind: ArtworkKind,
+): Promise<ArtworkApplied> {
+  return api.post<ArtworkApplied>(
+    `/library/series/${encodeURIComponent(seriesId)}/artwork/dramadex`,
+    { titleId, kind },
   )
 }
 

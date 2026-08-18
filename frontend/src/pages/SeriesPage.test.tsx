@@ -76,6 +76,7 @@ function detail(overrides: Partial<SeriesDetail> = {}): SeriesDetail {
     // Both ends of the catalogue by default, so a test that says nothing about the arrows is
     // exercising the disabled pair rather than an accidental one.
     dramadexId: null,
+    artworkLocked: false,
     previousSeriesSlug: null,
     previousSeriesTitle: null,
     nextSeriesSlug: null,

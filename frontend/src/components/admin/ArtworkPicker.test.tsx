@@ -27,6 +27,9 @@ import { setupI18n } from '@/i18n'
 
 const selectArtwork = vi.fn()
 const uploadArtwork = vi.fn()
+const searchDramadex = vi.fn()
+const chooseDramadexArtwork = vi.fn()
+const patchSeries = vi.fn()
 
 vi.mock('@/api/admin', async () => {
   const actual = await vi.importActual<typeof import('@/api/admin')>('@/api/admin')
@@ -34,6 +37,9 @@ vi.mock('@/api/admin', async () => {
     ...actual,
     selectArtwork: (...args: unknown[]) => selectArtwork(...args),
     uploadArtwork: (...args: unknown[]) => uploadArtwork(...args),
+    searchDramadex: (...args: unknown[]) => searchDramadex(...args),
+    chooseDramadexArtwork: (...args: unknown[]) => chooseDramadexArtwork(...args),
+    patchSeries: (...args: unknown[]) => patchSeries(...args),
   }
 })
 
@@ -71,6 +77,10 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Every test mounts the dialog, and the dialog searches on mount now.
+  searchDramadex.mockResolvedValue({ configured: true, query: '', items: [] })
+  chooseDramadexArtwork.mockResolvedValue({ seriesId: 's1', kind: 'poster' })
+  patchSeries.mockResolvedValue({})
 })
 
 afterEach(cleanup)
@@ -144,5 +154,95 @@ describe('ArtworkPicker', () => {
 
     expect(screen.getByText(/ese formato no se puede usar/i)).toBeTruthy()
     expect(uploadArtwork).not.toHaveBeenCalled()
+  })
+})
+
+describe('ArtworkPicker — arriving pre-searched', () => {
+  it('shows the bound record’s own art without anyone pressing search', async () => {
+    // The complaint, verbatim: "no necesito estar copiando y pegando... debería ir prellenado y
+    // prebuscando cuando ya aparece el modal". So the assertion is about *mount*, not about a
+    // click — a test that pressed a button first would pass against the old dialog.
+    searchDramadex.mockResolvedValue({ configured: true, query: 'Mi Qing', items: [] })
+    renderIn(
+      <ArtworkPicker
+        open
+        onClose={() => {}}
+        seriesId="s1"
+        seriesTitle="Mi Qing"
+        dramadexId={4242}
+      />,
+    )
+
+    await waitFor(() =>
+      expect(document.querySelector('img[src="/api/library/dramadex/titles/4242/poster"]')).toBeTruthy(),
+    )
+    expect(searchDramadex).toHaveBeenCalled()
+  })
+
+  it('sends a title id, never a URL, when a poster is chosen', async () => {
+    // The indexer's poster route wants an API key in a header, so the fetch happens on the
+    // server. Passing our own proxy URL back through the SSRF-guarded fetcher would be a round
+    // trip through our own gate to arrive where we started.
+    searchDramadex.mockResolvedValue({
+      configured: true,
+      query: 'Mi Qing',
+      items: [
+        {
+          id: 99,
+          title: 'Vecina',
+          year: 2025,
+          episodeCount: 60,
+          posterUrl: null,
+          synopsis: null,
+          studio: 'ReelShort',
+          watchUrl: null,
+          genres: [],
+          cast: [],
+          matches: false,
+          inLibrary: false,
+          librarySlug: null,
+        },
+      ],
+    })
+    renderIn(
+      <ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" dramadexId={null} />,
+    )
+
+    const card = await screen.findByTitle('Vecina')
+    fireEvent.click(card)
+
+    await waitFor(() => expect(chooseDramadexArtwork).toHaveBeenCalledWith('s1', 99, 'poster'))
+  })
+
+  it('says when a series has no record to take art from', async () => {
+    searchDramadex.mockResolvedValue({ configured: true, query: 'Mi Qing', items: [] })
+    renderIn(
+      <ArtworkPicker open onClose={() => {}} seriesId="s1" seriesTitle="Mi Qing" dramadexId={null} />,
+    )
+
+    expect(await screen.findByText(/no está vinculada a DramaDex/i)).toBeTruthy()
+  })
+
+  it('offers a way back when the artwork is pinned', async () => {
+    // Until this existed a chosen poster was permanent: the flag was not even on the payload,
+    // so the only undo was uploading another picture.
+    searchDramadex.mockResolvedValue({ configured: true, query: 'Mi Qing', items: [] })
+    renderIn(
+      <ArtworkPicker
+        open
+        onClose={() => {}}
+        seriesId="s1"
+        seriesTitle="Mi Qing"
+        dramadexId={4242}
+        artworkLocked
+      />,
+    )
+
+    const release = await screen.findByRole('button', { name: /permitir que DramaDex cambie/i })
+    fireEvent.click(release)
+
+    await waitFor(() =>
+      expect(patchSeries).toHaveBeenCalledWith('s1', { artworkLocked: false }),
+    )
   })
 })

@@ -778,6 +778,7 @@ async def series_detail(session: AsyncSession, series: Series, user_id: str) -> 
         ],
         library_path=series.library_path,
         metadata_locked=series.metadata_locked,
+        artwork_locked=series.artwork_locked,
         updated_at=as_aware(series.updated_at),
         titles=[
             SeriesTitleOut(
