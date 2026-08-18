@@ -556,7 +556,7 @@
       },
       "genrePlaceholder": "Type one, or pick one already in use",
       "dramadexColumn": "DramaDex",
-      "dramadexLinked": "Linked",
+      "dramadexLinked": "Synced",
       "dramadexNotLinked": "Not linked"
     },
     "import": {

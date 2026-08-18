@@ -40,8 +40,24 @@
   color: var(--text-subtle);
 }
 
+/* Three lines, then it fades out.
+ *
+ * What lands here is `search.matchedVia` — "Coincide con «…»" — and when the match was on the
+ * *synopsis* the quoted text is a whole paragraph. Unclamped, one card grew to twelve lines
+ * while its neighbours kept four, and the grid stopped being a grid.
+ *
+ * `line-clamp` does the cutting; the mask does the fading. An ellipsis alone says "there is
+ * more" at the end of a line, which reads as part of the sentence when the sentence is already
+ * a quotation. The gradient says it without adding a character. */
 .note {
   font-size: var(--text-xs);
   color: var(--text-muted);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  /* Only over the last line, so two-line notes are not dimmed for nothing. */
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 1.1em), transparent 100%);
 }

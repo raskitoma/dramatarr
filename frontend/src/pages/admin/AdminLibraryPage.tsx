@@ -444,9 +444,10 @@ function SeriesTab() {
                     )}
                   </Cell>
                   <Cell label={t('admin.library.dramadexColumn')}>
-                    {row.dramadexId === undefined ? (
-                      <span className={styles.muted}>{t('common.unknown')}</span>
-                    ) : row.dramadexId === null ? (
+                    {/* Two states, not three. The "unknown" branch existed because the list
+                        payload did not carry the id, so it fired for every row — and a column
+                        that can only say "I don't know" is worse than no column. */}
+                    {row.dramadexId === null || row.dramadexId === undefined ? (
                       <Badge tone="neutral">{t('admin.library.dramadexNotLinked')}</Badge>
                     ) : (
                       <Badge tone="success">{t('admin.library.dramadexLinked')}</Badge>

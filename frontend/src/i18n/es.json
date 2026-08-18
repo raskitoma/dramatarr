@@ -556,8 +556,8 @@
       },
       "genrePlaceholder": "Escribe o elige uno ya usado",
       "dramadexColumn": "DramaDex",
-      "dramadexLinked": "Vinculada",
-      "dramadexNotLinked": "Sin vincular"
+      "dramadexLinked": "Sincronizada",
+      "dramadexNotLinked": "Sin asociar"
     },
     "import": {
       "title": "Importar carpetas",

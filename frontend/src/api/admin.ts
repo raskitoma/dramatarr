@@ -55,7 +55,6 @@ export interface DeletedResult {
  * column as unknown rather than lying about the state.
  */
 export interface AdminSeriesRow extends SeriesSummary {
-  dramadexId?: number | null
   tmdbId?: number | null
   metadataLocked?: boolean
 }

@@ -351,6 +351,7 @@ def series_summary(series: Series, counts: SeriesCounts | None = None) -> Series
         progress_percent=counts.percent,
         added_at=_aware(series.added_at),
         last_played_at=as_aware(counts.last_played_at),
+        dramadex_id=series.dramadex_id,
     )
 
 

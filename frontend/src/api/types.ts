@@ -151,6 +151,16 @@ export interface SeriesSummary {
   declaredEpisodeCount: number | null
   watchedEpisodeCount: number
   progressPercent: number
+  /**
+   * The DramaDex title this series is bound to, or null when it is bound to none.
+   *
+   * On the summary because the admin table has a column for it. It used to be declared only on
+   * `AdminSeriesRow`, as optional, while the list payload never carried it — so the column read
+   * `undefined` for every row and rendered "Desconocido" across a library where all eighteen
+   * series are bound. A field the screen asks about and the payload does not answer is not a
+   * missing feature; it is the screen asserting something false.
+   */
+  dramadexId: number | null
 }
 
 export interface SeriesTitleOut {
@@ -210,7 +220,6 @@ export interface SeriesLink {
 }
 
 export interface SeriesDetail extends SeriesSummary, OverviewProvenance {
-  dramadexId?: number | null
   cast?: CastMember[]
   links?: SeriesLink[]
   overview: string | null

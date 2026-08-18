@@ -189,6 +189,13 @@ class SeriesSummary(APIModel):
     added_at: datetime
     #: This user's last activity on the series; null until they have played something.
     last_played_at: datetime | None = None
+    #: Whether this series is bound to a DramaDex title, and to which.
+    #:
+    #: On the *summary* rather than only on the detail because the admin table has a column for
+    #: it, and without it here that column could only ever read "Desconocido" — for all eighteen
+    #: series, every one of which is bound. A field the UI asks about and the payload does not
+    #: carry is not a missing feature, it is the screen asserting something false.
+    dramadex_id: int | None = None
 
 
 class SeriesDetail(SeriesSummary):

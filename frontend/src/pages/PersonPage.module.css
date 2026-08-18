@@ -163,12 +163,15 @@
        `row-reverse` rather than reordering the DOM, so a screen reader is unaffected. */
     flex-direction: row-reverse;
     align-items: flex-start;
-    justify-content: space-between;
     gap: var(--space-5);
   }
 
+  /* Beside the portrait rather than pushed away from it. `space-between` sent the two to
+     opposite edges of a 1200px page, which put half a screen of nothing between a biography
+     and the face it belongs to. The text takes the room it needs and stops. */
   .headerText {
     flex: 1 1 auto;
+    max-inline-size: 46rem;
   }
 }
 
