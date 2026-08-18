@@ -141,7 +141,7 @@
     "alreadyInLibrary": "«{{title}}» ya está en la biblioteca.",
     "inLibrary": "Ya la tenemos",
     "openSource": "Abrir en {{provider}}",
-    "matchedCast": "Aparece {{name}}",
+    "matchedCast": "Reparto: «{{name}}»",
     "byNameTitle": "¿No la encontrás?",
     "byNameHint": "Pídela igual con el título que escribiste: «{{query}}».",
     "askByName": "Pedir por título",

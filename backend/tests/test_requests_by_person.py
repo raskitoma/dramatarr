@@ -130,8 +130,9 @@ async def test_a_title_both_searches_return_appears_once(
 
     found = await requests_service.search(db, user, "Feast")
     assert [card.key for card in found.results] == ["dramadex:7"]
-    # Reported as a title match, because that is the search that reached it first.
-    assert found.results[0].matched_person == ""
+    # One card, and it still says the cast confirmed it — the title search reaching it first
+    # is not a reason to hide that the query also names somebody in it.
+    assert found.results[0].matched_person == "Feast"
 
 
 async def test_cast_matches_are_not_pushed_off_a_full_page(
@@ -170,3 +171,20 @@ async def test_one_search_failing_does_not_take_the_other_down(
 
     found = await requests_service.search(db, user, "Feast")
     assert [card.title for card in found.results] == ["Feast of Power"]
+
+
+async def test_a_card_only_the_title_search_found_says_nothing_about_a_cast(
+    db: AsyncSession, serve: Callable[..., list[httpx.Request]]
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "person" in params_of(request):
+            return httpx.Response(200, json={"items": []})
+        return httpx.Response(200, json={"items": [row(7, "Feast of Power")]})
+
+    serve(handler)
+    user = await a_member(db, "p6@example.com")
+
+    from app.services import requests as requests_service
+
+    found = await requests_service.search(db, user, "Feast")
+    assert found.results[0].matched_person == ""

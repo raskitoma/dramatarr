@@ -317,7 +317,13 @@ async def _dramadex_search(session: AsyncSession, text: str, limit: int) -> list
         _dramadex_page(client, limit, person=text),
     )
 
-    titled = [_candidate_from(found) for found in by_title]
+    # A title the *person* search also returned is marked even though the title search reached
+    # it first. Measured on "Adam Daniel": seven cards came back by title, five of them his and
+    # two coincidental, and without this the two look exactly as relevant as the five.
+    confirmed = {found.id for found in by_person}
+    titled = [
+        _candidate_from(found, person=text if found.id in confirmed else "") for found in by_title
+    ]
     seen = {card.key for card in titled}
     credited = [
         _candidate_from(found, person=text)

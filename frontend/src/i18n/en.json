@@ -141,7 +141,7 @@
     "alreadyInLibrary": "“{{title}}” is already in the library.",
     "inLibrary": "Already here",
     "openSource": "Open on {{provider}}",
-    "matchedCast": "Features {{name}}",
+    "matchedCast": "Cast: “{{name}}”",
     "byNameTitle": "Can't find it?",
     "byNameHint": "Request it anyway with the title you typed: “{{query}}”.",
     "askByName": "Request by title",
