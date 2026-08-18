@@ -41,6 +41,39 @@ function trigger(): HTMLElement {
   return document.querySelector('.peek') as HTMLElement
 }
 
+const CARD_W = 352
+const CARD_H = 180
+
+/**
+ * jsdom measures everything as zero, and the component refuses to place a card it cannot
+ * measure — so without this the card never becomes visible and none of these tests mean
+ * anything. The anchor is where the face is; the card is the size the CSS gives it.
+ */
+function stubGeometry(anchor: { left: number; top: number }, viewport = { w: 1200, h: 800 }): void {
+  Object.defineProperty(window, 'innerWidth', { value: viewport.w, configurable: true })
+  Object.defineProperty(window, 'innerHeight', { value: viewport.h, configurable: true })
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: Element,
+  ) {
+    const isCard = this.getAttribute('role') === 'tooltip'
+    const box = isCard
+      ? { width: CARD_W, height: CARD_H, left: 0, top: 0 }
+      : { width: 96, height: 96, left: anchor.left, top: anchor.top }
+    return {
+      ...box,
+      right: box.left + box.width,
+      bottom: box.top + box.height,
+      x: box.left,
+      y: box.top,
+      toJSON: () => box,
+    } as DOMRect
+  })
+}
+
+function positionOf(node: HTMLElement): { left: number; top: number } {
+  return { left: Number.parseFloat(node.style.left), top: Number.parseFloat(node.style.top) }
+}
+
 function mouseEnter(node: HTMLElement): void {
   fireEvent.pointerEnter(node, { pointerType: 'mouse' })
 }
@@ -50,6 +83,7 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
+  stubGeometry({ left: 500, top: 300 })
   dramadexPerson.mockReset()
   dramadexPerson.mockResolvedValue({
     id: 43,
@@ -60,7 +94,10 @@ beforeEach(() => {
   })
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  vi.restoreAllMocks()
+  cleanup()
+})
 
 describe('PersonPeek', () => {
   it('asks for nothing until somebody hovers', () => {
@@ -154,5 +191,66 @@ describe('PersonPeek', () => {
 
     await waitFor(() => expect(dramadexPerson).toHaveBeenCalled())
     await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
+  })
+})
+
+describe('PersonPeek — staying on screen', () => {
+  /* The complaint that produced these: at the ends of a scrolling cast strip the face is near
+     the viewport edge, so a card centred on it hangs off and the bio cannot be read. The width
+     cap in CSS bounds the card; it says nothing about where the card is put. */
+
+  it('sits centred under the face when there is room', async () => {
+    stubGeometry({ left: 500, top: 300 })
+    draw()
+    mouseEnter(trigger())
+    const node = (await screen.findByRole('tooltip')) as HTMLElement
+
+    const { left, top } = positionOf(node)
+    expect(left).toBe(500 + 96 / 2 - CARD_W / 2)
+    expect(top).toBe(300 + 96 + 8)
+  })
+
+  it('does not hang off the right edge', async () => {
+    stubGeometry({ left: 1150, top: 300 }, { w: 1200, h: 800 })
+    draw()
+    mouseEnter(trigger())
+    const node = (await screen.findByRole('tooltip')) as HTMLElement
+
+    const { left } = positionOf(node)
+    expect(left + CARD_W).toBeLessThanOrEqual(1200 - 12)
+    expect(left).toBeGreaterThanOrEqual(12)
+  })
+
+  it('does not hang off the left edge', async () => {
+    stubGeometry({ left: 4, top: 300 }, { w: 1200, h: 800 })
+    draw()
+    mouseEnter(trigger())
+    const node = (await screen.findByRole('tooltip')) as HTMLElement
+
+    expect(positionOf(node).left).toBeGreaterThanOrEqual(12)
+  })
+
+  it('flips above the face when there is no room below', async () => {
+    /* A cast strip near the bottom of a short window: below would put the biography under the
+       fold, where it is not readable at all. */
+    stubGeometry({ left: 500, top: 600 }, { w: 1200, h: 760 })
+    draw()
+    mouseEnter(trigger())
+    const node = (await screen.findByRole('tooltip')) as HTMLElement
+
+    const { top } = positionOf(node)
+    expect(top + CARD_H).toBeLessThanOrEqual(600)
+    expect(top).toBeGreaterThanOrEqual(12)
+  })
+
+  it('stays inside a window too short for either side', async () => {
+    stubGeometry({ left: 500, top: 90 }, { w: 1200, h: 300 })
+    draw()
+    mouseEnter(trigger())
+    const node = (await screen.findByRole('tooltip')) as HTMLElement
+
+    const { top } = positionOf(node)
+    expect(top).toBeGreaterThanOrEqual(12)
+    expect(top + CARD_H).toBeLessThanOrEqual(300 - 12 + 1)
   })
 })

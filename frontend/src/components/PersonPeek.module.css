@@ -1,16 +1,20 @@
 /* Fixed, because the coordinates come from `getBoundingClientRect` — which is viewport-relative
    — and because the card is portaled out to the body, where the strip's `overflow` cannot reach
-   it. `translate` centres it under the face and `clamp` keeps it inside the viewport at the two
-   ends of the strip, where a centred card would otherwise hang off the edge. */
+   it.
+
+   `top` and `left` are the final position, computed in the component against the measured card
+   and the viewport. There is no `translate: -50%` here on purpose: a card centred in CSS hangs
+   off the edge at the ends of the strip, and CSS cannot know how wide it turned out to be.
+
+   `max-block-size` with `overflow-y` is the floor under all of it — on a short viewport where
+   neither above nor below fits, the card scrolls instead of spilling. */
 .card {
   position: fixed;
   z-index: var(--z-popover, 60);
   inline-size: min(22rem, calc(100vw - var(--space-4) * 2));
   max-block-size: 60vh;
   overflow-y: auto;
-  margin-block-start: var(--space-2);
   padding: var(--space-3);
-  translate: -50% 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
