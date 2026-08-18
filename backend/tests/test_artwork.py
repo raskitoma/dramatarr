@@ -776,11 +776,14 @@ async def test_artwork_selection_stores_and_locks_metadata(
 ) -> None:
     """A chosen poster becomes the series' poster, and the choice survives the next refresh.
 
-    `metadata_locked` is the load-bearing assertion. Without it the nightly refresh would put
+    `artwork_locked` is the load-bearing assertion, and it is deliberately **not**
+    `metadata_locked`. Choosing a picture used to set that one, so uploading a poster opted the
+    series out of every future metadata update — a decision nobody made by picking an image.
+    Without a lock of its own the next refresh would put
     the automatic pick back, and an admin who has to re-choose their poster every night stops
     choosing.
     """
-    assert series.metadata_locked is False
+    assert series.artwork_locked is False
     poster = make_image(tmp_path, "poster.png", 1000, 1500)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -794,12 +797,14 @@ async def test_artwork_selection_stores_and_locks_metadata(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["kind"] == "poster"
-    assert body["metadataLocked"] is True
+    assert body["artworkLocked"] is True
     assert body["storedPath"].startswith(f"images/{series.id}/poster.")
     assert body["url"] == f"/api/stream/images/{series.id}/{Path(body['storedPath']).name}"
 
     await db.refresh(series)
-    assert series.metadata_locked is True
+    assert series.artwork_locked is True
+    # And the *other* flag stays down: "elegir póster no debería bloquear la actualización".
+    assert series.metadata_locked is False
     assert series.poster_path == body["storedPath"]
 
     on_disk = artwork_files(images_dir, series.id, "poster")
@@ -886,14 +891,14 @@ async def test_artwork_upload_takes_the_same_pipeline(
         files={"file": ("scan.jpg", photo, "image/jpeg")},
     )
     assert response.status_code == 200, response.text
-    assert response.json()["metadataLocked"] is True
+    assert response.json()["artworkLocked"] is True
 
     stored = artwork_files(images_dir, series.id, "poster")[0].read_bytes()
     assert b"Exif\x00\x00" not in stored
     assert rationals not in stored
 
     await db.refresh(series)
-    assert series.metadata_locked is True
+    assert series.artwork_locked is True
 
     rejected = await client.post(
         f"/api/library/series/{series.id}/artwork/upload?kind=poster",

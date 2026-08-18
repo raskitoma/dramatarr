@@ -458,7 +458,7 @@
       "posterZoom": "Ver el póster en grande",
       "artworkTitle": "Elegir póster",
       "artworkHint": "Sube tu propia imagen para esta serie.",
-      "artworkLockNote": "Al elegir un póster, la metadata de esta serie queda bloqueada: las actualizaciones automáticas ya no la van a pisar.",
+      "artworkLockNote": "Al elegir un póster, esa imagen se conserva: las actualizaciones ya no la van a reemplazar. El resto de la metadata se sigue actualizando normalmente.",
       "artworkFromUrl": "Desde una URL",
       "artworkUrl": "URL de la imagen",
       "artworkUrlHint": "Tiene que empezar con http:// o https://.",

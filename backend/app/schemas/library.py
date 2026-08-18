@@ -518,10 +518,11 @@ class CleanupResult(APIModel):
 
 # --- Artwork ----------------------------------------------------------------------------------
 #
-# The metadata jobs pick a poster on their own and are usually right. These shapes are for when
-# they are not: TMDB's whole gallery, plus an optional web search, laid out so an admin can look
-# at the candidates and choose one. Choosing sets `metadata_locked` — the choice would be
-# pointless if the next refresh silently replaced it.
+# A metadata fill brings whatever picture the indexer has, and is usually right. These shapes
+# are for when it is not: an image the admin supplies, by URL or from disk. Choosing sets
+# `artwork_locked` — the choice would be pointless if the next refresh silently replaced it —
+# and deliberately nothing else, because wanting *this* poster says nothing about wanting the
+# synopsis to stop being corrected.
 
 
 class ArtworkSelectIn(APIModel):
@@ -539,7 +540,7 @@ class ArtworkApplied(APIModel):
     url: str | None = None
     #: Always true. Stated on the wire because it is a consequence the admin should see: their
     #: choice now also stops metadata refreshes from overwriting the series' other fields.
-    metadata_locked: bool = True
+    artwork_locked: bool = True
 
 
 # --- Web discovery ------------------------------------------------------------------------------

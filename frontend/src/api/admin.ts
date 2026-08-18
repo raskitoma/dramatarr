@@ -515,10 +515,13 @@ export interface ArtworkApplied {
   storedPath: string
   url: string | null
   /**
-   * Always true, and reported rather than assumed: choosing artwork also stops metadata
-   * refreshes overwriting the series' other fields, which is a consequence worth showing.
+   * Always true, and reported rather than assumed: a chosen picture survives the next refresh.
+   *
+   * It says nothing about the metadata, and that separation is the point. The two used to be
+   * one flag, so uploading a poster opted the series out of every future update — a decision
+   * nobody made by picking an image.
    */
-  metadataLocked: boolean
+  artworkLocked: boolean
 }
 
 /**

@@ -458,7 +458,7 @@
       "posterZoom": "Open the poster full size",
       "artworkTitle": "Choose a poster",
       "artworkHint": "Upload your own image for this series.",
-      "artworkLockNote": "Choosing a poster locks this series' metadata: automatic refreshes will no longer overwrite it.",
+      "artworkLockNote": "Choosing a poster keeps that image: refreshes will not replace it. The rest of the metadata goes on updating as usual.",
       "artworkFromUrl": "From a URL",
       "artworkUrl": "Image URL",
       "artworkUrlHint": "It has to start with http:// or https://.",

@@ -98,8 +98,16 @@ class Series(Base):
     declared_episode_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     library_path: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
 
-    # Set the moment an admin edits any metadata field; metadata jobs then leave it alone.
+    # Set the moment an admin edits any metadata field. Two things it is *not*: it is not what
+    # protects a chosen poster (that is `artwork_locked` below), and it is not shielding the row
+    # from a nightly job — nothing schedules a metadata refresh. `workers/scheduler.py` enqueues
+    # `LIBRARY_SCAN` and nothing else, and has since TMDB was removed.
     metadata_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Set when an admin picks artwork. A refresh replaces the indexer's own picture and leaves
+    # this one alone — which is the whole point of splitting the two flags: wanting *this*
+    # poster and wanting the synopsis kept current are not the same wish.
+    artwork_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     added_at: Mapped[datetime] = created_column()
     updated_at: Mapped[datetime] = updated_column()

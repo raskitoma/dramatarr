@@ -82,8 +82,10 @@ describe('ArtworkPicker', () => {
     await waitFor(() => expect(document.getElementById('artwork-url')).toBeTruthy())
     expect(document.getElementById('artwork-file')).toBeTruthy()
 
-    // Choosing artwork locks the series' metadata, and that is said before any choice is made.
-    expect(screen.getByText(/queda bloqueada/i)).toBeTruthy()
+    // What choosing costs is said before any choice is made — and what it does *not* cost.
+    // Picking a poster used to lock the whole record; now it keeps the picture and nothing else.
+    expect(screen.getByText(/esa imagen se conserva/i)).toBeTruthy()
+    expect(screen.getByText(/resto de la metadata se sigue actualizando/i)).toBeTruthy()
 
     // No gallery is fetched, offered, or explained away: the sources that fed one are gone.
     expect(screen.queryByText(/TMDB/i)).toBeNull()

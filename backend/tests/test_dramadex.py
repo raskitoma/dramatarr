@@ -765,7 +765,7 @@ async def test_a_refresh_asks_for_the_art_every_time(db: AsyncSession, tmp_env) 
 async def test_artwork_an_admin_chose_is_never_overruled(db: AsyncSession, tmp_env) -> None:
     """The one exception. Choosing artwork locks the row, and that choice is theirs."""
     series = await make_series(db)
-    series.metadata_locked = True
+    series.artwork_locked = True
     await db.flush()
 
     assert dramadex._keeps_its_own_artwork(series) is True

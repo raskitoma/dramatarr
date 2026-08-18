@@ -489,11 +489,12 @@ def hit_from(
 def _keeps_its_own_artwork(series: Any) -> bool:
     """True when this series' picture is somebody's explicit choice, not the indexer's.
 
-    Choosing artwork in the picker sets `metadata_locked` and stores the file under the series'
-    own stem. Overruling that on a refresh is how a feature stops being used, so it is the one
-    case a refresh leaves alone.
+    Reads `artwork_locked`, which exists precisely so that this question and "has an admin
+    edited this record" stop sharing one answer. They used to: the picker set
+    `metadata_locked`, so choosing a poster opted the series out of every future metadata
+    update — a decision nobody made by uploading a picture.
     """
-    return bool(series.metadata_locked)
+    return bool(series.artwork_locked)
 
 
 async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = None) -> list[str]:

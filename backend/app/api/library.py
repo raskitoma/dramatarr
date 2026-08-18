@@ -384,8 +384,10 @@ async def unlink_series(session: SessionDep, admin: AdminUser, series_id: str) -
 # none at all. These two routes are the admin overruling it: supply an image, and have the
 # choice stick.
 #
-# "Stick" is `metadata_locked`. Without it the next scheduled refresh would put the automatic
-# poster back, and an admin who has to re-pick their poster every night stops using the feature.
+# "Stick" is `artwork_locked`. Without it the next refresh would put the indexer's poster back,
+# and an admin who has to re-pick their artwork stops using the feature. Deliberately its own
+# flag: it says nothing about the synopsis, the year or the cast, all of which the admin may
+# well want kept current by the same refresh.
 #
 # There used to be a third route listing candidates to choose *between* — TMDB's gallery and a
 # web image search. Both left with the sources they belonged to, and DramaDex has exactly one
@@ -403,7 +405,9 @@ async def _apply_artwork(
     """
     stored = await store_series_artwork(series.id, kind, data)
     setattr(series, f"{kind}_path", stored)
-    series.metadata_locked = True
+    # `artwork_locked`, not `metadata_locked`. Choosing a picture used to opt the series out of
+    # metadata updates entirely, which is a decision nobody made by uploading a poster.
+    series.artwork_locked = True
     series.updated_at = utcnow()
     await session.flush()
     return ArtworkApplied(
@@ -413,7 +417,7 @@ async def _apply_artwork(
         url=library_service.image_url(
             stored, POSTER_SIZE if kind == "poster" else BACKDROP_SIZE
         ),
-        metadata_locked=series.metadata_locked,
+        artwork_locked=series.artwork_locked,
     )
 
 
