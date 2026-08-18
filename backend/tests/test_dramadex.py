@@ -950,3 +950,45 @@ async def test_every_planned_field_is_a_field_the_writer_understands(db: AsyncSe
     assert series.year == fresh.year
     assert series.network == fresh.network
     assert series.genres == fresh.genres
+
+
+async def test_the_poster_row_stops_changing_once_it_is_the_indexers(db: AsyncSession, tmp_env) -> None:
+    """`metadataNothing` was unreachable, and that is a screen lying quietly.
+
+    The poster row hardcoded `changed=True`, so a series refreshed a minute ago reopened
+    offering one pre-ticked change with two identical pictures side by side — and every apply
+    re-downloaded the art to write the same bytes.
+    """
+    from app.services.images import dramadex_poster_name, request_poster_url
+
+    series = await make_series(db)
+    series.poster_path = request_poster_url(f"{dramadex_poster_name(4242)}-abc123def456.webp")
+    await db.flush()
+
+    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+
+    assert rows["poster"].changed is False
+    assert rows["poster"].default_checked is False
+
+
+async def test_a_poster_from_somewhere_else_still_counts_as_a_change(
+    db: AsyncSession, tmp_env
+) -> None:
+    from app.services.images import request_poster_url
+
+    series = await make_series(db)
+    series.poster_path = request_poster_url("something-else.webp")
+    await db.flush()
+
+    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+
+    assert rows["poster"].changed is True
+
+
+async def test_aliases_are_reported_when_they_are_written(db: AsyncSession) -> None:
+    """`filled` is what the toast and the job log count. Aliases were written and never named."""
+    series = await make_series(db)
+
+    filled = await library_service.apply_dramadex_title(db, series, parsed())
+
+    assert "titles" in filled

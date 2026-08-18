@@ -50,9 +50,19 @@ interface MetadataDialogProps {
   open: boolean
   onClose: () => void
   detail: SeriesDetail
+  /**
+   * Called after a successful apply, so the editor can reseed its form.
+   *
+   * Not optional politeness: the page seeds `form` and `baseline` once per series id, and the
+   * id does not change when the metadata does. Without this the inputs keep their pre-apply
+   * values, the next save is diffed against the stale baseline, and editing anything silently
+   * reverts what DramaDex just wrote — permanently, because that save also sets
+   * `metadata_locked`.
+   */
+  onApplied?: () => void
 }
 
-export function MetadataDialog({ open, onClose, detail }: MetadataDialogProps) {
+export function MetadataDialog({ open, onClose, detail, onApplied }: MetadataDialogProps) {
   const { t } = useTranslation()
   const { show } = useToast()
   const queryClient = useQueryClient()
@@ -107,10 +117,21 @@ export function MetadataDialog({ open, onClose, detail }: MetadataDialogProps) {
     onSuccess: (fresh) => {
       queryClient.setQueryData(adminKeys.seriesDetail(detail.id), fresh)
       void queryClient.invalidateQueries({ queryKey: adminKeys.series() })
+      // Counts what will actually be written, not what is ticked. `declared_episode_count`
+      // below the file count is refused by the writer whatever the checkbox says — the row
+      // carries `fewerEpisodes` to say so — and "actualizamos 2 campos" when one was declined
+      // is the screen asserting something it did not do.
+      const refused = (data?.rows ?? []).filter(
+        (row) => row.note === 'fewerEpisodes' && ticks.has(row.field),
+      ).length
       show(
-        t('admin.library.metadataApplied', { count: ticks.size, title: detail.title }),
+        t('admin.library.metadataApplied', {
+          count: Math.max(0, ticks.size - refused),
+          title: detail.title,
+        }),
         'success',
       )
+      onApplied?.()
       onClose()
     },
     onError: () => show(t('admin.library.metadataFailed'), 'error'),
@@ -152,7 +173,10 @@ export function MetadataDialog({ open, onClose, detail }: MetadataDialogProps) {
             <Button
               variant="primary"
               loading={apply.isPending}
-              disabled={ticks.size === 0}
+              // Deliberately not disabled at zero. The binding is not a field, and an admin who
+              // picked the right record and wants none of its values still needs the link to
+              // land — `test_an_empty_selection_writes_no_fields_but_still_binds` exists for
+              // exactly that case, and disabling here reintroduced it on the client.
               onClick={() => apply.mutate()}
             >
               {t('admin.library.metadataApply', { count: ticks.size })}
@@ -257,7 +281,15 @@ export function MetadataDialog({ open, onClose, detail }: MetadataDialogProps) {
       {data?.found && !onSearchScreen ? (
         <section className={styles.screen}>
           <p className={styles.source}>
-            {t('admin.library.metadataBoundTo', { title: data.dramadexTitle ?? '' })}
+            {/* Two different sentences, because the alias fix makes the difference real: until
+                it landed the candidate was never previewed, so this always described the true
+                binding. Now it can describe a record you are only looking at. */}
+            {t(
+              candidate !== null && candidate !== detail.dramadexId
+                ? 'admin.library.metadataLookingAt'
+                : 'admin.library.metadataBoundTo',
+              { title: data.dramadexTitle ?? '' },
+            )}
             {data.dramadexEpisodeCount !== null ? (
               <span className={styles.sourceMeta}>
                 {' · '}
@@ -376,7 +408,9 @@ function DiffRow({ row, checked, onToggle }: DiffRowProps) {
         </p>
       ) : null}
 
-      {/* Said under the poster specifically: taking the automatic source is not pinning it. */}
+      {/* Said under the poster specifically: taking the automatic source is not pinning it —
+          and it releases a pin that was there, which is what makes the sentence true rather
+          than aspirational. */}
       {row.field === 'poster' ? (
         <p className={styles.rowNote}>{t('admin.library.metadataNotePosterSource')}</p>
       ) : null}

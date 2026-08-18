@@ -783,7 +783,12 @@ async def preview_dramadex(
     session: SessionDep,
     admin: AdminUser,
     series_id: str,
-    dramadex_id: Annotated[int | None, Query(ge=1)] = None,
+    # `alias` is load-bearing, not decoration: every other query parameter in this API is
+    # camelCase because `APIModel` converts bodies automatically — a bare `Query()` does not.
+    # Without it the client's `?dramadexId=` was dropped, so previewing a *different* record
+    # showed the bound one's values while applying wrote the picked one's. The admin ticked
+    # rows they had never been shown, which is precisely what the shared plan exists to stop.
+    dramadex_id: Annotated[int | None, Query(alias="dramadexId", ge=1)] = None,
 ) -> MetadataPreview:
     """What applying a DramaDex record would change, before anything is written.
 
@@ -871,7 +876,13 @@ async def apply_dramadex(
         raise NotFound("DramaDex title", "DRAMADEX_TITLE_NOT_FOUND")
 
     selected = frozenset(body.fields) if body.fields is not None else None
-    filled = await library_service.apply_dramadex_title(session, series, found, only=selected)
+    # `only=None` here means "everything that changed", which is what the job path wants and
+    # what omitting `fields` promises. `overwrite` is deliberately *not* a wire field: it was
+    # accepted, documented and then never passed through, so a caller could ask for it and get
+    # a 200 with nothing written. The job path sets it directly in `dramadex.refresh_series`.
+    filled = await library_service.apply_dramadex_title(
+        session, series, found, overwrite=True, only=selected
+    )
 
     # Artwork last and never fatally: a poster that will not decode must not undo a fill that
     # already succeeded.
@@ -881,6 +892,11 @@ async def apply_dramadex(
             stored = await cache_dramadex_poster(fetched[0], title_id=found.id)
             if stored and stored != series.poster_path:
                 series.poster_path = stored
+                # Asking for the indexer's poster is choosing the automatic source, so the pin
+                # comes off. Leaving it on made the note under that very row false for exactly
+                # the series it is aimed at: "tomar el póster de DramaDex no lo fija" printed
+                # directly beneath a picture that had just been fixed forever.
+                series.artwork_locked = False
                 await session.commit()
                 filled.append("poster")
 

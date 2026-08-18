@@ -619,7 +619,8 @@
         "cast": "Reparto",
         "links": "Enlaces",
         "titles": "Títulos alternativos"
-      }
+      },
+      "metadataLookingAt": "Estás viendo «{{title}}»"
     },
     "import": {
       "title": "Importar carpetas",

@@ -2510,14 +2510,20 @@ async def plan_dramadex_title(
     rows: list[FieldChange] = []
 
     # --- Artwork, first, because it is the one the owner asked to be able to choose ----------
+    # Changed when the stored file is not already this title's key art. Hardcoding `True` made
+    # "no hay nada que actualizar" unreachable — a series refreshed a minute ago reopened
+    # offering one pre-ticked change and two identical pictures side by side.
+    from app.services.images import is_dramadex_poster
+
+    poster_is_theirs = is_dramadex_poster(series.poster_path, found.id)
     rows.append(
         FieldChange(
             field="poster",
             kind="image",
             current=_as_list(image_url(series.poster_path, POSTER_SIZE)),
             incoming=[f"/api/library/dramadex/titles/{found.id}/poster"],
-            changed=True,
-            default_checked=not series.artwork_locked,
+            changed=not poster_is_theirs,
+            default_checked=not poster_is_theirs and not series.artwork_locked,
             note="ownArtwork" if series.artwork_locked else None,
         )
     )
@@ -2812,6 +2818,7 @@ async def apply_dramadex_title(
     # Aliases become searchable title rows, which is what makes a member typing the platform's
     # own spelling find the series the household actually filed under another name.
     if wanted("titles"):
+        added_alias = False
         known = {
             row
             for row in (
@@ -2825,17 +2832,21 @@ async def apply_dramadex_title(
             if not slug or slug in known:
                 continue
             known.add(slug)
+            added_alias = True
             session.add(
                 SeriesTitle(
                     series_id=series.id,
                     language="",
                     title=alias[:500],
-
-                kind=TitleKind.ALTERNATE,
-                source=TitleSource.MANUAL,
-                normalized=slug,
+                    kind=TitleKind.ALTERNATE,
+                    source=TitleSource.MANUAL,
+                    normalized=slug,
+                )
             )
-        )
+        if added_alias:
+            # Reported, so the toast and the job log count what was written. Aliases were the
+            # one thing this function wrote and never mentioned.
+            filled.append("titles")
 
     if series.dramadex_id != found.id:
         series.dramadex_id = found.id

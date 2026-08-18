@@ -698,6 +698,10 @@ class DramadexApplyIn(APIModel):
     #: Omit to re-apply the current binding; provide one to bind somewhere else.
     dramadex_id: int | None = Field(default=None, ge=1)
     #: Omit for every changed row; provide the subset the admin left ticked.
+    #:
+    #: There is deliberately no `overwrite` here any more. It was accepted and documented and
+    #: then not passed through, so asking for it returned 200 having written nothing — an
+    #: advertised switch that did nothing is worse than an absent one.
     fields: list[str] | None = None
     #: Blanks-only by default, like every other fill. Replacing is a separate, explicit act.
     overwrite: bool = False

@@ -670,7 +670,15 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
       ) : null}
 
       {showMetadata ? (
-        <MetadataDialog open onClose={() => setShowMetadata(false)} detail={detail} />
+        <MetadataDialog
+          open
+          onClose={() => setShowMetadata(false)}
+          detail={detail}
+          // Reseeds the form. Without it the inputs keep their pre-apply values and the next
+          // save reverts what DramaDex wrote — the deleted DramadexPanel had this for the same
+          // reason, and dropping it took the guarantee with it.
+          onApplied={() => setSeed(null)}
+        />
       ) : null}
 
       {/* The poster at the size the decision needs. `lg` rather than a bare `<img>` so it

@@ -619,7 +619,8 @@
         "cast": "Cast",
         "links": "Links",
         "titles": "Alternate titles"
-      }
+      },
+      "metadataLookingAt": "You are looking at “{{title}}”"
     },
     "import": {
       "title": "Import folders",
