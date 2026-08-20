@@ -59,7 +59,14 @@ export function registerServiceWorker(): void {
   // to be downloaded before somebody relies on it rather than after.
   void import('./downloadManager').then((module) => void module.reconcile())
 
-  void navigator.serviceWorker.register('/sw.js', { scope: '/' }).then((registration) => {
+  /* `updateViaCache: 'none'` because Cloudflare rewrites this file's `Cache-Control` on the way
+     out: nginx sends `no-cache` and the browser is told `max-age=14400`. Measured on the live
+     domain. The edge itself revalidates, so updates do arrive — but without this the *browser*
+     would sit on a four-hour-old worker, and the one moment that matters is checking the app
+     the evening before a flight. */
+  void navigator.serviceWorker
+    .register('/sw.js', { scope: '/', updateViaCache: 'none' })
+    .then((registration) => {
     if (registration.waiting) {
       waiting = registration.waiting
       announce()
