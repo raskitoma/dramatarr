@@ -19,6 +19,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef } from 'react'
 
 import { api } from '@/api/client'
+import { recordLocal } from '@/offline/progress'
 
 const API_BASE = '/api'
 const REPORT_INTERVAL_MS = 10_000
@@ -38,6 +39,8 @@ interface ProgressWrite extends ProgressSnapshot {
 
 export interface UseProgressReporterOptions {
   episodeId: string
+  /** Only used to file the local copy under the right series when there is no server to tell. */
+  seriesId: string
   playing: boolean
   /** True while the position is in flux — a real element seek *or* a drag in progress. */
   seeking: boolean
@@ -52,7 +55,7 @@ export interface ProgressReporter {
 }
 
 export function useProgressReporter(options: UseProgressReporterOptions): ProgressReporter {
-  const { episodeId, playing, seeking, getSnapshot, enabled = true } = options
+  const { episodeId, seriesId, playing, seeking, getSnapshot, enabled = true } = options
 
   const mutation = useMutation({
     mutationFn: ({ episodeId: target, ...payload }: ProgressWrite) =>
@@ -67,6 +70,8 @@ export function useProgressReporter(options: UseProgressReporterOptions): Progre
   seekingRef.current = seeking
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
+  const seriesIdRef = useRef(seriesId)
+  seriesIdRef.current = seriesId
   const episodeIdRef = useRef(episodeId)
   episodeIdRef.current = episodeId
 
@@ -89,6 +94,16 @@ export function useProgressReporter(options: UseProgressReporterOptions): Progre
     const snapshot = collect()
     if (!snapshot) return
     lastSentRef.current = { position: snapshot.positionSeconds, at: Date.now() }
+    // Local first, always. On a plane the call below simply fails, and it fails *silently* —
+    // `retry: false` with no error handler, and `sendBeacon` reports nothing either. Writing
+    // here first is what stops three weeks of viewing disappearing on landing.
+    void recordLocal({
+      episodeId: episodeIdRef.current,
+      seriesId: seriesIdRef.current,
+      positionSeconds: snapshot.positionSeconds,
+      durationSeconds: snapshot.durationSeconds,
+      completed: false,
+    })
     mutate({ episodeId: episodeIdRef.current, ...snapshot })
   }, [collect, mutate])
 
@@ -119,6 +134,13 @@ export function useProgressReporter(options: UseProgressReporterOptions): Progre
       const snapshot = collect()
       if (!snapshot) return
       lastSentRef.current = { position: snapshot.positionSeconds, at: Date.now() }
+      void recordLocal({
+        episodeId: target,
+        seriesId: seriesIdRef.current,
+        positionSeconds: snapshot.positionSeconds,
+        durationSeconds: snapshot.durationSeconds,
+        completed: false,
+      })
       const url = `${API_BASE}/watch/${encodeURIComponent(target)}/progress`
       if (typeof navigator.sendBeacon === 'function') {
         const body = new Blob([JSON.stringify(snapshot)], { type: 'application/json' })

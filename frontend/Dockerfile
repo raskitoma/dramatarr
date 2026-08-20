@@ -5,7 +5,10 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci 2>/dev/null || npm install
 
-COPY tsconfig.json vite.config.ts index.html ./
+# tsconfig.sw.json is load-bearing: without it the build still succeeds and simply emits no
+# sw.js, and nginx then answers GET /sw.js from the SPA fallback with 200 text/html — which
+# fails registration on MIME type rather than on a 404, so it looks like nothing at all.
+COPY tsconfig.json tsconfig.sw.json vite.config.ts index.html ./
 COPY public ./public
 COPY src ./src
 RUN npm run build

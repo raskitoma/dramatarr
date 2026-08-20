@@ -31,6 +31,7 @@ import Spinner from '@/components/Spinner'
 import VideoPlayer from '@/components/VideoPlayer'
 import { ChevronLeftIcon, CloseIcon } from '@/components/icons'
 import { useAuth } from '@/hooks/useAuth'
+import { localResume } from '@/offline/progress'
 
 import styles from './WatchPage.module.css'
 
@@ -76,6 +77,22 @@ export function WatchPage() {
   }, [episodeQuery.data])
 
   const episode = episodeQuery.data ?? shownEpisode
+
+  /* The position written on this device, which is the only one that exists while the server is
+     off. Read once per episode; `null` both while it loads and when there is nothing local, and
+     in both cases the cached server value is used. */
+  const [localPosition, setLocalPosition] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    setLocalPosition(null)
+    if (!activeEpisodeId) return undefined
+    void localResume(activeEpisodeId).then((position) => {
+      if (alive) setLocalPosition(position)
+    })
+    return () => {
+      alive = false
+    }
+  }, [activeEpisodeId])
 
   /**
    * Warm the next episode's detail while this one plays.
@@ -229,7 +246,10 @@ export function WatchPage() {
           onEpisodeComplete={handleEpisodeComplete}
           onLeave={goToSeries}
           autoplayNext={user?.autoplayNext ?? false}
-          initialPositionSeconds={episode.resumePositionSeconds}
+          /* Local wins when it exists. Offline, `episode.resumePositionSeconds` is whatever
+             was true the night the series was downloaded, so without this every episode
+             watched on the plane would jump back to that frozen position. */
+          initialPositionSeconds={localPosition ?? episode.resumePositionSeconds}
         />
       </div>
     </div>

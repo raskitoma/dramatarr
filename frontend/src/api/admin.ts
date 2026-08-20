@@ -23,6 +23,7 @@ import type {
   QueueState,
   Role,
   SeriesDetail,
+  EpisodeMediaFile,
   SeriesStatus,
   SeriesSummary,
   SeriesTitleOut,
@@ -59,24 +60,13 @@ export interface AdminSeriesRow extends SeriesSummary {
   metadataLocked?: boolean
 }
 
-export interface AdminMediaFile {
-  id: string
-  path: string
-  sizeBytes: number
-  container: string | null
-  videoCodec: string | null
-  audioCodec: string | null
-  width: number | null
-  height: number | null
-  durationSeconds: number | null
-  bitrate?: number | null
-  status?: string
-}
+/** The file record behind an episode. One wire object (`schemas/library.py:49`), so one type:
+ *  this used to be declared here a second time, and the two drifted the moment the viewer side
+ *  needed `sizeBytes`. */
+export type AdminMediaFile = EpisodeMediaFile
 
-/** Episode detail plus the read-only file record the metadata editor shows. */
-export interface AdminEpisodeDetail extends EpisodeDetail {
-  mediaFile?: AdminMediaFile | null
-}
+/** Episode detail as the metadata editor sees it. The file record is already on the base. */
+export type AdminEpisodeDetail = EpisodeDetail
 
 export interface SeriesPatch {
   title?: string

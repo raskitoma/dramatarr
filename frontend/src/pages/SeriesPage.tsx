@@ -43,6 +43,7 @@ import { EpisodeGrid } from '@/components/EpisodeGrid'
 import { EpisodeRow, episodeLabelParts } from '@/components/EpisodeRow'
 import { IconButton } from '@/components/IconButton'
 import { PlatformMark } from '@/components/PlatformMark'
+import { DownloadButton } from '@/components/DownloadButton'
 import { PersonFace } from '@/components/PersonFace'
 import { PersonPeek } from '@/components/PersonPeek'
 import { Poster } from '@/components/Poster'
@@ -586,6 +587,10 @@ function NavArrow({
                   </Button>
                 </>
               ) : null}
+
+              {/* Every member's, not just an admin's: taking a series on a plane is watching,
+                  not administration. */}
+              <DownloadButton detail={detail} />
 
               {/* One control the width of the others, not a wrapping run of words. Green
                   because it is the only thing here that takes you off this app, and the accent

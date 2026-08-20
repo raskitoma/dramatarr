@@ -188,6 +188,14 @@ export const SearchIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const DownloadIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 4v11" />
+    <path d="M8 11.5l4 4 4-4" />
+    <path d="M5 19.5h14" />
+  </Icon>
+)
+
 export const UploadIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 16V4.5M7.5 9L12 4.5 16.5 9" />

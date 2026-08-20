@@ -67,6 +67,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // Last, and deliberately after search: asking for something is what you do once looking for
   // it has failed, and putting it earlier would invite requests for things already on the NAS.
   { href: '/requests', labelKey: 'nav.requests', tone: 'requests' },
+  // After Pedidos, because it is about what is already here rather than what is not. It earns
+  // its place in the bar rather than hiding in the account menu: the whole point is checking it
+  // *before* leaving, and something you have to go looking for gets checked on the plane.
+  { href: '/downloads', labelKey: 'nav.downloads' },
 ]
 
 /**

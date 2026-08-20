@@ -1,0 +1,43 @@
+/* Matches the three buttons it sits beside — the label hides on a narrow screen exactly as
+   theirs do, so the action row stays one line on a phone. */
+.label {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+.running {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 9rem;
+}
+
+.bar {
+  inline-size: 100%;
+}
+
+.pause {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+}
+
+.pause:hover {
+  color: var(--accent);
+}
+
+.note {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+}

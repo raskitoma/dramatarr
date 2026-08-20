@@ -341,6 +341,7 @@ export function VideoPlayer({
 
   useProgressReporter({
     episodeId: episode.id,
+    seriesId: episode.seriesId,
     playing: state.playing,
     // A drag is as much "in flux" as an element seek: reporting mid-drag stores a position
     // the viewer is still moving away from.

@@ -25,6 +25,7 @@ import { BrowsePage } from '@/pages/BrowsePage'
 import { HomePage } from '@/pages/HomePage'
 import { InvitePage } from '@/pages/InvitePage'
 import { LoginPage } from '@/pages/LoginPage'
+import { DownloadsPage } from '@/pages/DownloadsPage'
 import { RequestsPage } from '@/pages/RequestsPage'
 import { SearchPage } from '@/pages/SearchPage'
 import { SeriesPage } from '@/pages/SeriesPage'
@@ -179,6 +180,13 @@ function Routes() {
         <ProtectedRoute>
           <Chrome>
             <RequestsPage />
+          </Chrome>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/downloads">
+        <ProtectedRoute>
+          <Chrome>
+            <DownloadsPage />
           </Chrome>
         </ProtectedRoute>
       </Route>

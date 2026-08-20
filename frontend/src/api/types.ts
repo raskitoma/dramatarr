@@ -301,7 +301,25 @@ export interface SubtitleTrackOut {
   url: string
 }
 
+/** What `/library/episodes/{id}` carries about the file behind an episode. On the wire all
+ *  along (`schemas/library.py:49-61`); declared here because the offline download needs
+ *  `sizeBytes` to say "1,37 GB" before it starts pulling. */
+export interface EpisodeMediaFile {
+  id: string
+  path: string
+  container: string | null
+  videoCodec: string | null
+  audioCodec: string | null
+  width: number | null
+  height: number | null
+  durationSeconds: number | null
+  bitrate?: number | null
+  sizeBytes: number
+  status?: string
+}
+
 export interface EpisodeDetail extends EpisodeSummary {
+  mediaFile: EpisodeMediaFile | null
   overview: string | null
   seriesId: string
   seriesTitle: string
