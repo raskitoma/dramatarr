@@ -1029,8 +1029,16 @@
     "remove": "Remove from this device",
     "removed": "Removed from this device.",
     "episodesOf": "{{done}} of {{total}}",
+    "state": {
+      "queued": "Queued",
+      "running": "Downloading",
+      "paused": "Paused",
+      "done": "Ready",
+      "error": "Failed"
+    },
     "progressLabel": "Downloading “{{title}}”",
     "measureFailed": "We could not work out the size. Is the server on?",
+    "startFailed": "We could not start the download. {{reason}}",
     "confirmTitle": "Download “{{title}}”",
     "confirmBody": "{{count}} episodes · {{size}} on this device.",
     "confirmMeasuring": "{{count}} episodes · working out the size…",

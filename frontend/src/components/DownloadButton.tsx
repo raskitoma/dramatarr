@@ -132,7 +132,18 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
               disabled={measuring}
               onClick={() => {
                 setAsking(false)
-                if (plan) void start(detail, plan)
+                if (!plan) return
+                // Never `void`: this used to swallow every failure, so a download that died on
+                // IndexedDB or a rejected quota looked exactly like one that had never been
+                // pressed. The row records it too; this is what puts it on screen.
+                start(detail, plan).catch((error: unknown) => {
+                  toast.show(
+                    t('downloads.startFailed', {
+                      reason: error instanceof Error ? error.message : '',
+                    }),
+                    'error',
+                  )
+                })
               }}
             >
               {t('downloads.download')}

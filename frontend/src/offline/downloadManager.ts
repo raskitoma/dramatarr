@@ -172,44 +172,56 @@ export async function measure(detail: SeriesDetail): Promise<Measured> {
  * Downloads screen.
  */
 export async function start(detail: SeriesDetail, measured?: Measured): Promise<void> {
-  if (!offlineSupported()) return
+  if (!offlineSupported()) throw new Error('offline storage is unavailable on this origin')
   cancelled.delete(detail.id)
 
-  // Ask before filling the disk. On an installed app this is granted without a prompt on
-  // Chromium and Android; on iOS it is the difference between surviving the trip and not.
-  await navigator.storage?.persist?.()
-
+  // The ledger row is written **first**, before anything that can fail. Everything below it —
+  // asking for persistent storage, reading sixty-seven records, fetching a poster — can throw,
+  // and when it did the whole thing vanished without trace: no row, no error, nothing on the
+  // Downloads screen. A row that says "error" is worth more than silence.
   const existing = await get<DownloadRow>(DOWNLOADS, detail.id)
-  // The dialog has usually just measured it; asking the server for the same sixty-seven
-  // records a second time is a minute of nothing.
-  const { episodeIds, bytes } = measured ?? (await measure(detail))
-
   const row: DownloadRow = existing ?? {
     seriesId: detail.id,
     slug: detail.slug,
     title: detail.title,
     posterUrl: detail.posterUrl,
-    episodeIds,
+    episodeIds: measured?.episodeIds ?? [],
     storedIds: [],
-    bytesTotal: bytes,
+    bytesTotal: measured?.bytes ?? 0,
     bytesDone: 0,
     state: 'queued',
     error: null,
     updatedAt: Date.now(),
   }
-  row.episodeIds = episodeIds
-  row.bytesTotal = bytes
   row.state = 'queued'
   row.error = null
   await save(row)
 
-  // The poster, so the downloads shelf is not a row of grey rectangles on the plane.
-  if (detail.posterUrl) {
-    try {
-      await (await caches.open(API_CACHE)).add(detail.posterUrl)
-    } catch {
-      /* Artwork is not worth failing a download over; Poster already degrades to a glyph. */
+  try {
+    // Ask before filling the disk. On an installed app this is granted without a prompt on
+    // Chromium and Android; on iOS it is the difference between surviving the trip and not.
+    await navigator.storage?.persist?.()
+
+    // The dialog has usually just measured it; asking the server for the same sixty-seven
+    // records a second time is a minute of nothing.
+    const plan = measured ?? (await measure(detail))
+    row.episodeIds = plan.episodeIds
+    row.bytesTotal = plan.bytes
+    await save(row)
+
+    // The poster, so the downloads shelf is not a row of grey rectangles on the plane.
+    if (detail.posterUrl) {
+      try {
+        await (await caches.open(API_CACHE)).add(detail.posterUrl)
+      } catch {
+        /* Artwork is not worth failing a download over; Poster already degrades to a glyph. */
+      }
     }
+  } catch (error) {
+    row.state = 'error'
+    row.error = error instanceof Error ? error.message : 'failed'
+    await save(row)
+    throw error
   }
 
   queue.push(detail.id)

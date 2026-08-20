@@ -16,6 +16,7 @@ import { setupI18n } from '@/i18n'
 
 const measure = vi.fn()
 const start = vi.fn()
+const show = vi.fn()
 vi.mock('@/offline/downloadManager', () => ({
   measure: (...args: unknown[]) => measure(...args),
   start: (...args: unknown[]) => start(...args),
@@ -24,7 +25,7 @@ vi.mock('@/offline/downloadManager', () => ({
 }))
 vi.mock('@/offline/register', () => ({ offlineSupported: () => true }))
 vi.mock('@/offline/useDownloads', () => ({ useSeriesDownload: () => null }))
-vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: vi.fn() }) }))
+vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: (...a: unknown[]) => show(...a) }) }))
 
 const { DownloadButton } = await import('./DownloadButton')
 
@@ -48,8 +49,10 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
+  show.mockReset()
   measure.mockReset()
   start.mockReset()
+  start.mockResolvedValue(undefined)
   measure.mockResolvedValue({ episodeIds: ['a', 'b'], bytes: 1_370_000_000 })
 })
 
@@ -162,5 +165,23 @@ describe('DownloadButton', () => {
 
     expect(screen.getByRole('button')).toHaveProperty('disabled', true)
     expect(screen.getByText('No disponible aquí')).toBeTruthy()
+  })
+
+  it('says so when the download cannot even be started', async () => {
+    /* This used to be `void start(...)`, which swallowed everything: a download that died on
+       IndexedDB or a refused quota looked exactly like one that had never been pressed. */
+    start.mockRejectedValue(new Error('QuotaExceededError'))
+    render(<DownloadButton detail={detail} />)
+    fireEvent.click(screen.getByRole('button'))
+    await screen.findByText(/1,4GB/)
+
+    const confirm = screen
+      .getAllByRole('button')
+      .find((node) => node.textContent?.includes('Descargar') && node.closest('dialog'))
+    fireEvent.click(confirm as HTMLElement)
+
+    await waitFor(() =>
+      expect(show).toHaveBeenCalledWith(expect.stringContaining('QuotaExceededError'), 'error'),
+    )
   })
 })

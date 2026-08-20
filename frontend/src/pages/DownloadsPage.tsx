@@ -121,6 +121,12 @@ export function DownloadsPage() {
                   label={t('downloads.progressLabel', { title: row.title })}
                 />
                 <p className={styles.meta}>
+                  {/* The state in words, because "0 de 67" alone cannot tell waiting apart
+                      from stopped apart from failed — and those need different reactions. */}
+                  <Badge tone={row.state === 'error' ? 'warning' : 'neutral'}>
+                    {t(`downloads.state.${row.state}`)}
+                  </Badge>
+                  {' '}
                   {t('downloads.episodesOf', {
                     done: row.storedIds.length,
                     total: row.episodeIds.length,

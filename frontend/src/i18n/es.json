@@ -1029,8 +1029,16 @@
     "remove": "Borrar de este dispositivo",
     "removed": "Borramos la serie de este dispositivo.",
     "episodesOf": "{{done}} de {{total}}",
+    "state": {
+      "queued": "En cola",
+      "running": "Descargando",
+      "paused": "Pausada",
+      "done": "Lista",
+      "error": "Falló"
+    },
     "progressLabel": "Descargando «{{title}}»",
     "measureFailed": "No pudimos calcular el tamaño. ¿Está el servidor encendido?",
+    "startFailed": "No pudimos empezar la descarga. {{reason}}",
     "confirmTitle": "Descargar «{{title}}»",
     "confirmBody": "{{count}} episodios · {{size}} en este dispositivo.",
     "confirmMeasuring": "{{count}} episodios · calculando el tamaño…",
