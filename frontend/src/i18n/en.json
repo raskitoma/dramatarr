@@ -1025,6 +1025,7 @@
     "resume": "Resume",
     "pause": "pause",
     "downloaded": "Downloaded",
+    "downloadedRemove": "Downloaded — remove from this device",
     "remove": "Remove from this device",
     "removed": "Removed from this device.",
     "episodesOf": "{{done}} of {{total}}",

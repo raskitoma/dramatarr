@@ -1025,6 +1025,7 @@
     "resume": "Reanudar",
     "pause": "pausar",
     "downloaded": "Descargada",
+    "downloadedRemove": "Descargada — borrar de este dispositivo",
     "remove": "Borrar de este dispositivo",
     "removed": "Borramos la serie de este dispositivo.",
     "episodesOf": "{{done}} de {{total}}",

@@ -67,10 +67,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // Last, and deliberately after search: asking for something is what you do once looking for
   // it has failed, and putting it earlier would invite requests for things already on the NAS.
   { href: '/requests', labelKey: 'nav.requests', tone: 'requests' },
-  // After Pedidos, because it is about what is already here rather than what is not. It earns
-  // its place in the bar rather than hiding in the account menu: the whole point is checking it
-  // *before* leaving, and something you have to go looking for gets checked on the plane.
-  { href: '/downloads', labelKey: 'nav.downloads' },
 ]
 
 /**
@@ -214,6 +210,13 @@ function AvatarMenu({ user }: { user: User }) {
               {t('nav.admin')}
             </Link>
           ) : null}
+          {/* Above the sign-out, with the rest of what belongs to *this* device and this
+              person. Downloads are per-browser — what is here is not on the phone — so the
+              account menu is where they read as personal rather than as a section of the
+              library. */}
+          <Link href="/downloads" role="menuitem" className={styles.menuItem}>
+            {t('nav.downloads')}
+          </Link>
           <button
             type="button"
             role="menuitem"

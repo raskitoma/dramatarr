@@ -9,15 +9,14 @@
  * to work and is invisible to the app on the plane, because storage is per-origin.
  */
 
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { SeriesDetail } from '@/api/types'
 import { Button } from '@/components/Button'
 import { Dialog } from '@/components/Dialog'
-import { ProgressBar } from '@/components/ProgressBar'
 import { useToast } from '@/components/Toast'
-import { DownloadIcon, TrashIcon } from '@/components/icons'
+import { CheckIcon, DownloadIcon } from '@/components/icons'
 import { erase, measure, pause, start } from '@/offline/downloadManager'
 import { offlineSupported } from '@/offline/register'
 import { useSeriesDownload } from '@/offline/useDownloads'
@@ -61,39 +60,44 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
     )
   }
 
+  /* One square, four states. Its three neighbours in this row are glyphs, so this one is too —
+     the progress lives in the accessible name and in a hairline across the bottom of the
+     button, rather than in a word that spills out of the box. */
+  const label = done
+    ? t('downloads.downloadedRemove')
+    : busy
+      ? `${t('downloads.progressLabel', { title: detail.title })} · ${t('downloads.episodesOf', { done: stored, total })} · ${t('downloads.pause')}`
+      : row?.state === 'paused'
+        ? t('downloads.resume')
+        : t('downloads.download')
+
   return (
     <>
-      {done ? (
-        <Button
-          variant="secondary"
-          title={t('downloads.remove')}
-          onClick={() => {
+      <Button
+        variant="secondary"
+        className={styles.trigger}
+        title={label}
+        loading={measuring}
+        onClick={() => {
+          if (done) {
             void erase(detail.id).then(() => toast.show(t('downloads.removed'), 'success'))
-          }}
-        >
-          <TrashIcon />
-          <span className={styles.label}>{t('downloads.downloaded')}</span>
-        </Button>
-      ) : busy ? (
-        <div className={styles.running}>
-          <ProgressBar
-            className={styles.bar}
-            percent={total ? (stored / total) * 100 : 0}
-            size="sm"
-            label={t('downloads.progressLabel', { title: detail.title })}
+          } else if (busy) {
+            pause(detail.id)
+          } else {
+            void ask()
+          }
+        }}
+      >
+        {done ? <CheckIcon /> : <DownloadIcon />}
+        <span className={styles.label}>{label}</span>
+        {busy || row?.state === 'paused' ? (
+          <span
+            className={styles.fill}
+            style={{ '--fill': `${total ? (stored / total) * 100 : 0}%` } as CSSProperties}
+            aria-hidden="true"
           />
-          <button type="button" className={styles.pause} onClick={() => pause(detail.id)}>
-            {t('downloads.episodesOf', { done: stored, total })} · {t('downloads.pause')}
-          </button>
-        </div>
-      ) : (
-        <Button variant="secondary" onClick={() => void ask()} loading={measuring}>
-          <DownloadIcon />
-          <span className={styles.label}>
-            {row?.state === 'paused' ? t('downloads.resume') : t('downloads.download')}
-          </span>
-        </Button>
-      )}
+        ) : null}
+      </Button>
 
       <Dialog
         open={asking && plan !== null}
