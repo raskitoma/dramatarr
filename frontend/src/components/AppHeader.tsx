@@ -22,6 +22,7 @@ import { avatarUrlOf, type User } from '@/api/types'
 import { useAuth } from '@/hooks/useAuth'
 
 import { Avatar } from '@/components/Avatar'
+import { useRequestCounts } from '@/api/requests'
 import { useDownloadCount } from '@/offline/useDownloads'
 import { HeaderSearch } from '@/components/HeaderSearch'
 import { IconButton } from '@/components/IconButton'
@@ -112,6 +113,11 @@ function AvatarMenu({ user }: { user: User }) {
      The badge is how that stays visible: without it, a download in progress is only knowable
      by navigating to the screen that shows it. */
   const downloading = useDownloadCount()
+  /* Admins carry a second kind of pending thing: requests somebody else made. The dot on the
+     avatar is shared — it means "there is something for you in this menu" — and the menu rows
+     below say which. Only fetched for admins; `useRequestCounts` hits an admin-only route. */
+  const requestCounts = useRequestCounts(isAdmin)
+  const pendingRequests = isAdmin ? (requestCounts.data?.pending ?? 0) : 0
   const toast = useToast()
   const [, navigate] = useLocation()
   const [open, setOpen] = useState(false)
@@ -173,7 +179,7 @@ function AvatarMenu({ user }: { user: User }) {
         type="button"
         ref={triggerRef}
         className={styles.avatarButton}
-        data-busy={downloading > 0 ? 'true' : undefined}
+        data-busy={downloading > 0 || pendingRequests > 0 ? 'true' : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -212,8 +218,11 @@ function AvatarMenu({ user }: { user: User }) {
             {t('nav.account')}
           </Link>
           {isAdmin ? (
-            <Link href="/admin" role="menuitem" className={styles.menuItem}>
+            <Link href="/admin/requests" role="menuitem" className={styles.menuItem}>
               {t('nav.admin')}
+              {pendingRequests > 0 ? (
+                <span className={styles.menuCount}>{pendingRequests}</span>
+              ) : null}
             </Link>
           ) : null}
           {/* Above the sign-out, with the rest of what belongs to *this* device and this

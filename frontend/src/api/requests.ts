@@ -256,10 +256,13 @@ export function useAdminRequests(params: AdminRequestQuery = {}) {
   })
 }
 
-export function useRequestCounts() {
+/** Admin-only: the route is under `/admin`. `enabled` exists so the header can call this
+ *  unconditionally without firing a 403 for every member on every page load. */
+export function useRequestCounts(enabled = true) {
   return useQuery({
     queryKey: requestKeys.counts(),
     queryFn: () => api.get<RequestCounts>('/admin/requests/counts'),
+    enabled,
   })
 }
 

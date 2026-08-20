@@ -29,6 +29,8 @@ import {
 } from '@/components/icons'
 import { formatDate, formatDuration } from '@/lib/format'
 
+import { usePlayable } from '@/offline/useOffline'
+
 import styles from './EpisodeRow.module.css'
 
 /** Zero-padded parts for the `series.episodeLabel` interpolation, shared with the home row. */
@@ -49,6 +51,10 @@ interface EpisodeRowProps {
 }
 
 export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
+  /* Not `canPlay`, which answers "the NAS holds a file" — the right answer online and
+     the wrong one on a plane. Offline this becomes "downloaded on this device", so the row
+     agrees with what the Play button will actually open. */
+  const canPlay = usePlayable()(episode)
   const { t, i18n } = useTranslation()
   const hintId = useId()
 
@@ -72,7 +78,7 @@ export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
             {/* Only over a real still: it says the picture is the play control. Decorative —
                 the link around it is already named. The placeholder needs no such hint, and
                 would rather spend its middle on the number. */}
-            {episode.available ? (
+            {canPlay ? (
               <span className={styles.playMark} aria-hidden="true">
                 <PlayIcon />
               </span>
@@ -131,11 +137,11 @@ export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
     <li
       className={cx(
         styles.row,
-        episode.available ? styles.playable : styles.unavailable,
+        canPlay ? styles.playable : styles.unavailable,
         episode.watched && styles.isWatched,
       )}
     >
-      {episode.available ? (
+      {canPlay ? (
         <Link href={`/watch/${encodeURIComponent(episode.id)}`} className={styles.main}>
           {body}
         </Link>
@@ -154,7 +160,7 @@ export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
           <Badge tone="info">{t('series.inProgress')}</Badge>
         ) : null}
 
-        {!episode.available ? (
+        {!canPlay ? (
           <span className={styles.unavailableTag} title={t('series.notAvailableHint')}>
             <Badge tone="neutral">{t('series.notAvailable')}</Badge>
             <span className="sr-only" id={hintId}>

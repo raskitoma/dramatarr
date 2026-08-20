@@ -68,6 +68,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useDismissOnOutside } from '@/hooks/useDismissOnOutside'
 import { formatTimecode, missingFromLibrary } from '@/lib/format'
 
+import { usePlayable } from '@/offline/useOffline'
+
 import styles from './SeriesPage.module.css'
 
 const STATUS_LABEL_KEY: Record<SeriesStatus, string> = {
@@ -245,6 +247,9 @@ export function SeriesPage() {
     return <EmptyState title={t('errors.NOT_FOUND')} />
   }
 
+  // The same predicate the rows and the grid use, so the three cannot disagree about
+  // what this device can open.
+  const playable = usePlayable()
   const next = detail.nextEpisode
   const fullyWatched =
     detail.availableEpisodeCount > 0 && detail.watchedEpisodeCount >= detail.availableEpisodeCount
@@ -258,8 +263,11 @@ export function SeriesPage() {
    * first available episode makes Rewatch mean what it says.
    */
   const firstAvailable =
-    seasons.flatMap((season) => season.episodes).find((episode) => episode.available) ?? null
-  const playTarget = next ?? firstAvailable
+    seasons.flatMap((season) => season.episodes).find((episode) => playable(episode)) ?? null
+  /* Offline, the server's "where were you" can point at an episode this device never
+     downloaded — and it did: four episodes on a phone, aeroplane mode, and Play opened the
+     fifth. Whatever `next` says, it is only offered when the bytes are here. */
+  const playTarget = next && playable(next) ? next : firstAvailable
 
   const primaryLabel = !playTarget
     ? null

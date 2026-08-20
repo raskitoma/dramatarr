@@ -31,7 +31,6 @@ import styles from './DownloadsPage.module.css'
 
 interface DeviceFacts {
   persisted: boolean
-  originUsage: number
 }
 
 export function DownloadsPage() {
@@ -45,14 +44,16 @@ export function DownloadsPage() {
     void pendingCount().then(setPending)
     void (async () => {
       if (!offlineSupported()) return
-      const [persisted, estimate] = await Promise.all([
-        navigator.storage?.persisted?.() ?? Promise.resolve(false),
-        navigator.storage?.estimate?.() ?? Promise.resolve({ usage: 0 }),
-      ])
-      setFacts({ persisted, originUsage: estimate.usage ?? 0 })
+      const persisted = (await navigator.storage?.persisted?.()) ?? false
+      setFacts({ persisted })
     })()
   }, [])
 
+  /* One number, from the ledger, which counts the episodes actually written to the cache.
+     `navigator.storage.estimate().usage` used to sit beside it labelled "in total", and it
+     reported *less* — 46MB against 99MB — because browsers update that figure lazily and
+     quantise it. A part larger than its whole is the same defect as "62 de 62 vistos · falta
+     1": two true-ish numbers, adjacent, saying something false. */
   const mine = rows.reduce((sum, row) => sum + row.bytesDone, 0)
 
   return (
@@ -87,10 +88,6 @@ export function DownloadsPage() {
           <div className={styles.fact}>
             <dt>{t('downloads.deviceUsage')}</dt>
             <dd className={styles.number}>{formatBytes(mine)}</dd>
-          </div>
-          <div className={styles.fact}>
-            <dt>{t('downloads.deviceOriginUsage')}</dt>
-            <dd className={styles.number}>{formatBytes(facts?.originUsage ?? 0)}</dd>
           </div>
         </dl>
         {!offlineReady() ? <p className={styles.hint}>{t('downloads.offlineHint')}</p> : null}

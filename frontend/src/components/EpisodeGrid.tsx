@@ -32,6 +32,8 @@ import { ProgressBar } from '@/components/ProgressBar'
 import { cx } from '@/components/cx'
 import { CheckCircleIcon, CircleIcon, UnwatchIcon } from '@/components/icons'
 
+import { usePlayable } from '@/offline/useOffline'
+
 import styles from './EpisodeGrid.module.css'
 
 /**
@@ -248,6 +250,9 @@ function EpisodeTile({
   onClearProgress,
   faceRef,
 }: EpisodeTileProps) {
+  /* Same question as the row asks, answered the same way: offline, "available" has to mean
+     "downloaded here", or the grid offers episodes the player cannot open. */
+  const canPlay = usePlayable()(episode)
   const { t } = useTranslation()
   const hintId = useId()
 
@@ -275,10 +280,10 @@ function EpisodeTile({
       className={cx(
         styles.tile,
         episode.watched && styles.isWatched,
-        !episode.available && styles.isUnavailable,
+        !canPlay && styles.isUnavailable,
       )}
     >
-      {episode.available ? (
+      {canPlay ? (
         <Link
           href={`/watch/${encodeURIComponent(episode.id)}`}
           className={styles.face}
@@ -309,7 +314,7 @@ function EpisodeTile({
         </button>
       )}
 
-      {episode.available ? (
+      {canPlay ? (
         /* Doubles as the watched indicator, so it costs no extra room: a ringed check when the
            episode is done, an empty ring when it is not, and one tap flips it either way. */
         <IconButton
@@ -322,7 +327,7 @@ function EpisodeTile({
         </IconButton>
       ) : null}
 
-      {episode.available && hasProgress ? (
+      {canPlay && hasProgress ? (
         <>
           {/* The percent has to be on screen anyway, so it is also the control that resets it —
               one tap, always visible, rather than a menu hidden behind a hover. */}

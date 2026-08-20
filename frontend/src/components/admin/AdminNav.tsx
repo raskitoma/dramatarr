@@ -13,6 +13,8 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'wouter'
 
+import { useRequestCounts } from '@/api/requests'
+
 import styles from './AdminNav.module.css'
 
 interface AdminNavItem {
@@ -40,6 +42,10 @@ function isActive(item: AdminNavItem, location: string): boolean {
 export function AdminNav() {
   const { t } = useTranslation()
   const [location] = useLocation()
+  /* Pedidos is the one item here that carries work somebody else created, so it is the one
+     worth marking. The rest are places you go when you decide to. */
+  const counts = useRequestCounts()
+  const pending = counts.data?.pending ?? 0
 
   return (
     <nav aria-label={t('nav.admin')} className={styles.nav}>
@@ -51,6 +57,11 @@ export function AdminNav() {
           aria-current={isActive(item, location) ? 'page' : undefined}
         >
           {t(item.labelKey)}
+          {item.href === '/admin/requests' && pending > 0 ? (
+            <span className={styles.count} aria-label={t('admin.requests.pendingCount', { count: pending })}>
+              {pending}
+            </span>
+          ) : null}
         </Link>
       ))}
     </nav>

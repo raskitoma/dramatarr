@@ -164,7 +164,7 @@ describe('RequestsPage', () => {
 
     await cardHeading('Ruta de Cristal')
 
-    const link = screen.getByRole('link', { name: /ya la tenemos/i })
+    const link = screen.getByRole('link', { name: /en la biblioteca/i })
     expect(link.getAttribute('href')).toBe('/series/ruta-de-cristal')
     expect(screen.queryByRole('button', { name: /^pedir$/i })).toBeNull()
     expect(post).not.toHaveBeenCalled()
