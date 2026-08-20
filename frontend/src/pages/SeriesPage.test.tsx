@@ -19,7 +19,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -142,6 +142,55 @@ beforeEach(() => {
 })
 
 afterEach(cleanup)
+
+describe('SeriesPage — hooks and the loading transition', () => {
+  /* This is the one test shape that catches a hook below an early return, and it has now
+     caught the same mistake twice in this project — first on the actor page, then here. A test
+     handed loaded data renders once, calls every hook, and passes against the broken code: the
+     counts only diverge across loading → loaded. */
+
+  it('survives its data arriving', async () => {
+    seriesDetail.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    const { rerender } = renderIn(<SeriesPage />)
+
+    expect(screen.getByText('Cargando…')).toBeTruthy()
+
+    seriesDetail.mockReturnValue({ data: detail(), isLoading: false, isError: false })
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ToastProvider>
+          <SeriesPage />
+        </ToastProvider>
+      </QueryClientProvider>,
+    )
+
+    // Without the hook lifted above the early returns this throws
+    // "Rendered more hooks than during the previous render".
+    await waitFor(() => expect(screen.getByText('The Return of the Lost Heiress')).toBeTruthy())
+  })
+
+  it('survives an error arriving instead', () => {
+    seriesDetail.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    const { rerender } = renderIn(<SeriesPage />)
+
+    seriesDetail.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('boom'),
+      refetch: vi.fn(),
+    })
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ToastProvider>
+          <SeriesPage />
+        </ToastProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(screen.queryByText('The Return of the Lost Heiress')).toBeNull()
+  })
+})
 
 describe('SeriesPage hero', () => {
   it('shows the synopsis in the hero, with no way to open a dialog on a short one', () => {

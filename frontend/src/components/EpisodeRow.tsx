@@ -51,7 +51,7 @@ interface EpisodeRowProps {
 }
 
 export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
-  /* Not `canPlay`, which answers "the NAS holds a file" — the right answer online and
+  /* Not `episode.available`, which answers "the NAS holds a file" — the right answer online and
      the wrong one on a plane. Offline this becomes "downloaded on this device", so the row
      agrees with what the Play button will actually open. */
   const canPlay = usePlayable()(episode)

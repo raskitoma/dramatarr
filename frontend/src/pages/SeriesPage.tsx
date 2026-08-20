@@ -231,6 +231,16 @@ export function SeriesPage() {
     }
   }
 
+  /* Above the early returns, and it has to stay there.
+   *
+   * A hook below them is called on the loaded render and not on the loading one, so React sees
+   * the count change and throws "Rendered more hooks than during the previous render" — which
+   * is every series page dying the moment its data arrives. The same mistake killed the actor
+   * page earlier in this project; the test that catches it is the one that leaves the query
+   * unresolved and *then* resolves it, because a test handed loaded data passes against the
+   * broken code. */
+  const playable = usePlayable()
+
   if (query.isLoading) {
     return (
       <div className={styles.centered}>
@@ -247,9 +257,6 @@ export function SeriesPage() {
     return <EmptyState title={t('errors.NOT_FOUND')} />
   }
 
-  // The same predicate the rows and the grid use, so the three cannot disagree about
-  // what this device can open.
-  const playable = usePlayable()
   const next = detail.nextEpisode
   const fullyWatched =
     detail.availableEpisodeCount > 0 && detail.watchedEpisodeCount >= detail.availableEpisodeCount
