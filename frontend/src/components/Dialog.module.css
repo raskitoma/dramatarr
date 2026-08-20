@@ -4,6 +4,10 @@
   /* Percent, not vw: a top-layer element resolves it against the viewport minus scrollbars,
    * so the dialog cannot sit a scrollbar's width wider than the screen. */
   inline-size: min(var(--dialog-width), calc(100% - var(--space-5)));
+  /* A floor in viewport units, which no containing block can shrink. Belt and braces next to
+     the portal above: if `100%` ever resolves against something small again, the dialog is
+     narrow rather than a forty-pixel square with one letter showing through `overflow`. */
+  min-inline-size: min(18rem, calc(100dvw - var(--space-5)));
   max-inline-size: none;
   max-block-size: min(calc(100dvh - var(--space-6)), 44rem);
   padding: 0;

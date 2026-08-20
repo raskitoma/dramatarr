@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, type MouseEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { IconButton } from './IconButton'
@@ -118,7 +119,19 @@ export function Dialog({
     pressedBackdrop.current = false
   }, [])
 
-  return (
+  /* Mounted on the body, not where it was written.
+   *
+   * `showModal()` is supposed to make where it lives irrelevant — the top layer has the
+   * viewport as its containing block whatever is above it. When that promotion does not
+   * happen, or happens late, the UA falls back to `position: absolute` and the dialog inherits
+   * the nearest positioned ancestor instead: here, a 2.5rem icon button inside a hero card
+   * with `overflow: hidden`. `inline-size: min(32rem, 100% - …)` then resolves against forty
+   * pixels and the whole dialog collapses to a glyph, which is exactly what the owner kept
+   * seeing and what I could not reproduce.
+   *
+   * A portal removes the question rather than answering it, and it is the pattern this
+   * codebase already uses for `Toast` and `PersonPeek`. */
+  return createPortal(
     <dialog
       ref={ref}
       className={cx(styles.dialog, styles[size], className)}
@@ -160,7 +173,8 @@ export function Dialog({
           {footer ? <div className={styles.footer}>{footer}</div> : null}
         </div>
       ) : null}
-    </dialog>
+    </dialog>,
+    document.body,
   )
 }
 

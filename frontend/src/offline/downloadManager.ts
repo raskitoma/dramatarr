@@ -93,10 +93,26 @@ export async function reconcile(): Promise<void> {
  *
  * Sequential was the mistake that made this feel broken: sixty-seven round trips one after the
  * other, through Cloudflare, is most of a minute of a spinner that looks exactly like a
- * download. Eight at a time is a few seconds. It stays modest because these are the *records*,
- * not the video — there is nothing to gain by opening sixty-seven connections to a home NAS.
+ * download.
+ *
+ * Four, not eight. Eight produced a real `504 Gateway Timeout` from the NAS on this library —
+ * each of those records is a handful of queries against SQLite on a home box behind Cloudflare,
+ * and the ceiling is lower than a browser's six-connection limit suggests. Four is still an
+ * order of magnitude better than one, and it stops short of the thing that broke.
  */
-const MEASURE_CONCURRENCY = 8
+const MEASURE_CONCURRENCY = 4
+
+/** One retry, because a 504 is a timeout rather than an answer: the record is there, the box
+ *  was just busy. Without this a single slow episode fails the whole measurement and the dialog
+ *  says it could not work out the size. */
+async function withRetry<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    return work()
+  }
+}
 
 async function inBatches<T, R>(
   items: T[],
@@ -131,8 +147,8 @@ export async function measure(detail: SeriesDetail): Promise<Measured> {
   const cache = await caches.open(API_CACHE)
 
   const sizes = await inBatches(available, MEASURE_CONCURRENCY, async (episode) => {
-    const record = await api.get<EpisodeDetail>(
-      `/library/episodes/${encodeURIComponent(episode.id)}`,
+    const record = await withRetry(() =>
+      api.get<EpisodeDetail>(`/library/episodes/${encodeURIComponent(episode.id)}`),
     )
     await cache.put(
       `/api/library/episodes/${encodeURIComponent(episode.id)}`,
