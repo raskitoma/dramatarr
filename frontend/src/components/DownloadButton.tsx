@@ -17,7 +17,7 @@ import { Button } from '@/components/Button'
 import { Dialog } from '@/components/Dialog'
 import { useToast } from '@/components/Toast'
 import { CheckIcon, DownloadIcon } from '@/components/icons'
-import { erase, measure, pause, start } from '@/offline/downloadManager'
+import { erase, measure, pause, resume, start } from '@/offline/downloadManager'
 import { offlineSupported } from '@/offline/register'
 import { useSeriesDownload } from '@/offline/useDownloads'
 import { formatBytes } from '@/lib/format'
@@ -34,7 +34,7 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
 
   const supported = offlineSupported()
   const done = row?.state === 'done'
-  const busy = row?.state === 'running'
+  const busy = row?.state === 'running' || row?.state === 'queued'
   const stored = row?.storedIds.length ?? 0
   const total = row?.episodeIds.length ?? 0
 
@@ -83,6 +83,10 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
             void erase(detail.id).then(() => toast.show(t('downloads.removed'), 'success'))
           } else if (busy) {
             pause(detail.id)
+          } else if (row?.state === 'paused' || row?.state === 'error') {
+            // Already measured; the row knows its episodes, so this skips straight back to
+            // pulling bytes rather than re-reading sixty-seven episode records.
+            resume(detail.id)
           } else {
             void ask()
           }

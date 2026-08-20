@@ -19,12 +19,15 @@ import type { EpisodeDetail, SeriesDetail } from '@/api/types'
 
 import { API_CACHE, MEDIA_CACHE, mediaUrl } from './constants'
 import { DOWNLOADS, all, get, put, remove, type DownloadRow } from './db'
+import { createQueue } from './queue'
 import { offlineSupported } from './register'
 
 const listeners = new Set<() => void>()
 let rows: DownloadRow[] = []
-let running: string | null = null
-let cancelled = new Set<string>()
+const cancelled = new Set<string>()
+
+/** One series at a time, in the order they were asked for. Tested on its own in `queue.ts`. */
+const queue = createQueue((seriesId) => drain(seriesId), () => announce())
 
 function announce(): void {
   for (const listener of listeners) listener()
@@ -60,8 +63,22 @@ export async function reconcile(): Promise<void> {
       await put(DOWNLOADS, row)
     }
   }
+  /* A row still marked `running` is a lie: the loop that was writing it lived in a page that
+     has since been closed or reloaded, and nothing has been downloading since. Left alone it
+     would sit there claiming progress forever. Put it back to `paused` — and then, if there is
+     a network, pick it straight back up, because a reload is not a decision to stop. */
+  const interrupted: string[] = []
+  for (const row of await all<DownloadRow>(DOWNLOADS)) {
+    if (row.state !== 'running') continue
+    row.state = 'paused'
+    await put(DOWNLOADS, row)
+    interrupted.push(row.seriesId)
+  }
+
   rows = await all<DownloadRow>(DOWNLOADS)
   announce()
+
+  if (navigator.onLine) for (const seriesId of interrupted) resume(seriesId)
 }
 
 /**
@@ -93,89 +110,110 @@ export async function measure(detail: SeriesDetail): Promise<{ episodeIds: strin
   return { episodeIds, bytes }
 }
 
+/**
+ * Put a series in the queue. Returns as soon as it is recorded, not when it is downloaded.
+ *
+ * The work runs in a module-level pump rather than under the component that pressed the button,
+ * so navigating away — or closing the series page entirely — does not stop it. That is the
+ * whole point: press Download, go and look at something else, and watch the count climb on the
+ * Downloads screen.
+ */
 export async function start(detail: SeriesDetail): Promise<void> {
-  if (!offlineSupported() || running) return
-  running = detail.id
+  if (!offlineSupported()) return
   cancelled.delete(detail.id)
 
-  try {
-    // Ask before filling the disk. On an installed app this is granted without a prompt on
-    // Chromium and Android; on iOS it is the difference between surviving the trip and not.
-    await navigator.storage?.persist?.()
+  // Ask before filling the disk. On an installed app this is granted without a prompt on
+  // Chromium and Android; on iOS it is the difference between surviving the trip and not.
+  await navigator.storage?.persist?.()
 
-    const existing = await get<DownloadRow>(DOWNLOADS, detail.id)
-    const { episodeIds, bytes } = await measure(detail)
+  const existing = await get<DownloadRow>(DOWNLOADS, detail.id)
+  const { episodeIds, bytes } = await measure(detail)
 
-    const row: DownloadRow = existing ?? {
-      seriesId: detail.id,
-      slug: detail.slug,
-      title: detail.title,
-      posterUrl: detail.posterUrl,
-      episodeIds,
-      storedIds: [],
-      bytesTotal: bytes,
-      bytesDone: 0,
-      state: 'queued',
-      error: null,
-      updatedAt: Date.now(),
-    }
-    row.episodeIds = episodeIds
-    row.bytesTotal = bytes
-    row.state = 'running'
-    row.error = null
-    await save(row)
-
-    // The poster, so the downloads shelf is not a row of grey rectangles on the plane.
-    if (detail.posterUrl) {
-      const cache = await caches.open(API_CACHE)
-      try {
-        await cache.add(detail.posterUrl)
-      } catch {
-        /* Artwork is not worth failing a download over; Poster already degrades to a glyph. */
-      }
-    }
-
-    const media = await caches.open(MEDIA_CACHE)
-    const done = new Set(row.storedIds)
-
-    for (const id of episodeIds) {
-      if (cancelled.has(detail.id)) break
-      if (done.has(id)) continue
-
-      const url = mediaUrl(id)
-      try {
-        // No Range header, so the API answers a full 200 with content-length — the one shape
-        // that both Chrome and Safari replay from a cache with seeking intact.
-        const response = await fetch(url, { credentials: 'same-origin' })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        await media.put(url, response)
-      } catch (error) {
-        row.state = 'error'
-        row.error = error instanceof Error ? error.message : 'failed'
-        await save(row)
-        return
-      }
-
-      done.add(id)
-      row.storedIds = [...done]
-      row.bytesDone = Math.round((bytes * done.size) / Math.max(1, episodeIds.length))
-      await save(row)
-    }
-
-    row.state = cancelled.has(detail.id)
-      ? 'paused'
-      : done.size === episodeIds.length
-        ? 'done'
-        : 'paused'
-    await save(row)
-  } finally {
-    running = null
-    announce()
+  const row: DownloadRow = existing ?? {
+    seriesId: detail.id,
+    slug: detail.slug,
+    title: detail.title,
+    posterUrl: detail.posterUrl,
+    episodeIds,
+    storedIds: [],
+    bytesTotal: bytes,
+    bytesDone: 0,
+    state: 'queued',
+    error: null,
+    updatedAt: Date.now(),
   }
+  row.episodeIds = episodeIds
+  row.bytesTotal = bytes
+  row.state = 'queued'
+  row.error = null
+  await save(row)
+
+  // The poster, so the downloads shelf is not a row of grey rectangles on the plane.
+  if (detail.posterUrl) {
+    try {
+      await (await caches.open(API_CACHE)).add(detail.posterUrl)
+    } catch {
+      /* Artwork is not worth failing a download over; Poster already degrades to a glyph. */
+    }
+  }
+
+  queue.push(detail.id)
+}
+
+/** Resume something already measured — a paused row, or one a reload interrupted. No
+ *  `SeriesDetail` needed: the row already knows its episodes. */
+export function resume(seriesId: string): void {
+  if (!offlineSupported()) return
+  cancelled.delete(seriesId)
+  queue.push(seriesId)
+}
+
+async function drain(seriesId: string): Promise<void> {
+  const row = await get<DownloadRow>(DOWNLOADS, seriesId)
+  if (!row) return
+
+  row.state = 'running'
+  row.error = null
+  await save(row)
+
+  const media = await caches.open(MEDIA_CACHE)
+  const done = new Set(row.storedIds)
+
+  for (const id of row.episodeIds) {
+    if (cancelled.has(seriesId)) break
+    if (done.has(id)) continue
+
+    const url = mediaUrl(id)
+    try {
+      // No Range header, so the API answers a full 200 with content-length — the one shape
+      // that both Chrome and Safari replay from a cache with seeking intact.
+      const response = await fetch(url, { credentials: 'same-origin' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      await media.put(url, response)
+    } catch (error) {
+      row.state = 'error'
+      row.error = error instanceof Error ? error.message : 'failed'
+      await save(row)
+      return
+    }
+
+    done.add(id)
+    row.storedIds = [...done]
+    row.bytesDone = Math.round((row.bytesTotal * done.size) / Math.max(1, row.episodeIds.length))
+    await save(row)
+  }
+
+  row.state = cancelled.has(seriesId)
+    ? 'paused'
+    : done.size === row.episodeIds.length
+      ? 'done'
+      : 'paused'
+  await save(row)
 }
 
 export function pause(seriesId: string): void {
   cancelled.add(seriesId)
+  queue.drop(seriesId)
 }
 
 export async function erase(seriesId: string): Promise<void> {
@@ -198,6 +236,13 @@ export function snapshot(): DownloadRow[] {
   return rows
 }
 
-export function isRunning(): string | null {
-  return running
+/** The series being pulled right now, if any. */
+export function activeSeries(): string | null {
+  return queue.active()
+}
+
+/** How many are downloading or waiting — the number the header badge shows, so a download in
+ *  progress is visible from anywhere rather than only on its own screen. */
+export function pendingCount(): number {
+  return queue.size()
 }

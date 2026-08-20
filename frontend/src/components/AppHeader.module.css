@@ -149,6 +149,8 @@
 /* The circle itself belongs to Avatar; this is only the control wrapped around it, so the
    header, the account screen and the users table cannot drift apart visually. */
 .avatarButton {
+  /* Anchors the busy dot below. */
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -227,6 +229,32 @@
 .menuItem:hover {
   background: var(--surface-sunken);
   text-decoration: none;
+}
+
+/* Count of series downloading or waiting, pushed to the trailing edge of the row. */
+.menuCount {
+  margin-inline-start: auto;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--surface);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+
+/* A dot on the avatar itself, because the count above is only visible with the menu open —
+   and the whole point of a background download is that you have gone somewhere else. */
+.avatarButton[data-busy='true']::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 0.55rem;
+  block-size: 0.55rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  border: 2px solid var(--surface);
 }
 
 .menuDanger {

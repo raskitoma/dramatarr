@@ -22,6 +22,7 @@ import { avatarUrlOf, type User } from '@/api/types'
 import { useAuth } from '@/hooks/useAuth'
 
 import { Avatar } from '@/components/Avatar'
+import { useDownloadCount } from '@/offline/useDownloads'
 import { HeaderSearch } from '@/components/HeaderSearch'
 import { IconButton } from '@/components/IconButton'
 import { LocaleSelect } from '@/components/LocaleSelect'
@@ -107,6 +108,10 @@ function NavLinks({ linkClassName }: { linkClassName: string | undefined }) {
 function AvatarMenu({ user }: { user: User }) {
   const { t } = useTranslation()
   const { isAdmin, signOut } = useAuth()
+  /* Downloads run in a module-level queue, so they keep going after the series page is gone.
+     The badge is how that stays visible: without it, a download in progress is only knowable
+     by navigating to the screen that shows it. */
+  const downloading = useDownloadCount()
   const toast = useToast()
   const [, navigate] = useLocation()
   const [open, setOpen] = useState(false)
@@ -168,6 +173,7 @@ function AvatarMenu({ user }: { user: User }) {
         type="button"
         ref={triggerRef}
         className={styles.avatarButton}
+        data-busy={downloading > 0 ? 'true' : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -216,6 +222,9 @@ function AvatarMenu({ user }: { user: User }) {
               library. */}
           <Link href="/downloads" role="menuitem" className={styles.menuItem}>
             {t('nav.downloads')}
+            {downloading > 0 ? (
+              <span className={styles.menuCount}>{downloading}</span>
+            ) : null}
           </Link>
           <button
             type="button"
