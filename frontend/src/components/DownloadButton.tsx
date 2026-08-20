@@ -35,20 +35,28 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
   const supported = offlineSupported()
   const done = row?.state === 'done'
   const busy = row?.state === 'running' || row?.state === 'queued'
+  const available = (detail.seasons ?? [])
+    .flatMap((season) => season.episodes)
+    .filter((episode) => episode.available).length
   const stored = row?.storedIds.length ?? 0
   const total = row?.episodeIds.length ?? 0
 
-  async function ask(): Promise<void> {
+  /* Opens the dialog *first*, then measures into it.
+   *
+   * It used to measure first and open after, and the wait was long enough — sixty-seven
+   * records, one after the other — that the spinner read as a download in progress. Pressing
+   * Descargar and then being asked to confirm, a minute later, looks like nothing happened. */
+  function ask(): void {
+    setPlan(null)
     setAsking(true)
     setMeasuring(true)
-    try {
-      setPlan(await measure(detail))
-    } catch {
-      toast.show(t('downloads.measureFailed'), 'error')
-      setAsking(false)
-    } finally {
-      setMeasuring(false)
-    }
+    measure(detail)
+      .then(setPlan)
+      .catch(() => {
+        toast.show(t('downloads.measureFailed'), 'error')
+        setAsking(false)
+      })
+      .finally(() => setMeasuring(false))
   }
 
   if (!supported) {
@@ -77,7 +85,6 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
         variant="secondary"
         className={styles.trigger}
         title={label}
-        loading={measuring}
         onClick={() => {
           if (done) {
             void erase(detail.id).then(() => toast.show(t('downloads.removed'), 'success'))
@@ -88,7 +95,7 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
             // pulling bytes rather than re-reading sixty-seven episode records.
             resume(detail.id)
           } else {
-            void ask()
+            ask()
           }
         }}
       >
@@ -104,22 +111,28 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
       </Button>
 
       <Dialog
-        open={asking && plan !== null}
+        open={asking}
         onClose={() => setAsking(false)}
         title={t('downloads.confirmTitle', { title: detail.title })}
-        description={t('downloads.confirmBody', {
-          count: plan?.episodeIds.length ?? 0,
-          size: formatBytes(plan?.bytes ?? 0),
-        })}
+        description={
+          plan
+            ? t('downloads.confirmBody', {
+                count: plan.episodeIds.length,
+                size: formatBytes(plan.bytes),
+              })
+            : t('downloads.confirmMeasuring', { count: available })
+        }
         footer={
           <>
             <Button variant="ghost" onClick={() => setAsking(false)}>
               {t('common.cancel')}
             </Button>
             <Button
+              loading={measuring}
+              disabled={measuring}
               onClick={() => {
                 setAsking(false)
-                void start(detail)
+                if (plan) void start(detail, plan)
               }}
             >
               {t('downloads.download')}

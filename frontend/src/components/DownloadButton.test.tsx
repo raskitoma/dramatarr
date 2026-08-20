@@ -28,7 +28,13 @@ vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: vi.fn() }) }))
 
 const { DownloadButton } = await import('./DownloadButton')
 
-const detail = { id: 's1', slug: 'x-ray', title: 'My X-Ray Vision', posterUrl: null } as SeriesDetail
+const detail = {
+  id: 's1',
+  slug: 'x-ray',
+  title: 'My X-Ray Vision',
+  posterUrl: null,
+  seasons: [{ seasonNumber: 1, episodes: [{ id: 'a', available: true }, { id: 'b', available: true }] }],
+} as unknown as SeriesDetail
 
 beforeAll(async () => {
   await setupI18n('es')
@@ -61,18 +67,53 @@ describe('DownloadButton', () => {
     expect(document.querySelector('svg')).toBeTruthy()
   })
 
-  it('does not open the dialog until it knows the real size', async () => {
-    /* The total is not knowable without reading every episode record, and a confirmation that
-       guesses at gigabytes is worse than none. */
+  it('opens at once and fills the size in, rather than making you wait for it', async () => {
+    /* Measuring reads every episode record. When that ran *before* the dialog opened, the
+       spinner looked like a download in progress and the confirmation arrived a minute later
+       as if nothing had happened. */
     let resolve: (value: { episodeIds: string[]; bytes: number }) => void = () => {}
     measure.mockReturnValue(new Promise((r) => (resolve = r)))
 
     render(<DownloadButton detail={detail} />)
     fireEvent.click(screen.getByRole('button'))
 
-    expect(screen.queryByRole('dialog')).toBeNull()
+    // Open immediately, saying what it already knows.
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeTruthy()
+    expect(screen.getByText(/calculando el tamaño/)).toBeTruthy()
+
     resolve({ episodeIds: ['a', 'b'], bytes: 1_370_000_000 })
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/1,4GB/)).toBeTruthy())
+  })
+
+  it('will not start a download before the size is known', async () => {
+    measure.mockReturnValue(new Promise(() => {}))
+
+    render(<DownloadButton detail={detail} />)
+    fireEvent.click(screen.getByRole('button'))
+    await screen.findByRole('dialog')
+
+    const confirm = screen
+      .getAllByRole('button')
+      .find((node) => node.textContent?.includes('Descargar') && node.closest('dialog'))
+    expect(confirm).toHaveProperty('disabled', true)
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it('hands the measurement to the download instead of taking it twice', async () => {
+    const plan = { episodeIds: ['a', 'b'], bytes: 1_370_000_000 }
+    measure.mockResolvedValue(plan)
+
+    render(<DownloadButton detail={detail} />)
+    fireEvent.click(screen.getByRole('button'))
+    await screen.findByText(/1,4GB/)
+
+    const confirm = screen
+      .getAllByRole('button')
+      .find((node) => node.textContent?.includes('Descargar') && node.closest('dialog'))
+    fireEvent.click(confirm as HTMLElement)
+
+    expect(start).toHaveBeenCalledWith(detail, plan)
   })
 
   it('shows the count and the real size before moving a byte', async () => {
@@ -95,10 +136,10 @@ describe('DownloadButton', () => {
 
     const confirm = screen
       .getAllByRole('button')
-      .find((node) => node.textContent === 'Descargar' && node.closest('dialog'))
+      .find((node) => node.textContent?.includes('Descargar') && node.closest('dialog'))
     fireEvent.click(confirm as HTMLElement)
 
-    expect(start).toHaveBeenCalledWith(detail)
+    expect(start).toHaveBeenCalled()
   })
 
   it('cancels without downloading', async () => {

@@ -89,25 +89,62 @@ export async function reconcile(): Promise<void> {
  * confirmation is the real one rather than an estimate. Only then does the second pass start
  * pulling video.
  */
-export async function measure(detail: SeriesDetail): Promise<{ episodeIds: string[]; bytes: number }> {
+/** How many episode records to read at once.
+ *
+ * Sequential was the mistake that made this feel broken: sixty-seven round trips one after the
+ * other, through Cloudflare, is most of a minute of a spinner that looks exactly like a
+ * download. Eight at a time is a few seconds. It stays modest because these are the *records*,
+ * not the video — there is nothing to gain by opening sixty-seven connections to a home NAS.
+ */
+const MEASURE_CONCURRENCY = 8
+
+async function inBatches<T, R>(
+  items: T[],
+  size: number,
+  work: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = []
+  for (let index = 0; index < items.length; index += size) {
+    results.push(...(await Promise.all(items.slice(index, index + size).map(work))))
+  }
+  return results
+}
+
+export interface Measured {
+  episodeIds: string[]
+  bytes: number
+}
+
+/**
+ * Read every episode record, so the size shown is the real one and the series page can render
+ * offline afterwards.
+ *
+ * Two things at once, deliberately: the byte total for the confirmation, and the JSON cached
+ * for the trip. Doing them separately would mean asking the server for the same sixty-seven
+ * records twice.
+ */
+export async function measure(detail: SeriesDetail): Promise<Measured> {
   const available = (detail.seasons ?? [])
     .flatMap((season) => season.episodes)
     .filter((episode) => episode.available)
 
   const cache = await caches.open(API_CACHE)
-  let bytes = 0
-  const episodeIds: string[] = []
 
-  for (const episode of available) {
-    const record = await api.get<EpisodeDetail>(`/library/episodes/${encodeURIComponent(episode.id)}`)
-    bytes += record.mediaFile?.sizeBytes ?? 0
-    episodeIds.push(episode.id)
+  const sizes = await inBatches(available, MEASURE_CONCURRENCY, async (episode) => {
+    const record = await api.get<EpisodeDetail>(
+      `/library/episodes/${encodeURIComponent(episode.id)}`,
+    )
     await cache.put(
       `/api/library/episodes/${encodeURIComponent(episode.id)}`,
       new Response(JSON.stringify(record), { headers: { 'content-type': 'application/json' } }),
     )
+    return record.mediaFile?.sizeBytes ?? 0
+  })
+
+  return {
+    episodeIds: available.map((episode) => episode.id),
+    bytes: sizes.reduce((total, size) => total + size, 0),
   }
-  return { episodeIds, bytes }
 }
 
 /**
@@ -118,7 +155,7 @@ export async function measure(detail: SeriesDetail): Promise<{ episodeIds: strin
  * whole point: press Download, go and look at something else, and watch the count climb on the
  * Downloads screen.
  */
-export async function start(detail: SeriesDetail): Promise<void> {
+export async function start(detail: SeriesDetail, measured?: Measured): Promise<void> {
   if (!offlineSupported()) return
   cancelled.delete(detail.id)
 
@@ -127,7 +164,9 @@ export async function start(detail: SeriesDetail): Promise<void> {
   await navigator.storage?.persist?.()
 
   const existing = await get<DownloadRow>(DOWNLOADS, detail.id)
-  const { episodeIds, bytes } = await measure(detail)
+  // The dialog has usually just measured it; asking the server for the same sixty-seven
+  // records a second time is a minute of nothing.
+  const { episodeIds, bytes } = measured ?? (await measure(detail))
 
   const row: DownloadRow = existing ?? {
     seriesId: detail.id,

@@ -1033,6 +1033,7 @@
     "measureFailed": "We could not work out the size. Is the server on?",
     "confirmTitle": "Download “{{title}}”",
     "confirmBody": "{{count}} episodes · {{size}} on this device.",
+    "confirmMeasuring": "{{count}} episodes · working out the size…",
     "confirmNote": "Stored in the browser, not in your camera roll or Downloads. Each device keeps its own.",
     "unsupported": "Not available here",
     "unsupportedHint": "Downloads need HTTPS. Use dramatarr.raskitoma.com rather than the LAN address.",
