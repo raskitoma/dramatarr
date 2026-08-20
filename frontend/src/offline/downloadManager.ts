@@ -18,7 +18,16 @@ import { api } from '@/api/client'
 import type { EpisodeDetail, SeriesDetail } from '@/api/types'
 
 import { API_CACHE, MEDIA_CACHE, mediaUrl } from './constants'
-import { DOWNLOADS, all, get, put, remove, type DownloadRow } from './db'
+import {
+  DOWNLOADS,
+  all,
+  get,
+  put,
+  remove,
+  type DownloadEpisode,
+  type DownloadRow,
+} from './db'
+import { normaliseRow } from './legacyRow'
 import { createQueue } from './queue'
 import { offlineSupported } from './register'
 
@@ -54,11 +63,19 @@ export async function reconcile(): Promise<void> {
   const present = new Set((await cache.keys()).map((request) => new URL(request.url).pathname))
 
   for (const row of stored) {
-    const kept = row.episodeIds.filter((id) => present.has(mediaUrl(id)))
+    // Rows written by the previous shape carry `episodeIds` and no `episodes`; see
+    // `legacyRow.ts` for why reading one unmigrated kills this screen.
+    const { row: migrated, changed } = normaliseRow(row)
+    if (changed) {
+      Object.assign(row, migrated)
+      await put(DOWNLOADS, row)
+    }
+
+    const kept = row.episodes.filter((episode) => present.has(mediaUrl(episode.id)))
     if (kept.length !== row.storedIds.length) {
-      row.storedIds = kept
-      row.bytesDone = Math.round((row.bytesTotal * kept.length) / Math.max(1, row.episodeIds.length))
-      row.state = kept.length === row.episodeIds.length ? 'done' : 'paused'
+      row.storedIds = kept.map((episode) => episode.id)
+      row.bytesDone = kept.reduce((total, episode) => total + episode.sizeBytes, 0)
+      row.state = kept.length === row.episodes.length ? 'done' : 'paused'
       if (kept.length === 0) row.state = 'queued'
       await put(DOWNLOADS, row)
     }
@@ -127,7 +144,7 @@ async function inBatches<T, R>(
 }
 
 export interface Measured {
-  episodeIds: string[]
+  episodes: DownloadEpisode[]
   bytes: number
 }
 
@@ -146,7 +163,7 @@ export async function measure(detail: SeriesDetail): Promise<Measured> {
 
   const cache = await caches.open(API_CACHE)
 
-  const sizes = await inBatches(available, MEASURE_CONCURRENCY, async (episode) => {
+  const episodes = await inBatches(available, MEASURE_CONCURRENCY, async (episode) => {
     const record = await withRetry(() =>
       api.get<EpisodeDetail>(`/library/episodes/${encodeURIComponent(episode.id)}`),
     )
@@ -154,13 +171,24 @@ export async function measure(detail: SeriesDetail): Promise<Measured> {
       `/api/library/episodes/${encodeURIComponent(episode.id)}`,
       new Response(JSON.stringify(record), { headers: { 'content-type': 'application/json' } }),
     )
-    return record.mediaFile?.sizeBytes ?? 0
+    return {
+      id: episode.id,
+      label: episodeLabel(episode),
+      sizeBytes: record.mediaFile?.sizeBytes ?? 0,
+    } satisfies DownloadEpisode
   })
 
   return {
-    episodeIds: available.map((episode) => episode.id),
-    bytes: sizes.reduce((total, size) => total + size, 0),
+    episodes,
+    bytes: episodes.reduce((total, episode) => total + episode.sizeBytes, 0),
   }
+}
+
+/** `T01E04 · Título`. Built once, at measure time, so the expanded list is a render and not a
+ *  second round of lookups on a device with no server. */
+function episodeLabel(episode: { seasonNumber: number; episodeNumber: number; title: string | null }): string {
+  const code = `T${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}`
+  return episode.title ? `${code} · ${episode.title}` : code
 }
 
 /**
@@ -185,7 +213,7 @@ export async function start(detail: SeriesDetail, measured?: Measured): Promise<
     slug: detail.slug,
     title: detail.title,
     posterUrl: detail.posterUrl,
-    episodeIds: measured?.episodeIds ?? [],
+    episodes: measured?.episodes ?? [],
     storedIds: [],
     bytesTotal: measured?.bytes ?? 0,
     bytesDone: 0,
@@ -205,7 +233,7 @@ export async function start(detail: SeriesDetail, measured?: Measured): Promise<
     // The dialog has usually just measured it; asking the server for the same sixty-seven
     // records a second time is a minute of nothing.
     const plan = measured ?? (await measure(detail))
-    row.episodeIds = plan.episodeIds
+    row.episodes = plan.episodes
     row.bytesTotal = plan.bytes
     await save(row)
 
@@ -246,7 +274,8 @@ async function drain(seriesId: string): Promise<void> {
   const media = await caches.open(MEDIA_CACHE)
   const done = new Set(row.storedIds)
 
-  for (const id of row.episodeIds) {
+  for (const episode of row.episodes) {
+    const id = episode.id
     if (cancelled.has(seriesId)) break
     if (done.has(id)) continue
 
@@ -266,13 +295,17 @@ async function drain(seriesId: string): Promise<void> {
 
     done.add(id)
     row.storedIds = [...done]
-    row.bytesDone = Math.round((row.bytesTotal * done.size) / Math.max(1, row.episodeIds.length))
+    // The real sum, not a share of the total: these files differ enough that a proportional
+    // estimate was wrong on every partially-downloaded series.
+    row.bytesDone = row.episodes
+      .filter((stored) => done.has(stored.id))
+      .reduce((total, stored) => total + stored.sizeBytes, 0)
     await save(row)
   }
 
   row.state = cancelled.has(seriesId)
     ? 'paused'
-    : done.size === row.episodeIds.length
+    : done.size === row.episodes.length
       ? 'done'
       : 'paused'
   await save(row)
@@ -287,7 +320,7 @@ export async function erase(seriesId: string): Promise<void> {
   const row = await get<DownloadRow>(DOWNLOADS, seriesId)
   if (row) {
     const media = await caches.open(MEDIA_CACHE)
-    await Promise.all(row.episodeIds.map((id) => media.delete(mediaUrl(id))))
+    await Promise.all(row.episodes.map((episode) => media.delete(mediaUrl(episode.id))))
   }
   await remove(DOWNLOADS, seriesId)
   rows = rows.filter((existing) => existing.seriesId !== seriesId)

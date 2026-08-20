@@ -17,7 +17,14 @@ import { Button } from '@/components/Button'
 import { Dialog } from '@/components/Dialog'
 import { useToast } from '@/components/Toast'
 import { CheckIcon, DownloadIcon } from '@/components/icons'
-import { erase, measure, pause, resume, start } from '@/offline/downloadManager'
+import {
+  erase,
+  measure,
+  pause,
+  resume,
+  start,
+  type Measured,
+} from '@/offline/downloadManager'
 import { offlineSupported } from '@/offline/register'
 import { useSeriesDownload } from '@/offline/useDownloads'
 import { formatBytes } from '@/lib/format'
@@ -30,7 +37,7 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
   const row = useSeriesDownload(detail.id)
   const [asking, setAsking] = useState(false)
   const [measuring, setMeasuring] = useState(false)
-  const [plan, setPlan] = useState<{ episodeIds: string[]; bytes: number } | null>(null)
+  const [plan, setPlan] = useState<Measured | null>(null)
 
   const supported = offlineSupported()
   const done = row?.state === 'done'
@@ -39,7 +46,7 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
     .flatMap((season) => season.episodes)
     .filter((episode) => episode.available).length
   const stored = row?.storedIds.length ?? 0
-  const total = row?.episodeIds.length ?? 0
+  const total = row?.episodes.length ?? 0
 
   /* Opens the dialog *first*, then measures into it.
    *
@@ -117,7 +124,7 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
         description={
           plan
             ? t('downloads.confirmBody', {
-                count: plan.episodeIds.length,
+                count: plan.episodes.length,
                 size: formatBytes(plan.bytes),
               })
             : t('downloads.confirmMeasuring', { count: available })

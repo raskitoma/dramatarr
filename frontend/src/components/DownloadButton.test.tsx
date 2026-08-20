@@ -29,6 +29,10 @@ vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: (...a: unknown[]
 
 const { DownloadButton } = await import('./DownloadButton')
 
+function ep(id: string) {
+  return { id, label: `T01E0${id}`, sizeBytes: 685_000_000 }
+}
+
 const detail = {
   id: 's1',
   slug: 'x-ray',
@@ -53,7 +57,7 @@ beforeEach(() => {
   measure.mockReset()
   start.mockReset()
   start.mockResolvedValue(undefined)
-  measure.mockResolvedValue({ episodeIds: ['a', 'b'], bytes: 1_370_000_000 })
+  measure.mockResolvedValue({ episodes: [ep('a'), ep('b')], bytes: 1_370_000_000 })
 })
 
 afterEach(cleanup)
@@ -74,7 +78,7 @@ describe('DownloadButton', () => {
     /* Measuring reads every episode record. When that ran *before* the dialog opened, the
        spinner looked like a download in progress and the confirmation arrived a minute later
        as if nothing had happened. */
-    let resolve: (value: { episodeIds: string[]; bytes: number }) => void = () => {}
+    let resolve: (value: { episodes: ReturnType<typeof ep>[]; bytes: number }) => void = () => {}
     measure.mockReturnValue(new Promise((r) => (resolve = r)))
 
     render(<DownloadButton detail={detail} />)
@@ -85,7 +89,7 @@ describe('DownloadButton', () => {
     expect(dialog).toBeTruthy()
     expect(screen.getByText(/calculando el tamaño/)).toBeTruthy()
 
-    resolve({ episodeIds: ['a', 'b'], bytes: 1_370_000_000 })
+    resolve({ episodes: [ep('a'), ep('b')], bytes: 1_370_000_000 })
     await waitFor(() => expect(screen.getByText(/1,4GB/)).toBeTruthy())
   })
 
@@ -104,7 +108,7 @@ describe('DownloadButton', () => {
   })
 
   it('hands the measurement to the download instead of taking it twice', async () => {
-    const plan = { episodeIds: ['a', 'b'], bytes: 1_370_000_000 }
+    const plan = { episodes: [ep('a'), ep('b')], bytes: 1_370_000_000 }
     measure.mockResolvedValue(plan)
 
     render(<DownloadButton detail={detail} />)

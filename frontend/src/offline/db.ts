@@ -17,16 +17,29 @@ export const PROGRESS = 'progress'
 
 export type DownloadState = 'queued' | 'running' | 'paused' | 'done' | 'error'
 
+/** One episode, as the download screen needs to show it. */
+export interface DownloadEpisode {
+  id: string
+  /** "T01E04 · Título", built once at measure time so the list needs no second lookup. */
+  label: string
+  /** The real size of this file, read from its record. Not an average. */
+  sizeBytes: number
+}
+
 export interface DownloadRow {
   seriesId: string
   slug: string
   title: string
   posterUrl: string | null
-  /** Episode ids in play order, so a resumed download picks up where it stopped. */
-  episodeIds: string[]
-  /** Ids whose bytes are in the media cache. A subset of `episodeIds`. */
+  /** Episodes in play order, so a resumed download picks up where it stopped and the expanded
+   *  list can show each one with its own size. */
+  episodes: DownloadEpisode[]
+  /** Ids whose bytes are in the media cache. A subset of `episodes`. */
   storedIds: string[]
   bytesTotal: number
+  /** The **sum of the episodes actually stored**, not a share of the total. Episodes here run
+   *  from 57 to 112 seconds and their files differ accordingly, so the proportional estimate
+   *  this replaced was wrong on every partially-downloaded series. */
   bytesDone: number
   state: DownloadState
   /** Set when the browser refused, so the UI can say which episode it stopped at. */

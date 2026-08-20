@@ -75,12 +75,18 @@
 
 .row {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
   padding: var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -89,12 +95,83 @@
   inline-size: 3.5rem;
 }
 
+/* The whole middle is the disclosure. A separate chevron would be a 24px target next to a
+   300px one that does nothing, on a phone. */
 .body {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: var(--space-1);
   flex: 1 1 auto;
   min-width: 0;
+  text-align: start;
+  cursor: pointer;
+}
+
+.rowActions {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+/* Scrolls at sixty-seven rows rather than pushing the next series off the screen. */
+.episodes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  max-block-size: 18rem;
+  overflow-y: auto;
+  list-style: none;
+  border-block-start: 1px solid var(--border);
+}
+
+.episode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  min-width: 0;
+}
+
+/* Downloaded reads as present, pending as waiting — the difference is the whole reason for
+   opening this list. */
+.episode[data-stored] {
+  color: var(--text);
+}
+
+.tick {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-subtle);
+}
+
+.episode[data-stored] .tick {
+  color: var(--success, var(--accent));
+}
+
+.episodeLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.episodeSize {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 .name {

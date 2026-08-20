@@ -1027,6 +1027,8 @@
     "downloaded": "Descargada",
     "downloadedRemove": "Descargada — borrar de este dispositivo",
     "remove": "Borrar de este dispositivo",
+    "pauseSeries": "Pausar la descarga",
+    "resumeSeries": "Reanudar la descarga",
     "removed": "Borramos la serie de este dispositivo.",
     "episodesOf": "{{done}} de {{total}}",
     "state": {

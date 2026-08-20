@@ -19,12 +19,13 @@ import { Button } from '@/components/Button'
 import { EmptyState } from '@/components/EmptyState'
 import { Poster } from '@/components/Poster'
 import { ProgressBar } from '@/components/ProgressBar'
-import { TrashIcon } from '@/components/icons'
+import { CheckIcon, CircleIcon, DownloadIcon, PauseIcon, TrashIcon } from '@/components/icons'
 import { formatBytes } from '@/lib/format'
-import { erase, reconcile } from '@/offline/downloadManager'
+import { erase, pause, reconcile, resume } from '@/offline/downloadManager'
 import { pendingCount } from '@/offline/progress'
 import { offlineReady, offlineSupported } from '@/offline/register'
 import { useDownloads } from '@/offline/useDownloads'
+import type { DownloadRow } from '@/offline/db'
 
 import styles from './DownloadsPage.module.css'
 
@@ -104,51 +105,107 @@ export function DownloadsPage() {
       ) : (
         <ul className={styles.list}>
           {rows.map((row) => (
-            <li key={row.seriesId} className={styles.row}>
-              <Link href={`/series/${encodeURIComponent(row.slug)}`} className={styles.poster}>
-                <Poster src={row.posterUrl} alt={row.title} size="sm" />
-              </Link>
-              <div className={styles.body}>
-                <p className={styles.name}>{row.title}</p>
-                <ProgressBar
-                  percent={
-                    row.episodeIds.length
-                      ? (row.storedIds.length / row.episodeIds.length) * 100
-                      : 0
-                  }
-                  tone={row.state === 'done' ? 'success' : 'accent'}
-                  size="sm"
-                  label={t('downloads.progressLabel', { title: row.title })}
-                />
-                <p className={styles.meta}>
-                  {/* The state in words, because "0 de 67" alone cannot tell waiting apart
-                      from stopped apart from failed — and those need different reactions. */}
-                  <Badge tone={row.state === 'error' ? 'warning' : 'neutral'}>
-                    {t(`downloads.state.${row.state}`)}
-                  </Badge>
-                  {' '}
-                  {t('downloads.episodesOf', {
-                    done: row.storedIds.length,
-                    total: row.episodeIds.length,
-                  })}
-                  {' · '}
-                  {formatBytes(row.bytesDone)}
-                  {row.error ? ` · ${row.error}` : ''}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                iconOnly
-                aria-label={t('downloads.remove')}
-                title={t('downloads.remove')}
-                onClick={() => void erase(row.seriesId)}
-              >
-                <TrashIcon />
-              </Button>
-            </li>
+            <DownloadRowView key={row.seriesId} row={row} />
           ))}
         </ul>
       )}
     </div>
+  )
+}
+
+/**
+ * One series, and — when you open it — every episode in it.
+ *
+ * The list is the point rather than decoration: a partially downloaded series is the normal
+ * state, not a failure, and "48 de 67" does not tell you *which* forty-eight. On a plane that
+ * is the difference between knowing you can watch tonight's episode and finding out you
+ * cannot.
+ */
+function DownloadRowView({ row }: { row: DownloadRow }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const stored = new Set(row.storedIds)
+  const listId = `downloads-${row.seriesId}`
+  const running = row.state === 'running'
+
+  return (
+    <li className={styles.row}>
+      <div className={styles.summary}>
+        <Link href={`/series/${encodeURIComponent(row.slug)}`} className={styles.poster}>
+          <Poster src={row.posterUrl} alt={row.title} size="sm" />
+        </Link>
+
+        <button
+          type="button"
+          className={styles.body}
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          onClick={() => setOpen((previous) => !previous)}
+        >
+          <span className={styles.name}>{row.title}</span>
+          <ProgressBar
+            percent={row.episodes.length ? (stored.size / row.episodes.length) * 100 : 0}
+            tone={row.state === 'done' ? 'success' : 'accent'}
+            size="sm"
+            label={t('downloads.progressLabel', { title: row.title })}
+          />
+          <span className={styles.meta}>
+            {/* The state in words, because "0 de 67" cannot tell waiting apart from stopped
+                apart from failed — and those want different reactions. */}
+            <Badge tone={row.state === 'error' ? 'warning' : 'neutral'}>
+              {t(`downloads.state.${row.state}`)}
+            </Badge>{' '}
+            {t('downloads.episodesOf', { done: stored.size, total: row.episodes.length })}
+            {' · '}
+            {formatBytes(row.bytesDone)}
+            {row.bytesTotal > 0 ? ` / ${formatBytes(row.bytesTotal)}` : ''}
+            {row.error ? ` · ${row.error}` : ''}
+          </span>
+        </button>
+
+        <div className={styles.rowActions}>
+          {row.state !== 'done' ? (
+            <Button
+              variant="ghost"
+              iconOnly
+              aria-label={running ? t('downloads.pauseSeries') : t('downloads.resumeSeries')}
+              title={running ? t('downloads.pauseSeries') : t('downloads.resumeSeries')}
+              onClick={() => (running ? pause(row.seriesId) : resume(row.seriesId))}
+            >
+              {running ? <PauseIcon /> : <DownloadIcon />}
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            iconOnly
+            aria-label={t('downloads.remove')}
+            title={t('downloads.remove')}
+            onClick={() => void erase(row.seriesId)}
+          >
+            <TrashIcon />
+          </Button>
+        </div>
+      </div>
+
+      {open ? (
+        <ul className={styles.episodes} id={listId}>
+          {row.episodes.map((episode) => {
+            const here = stored.has(episode.id)
+            return (
+              <li key={episode.id} className={styles.episode} data-stored={here ? 'true' : undefined}>
+                <span className={styles.tick} aria-hidden="true">
+                  {here ? <CheckIcon /> : <CircleIcon />}
+                </span>
+                <span className={styles.episodeLabel}>{episode.label}</span>
+                <span className={styles.episodeSize}>{formatBytes(episode.sizeBytes)}</span>
+                <span className={styles.srOnly}>
+                  {here ? t('downloads.state.done') : t('downloads.state.queued')}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </li>
   )
 }
