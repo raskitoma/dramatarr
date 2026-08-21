@@ -29,6 +29,7 @@ from app.models import (
     JobType,
     MediaFile,
     MediaStatus,
+    ScanDirectory,
     Series,
     SeriesTitle,
     SubtitleTrack,
@@ -160,6 +161,16 @@ class _FileEntry:
 class _WalkResult:
     videos: list[_FileEntry] = field(default_factory=list)
     subtitles: dict[str, list[str]] = field(default_factory=dict)
+    #: Every directory the walk reached, with the mtime it had. Written back after a successful
+    #: scan so the next one can compare.
+    dir_mtimes: dict[str, float] = field(default_factory=dict)
+    #: The subset whose files were actually listed and stat'd. **The missing-file sweep is
+    #: scoped to these**: an incremental scan never sees the files in a skipped directory, and
+    #: without this it would mark the whole library missing on its first run.
+    scanned_dirs: set[str] = field(default_factory=set)
+    #: True when at least one directory was skipped, so the caller can say so honestly rather
+    #: than reporting "1141 files" after looking at nineteen.
+    skipped_dirs: int = 0
 
 
 def _posix_relative(root: Path, target: str | os.PathLike[str]) -> str:
@@ -181,8 +192,19 @@ def _skip_dir(name: str) -> bool:
     return name.startswith(".") or name.casefold() in _SKIP_DIRS
 
 
-def _walk_library(root: Path, start: Path) -> _WalkResult:
-    """Blocking directory walk. Always invoke through `asyncio.to_thread`."""
+def _walk_library(
+    root: Path, start: Path, unchanged: dict[str, float] | None = None
+) -> _WalkResult:
+    """Blocking directory walk. Always invoke through `asyncio.to_thread`.
+
+    `unchanged` turns this incremental: a directory whose mtime matches what the last scan
+    recorded has its files skipped entirely — no `os.stat` per file, no per-file database work.
+    A directory's mtime moves when a file is added, removed or renamed inside it, which is the
+    whole set of events this scan exists to notice.
+
+    Subdirectories are still descended into. Only the *files* of an unchanged directory are
+    skipped, because a folder's mtime says nothing about what happened inside its children.
+    """
     if not start.is_dir():
         raise FileNotFoundError(str(start))
 
@@ -190,6 +212,18 @@ def _walk_library(root: Path, start: Path) -> _WalkResult:
     for dirpath, dirnames, filenames in os.walk(start, followlinks=False):
         dirnames[:] = sorted(name for name in dirnames if not _skip_dir(name))
         dir_rel = _posix_relative(root, dirpath)
+
+        try:
+            dir_mtime = os.stat(dirpath).st_mtime
+        except OSError:  # vanished mid-walk; treat it as changed so its files are re-checked
+            dir_mtime = 0.0
+        result.dir_mtimes[dir_rel] = dir_mtime
+
+        if unchanged is not None and unchanged.get(dir_rel) == dir_mtime:
+            result.skipped_dirs += 1
+            continue
+
+        result.scanned_dirs.add(dir_rel)
         for name in sorted(filenames):
             if name.startswith("."):
                 continue
@@ -285,6 +319,7 @@ async def scan_library(
     ctx: ScanContext | None = None,
     path: str | None = None,
     full: bool = False,
+    incremental: bool = False,
 ) -> ScanReport:
     """Reconcile the library mount with the database.
 
@@ -292,6 +327,13 @@ async def scan_library(
     whose size and mtime are unchanged. Cancellation is cooperative: `ctx.cancelled()` is polled
     once per file and a cancelled scan returns the partial report with everything done so far
     committed.
+
+    `incremental` skips the files of directories whose mtime has not moved since the last scan
+    — one stat per folder instead of one per file, which on this library is nineteen instead of
+    eleven hundred, on a network-backed mount. It is what the *scheduled* scan uses. A manual
+    scan stays complete on purpose: the one thing a directory mtime cannot see is a file
+    rewritten in place under the same name, and the button somebody presses when they think
+    something is wrong should not share that blind spot.
     """
     root = library_root().resolve(strict=False)
     start = safe_media_path(path) if path else root
@@ -299,8 +341,9 @@ async def scan_library(
     report = ScanReport()
 
     await _progress(ctx, 0.0, "Reading the library…")
+    unchanged = await _known_dir_mtimes(session) if (incremental and not full) else None
     try:
-        walk = await asyncio.to_thread(_walk_library, root, start)
+        walk = await asyncio.to_thread(_walk_library, root, start, unchanged)
     except FileNotFoundError as exc:
         raise AppError(
             "LIBRARY_UNAVAILABLE",
@@ -381,12 +424,60 @@ async def scan_library(
             f"No media found but {present_before} files are on record — mount unavailable?",
         )
     else:
-        _sweep_missing(state, seen, prefix)
+        _sweep_missing(
+            state,
+            seen,
+            prefix,
+            scanned_dirs=walk.scanned_dirs if unchanged is not None else None,
+            walked_dirs=set(walk.dir_mtimes) if unchanged is not None else None,
+        )
         await session.commit()
+
+    # Written only after the sweep committed, so a scan that died half way leaves the old
+    # mtimes in place and the next one re-examines rather than trusting a partial pass.
+    await _remember_dir_mtimes(session, walk.dir_mtimes, replace_all=unchanged is None)
+    await session.commit()
+
+    if walk.skipped_dirs:
+        await _log(ctx, "info", f"{walk.skipped_dirs} unchanged folders skipped")
 
     await _progress(ctx, 100.0, report.summary())
     await _log(ctx, "info", report.summary())
     return report
+
+
+async def _known_dir_mtimes(session: AsyncSession) -> dict[str, float]:
+    rows = (await session.execute(select(ScanDirectory))).scalars().all()
+    return {row.rel_path: row.mtime for row in rows}
+
+
+async def _remember_dir_mtimes(
+    session: AsyncSession, mtimes: dict[str, float], *, replace_all: bool
+) -> None:
+    """Record what each directory looked like, for the next scan to compare against.
+
+    `replace_all` on a complete scan: that pass looked at everything under `start`, so rows for
+    directories it did not see are stale and would otherwise keep a deleted folder alive in the
+    table for ever. An incremental pass only merges, because it deliberately did not look
+    everywhere.
+    """
+    now = utcnow()
+    existing = {
+        row.rel_path: row for row in (await session.execute(select(ScanDirectory))).scalars()
+    }
+
+    for rel_path, mtime in mtimes.items():
+        row = existing.get(rel_path)
+        if row is None:
+            session.add(ScanDirectory(rel_path=rel_path, mtime=mtime, scanned_at=now))
+        else:
+            row.mtime = mtime
+            row.scanned_at = now
+
+    if replace_all:
+        for rel_path, row in existing.items():
+            if rel_path not in mtimes:
+                await session.delete(row)
 
 
 async def _load_known(session: AsyncSession, prefix: str) -> dict[str, MediaFile]:
@@ -542,9 +633,7 @@ def _sync_sidecars(media: MediaFile, entry: _FileEntry, filenames: Iterable[str]
         if track.sidecar_path and track.sidecar_path not in wanted
     ]
     if stale:
-        media.subtitle_tracks[:] = [
-            track for track in media.subtitle_tracks if track not in stale
-        ]
+        media.subtitle_tracks[:] = [track for track in media.subtitle_tracks if track not in stale]
 
 
 def _apply_folder_season(parsed: ParsedEpisode, entry: _FileEntry) -> ParsedEpisode:
@@ -659,14 +748,18 @@ async def _get_or_create_episode(state: _State, series: Series, parsed: ParsedEp
         return cached
 
     episode = (
-        await state.session.execute(
-            select(Episode).where(
-                Episode.series_id == series.id,
-                Episode.season_number == parsed.season,
-                Episode.episode_number == parsed.episode,
+        (
+            await state.session.execute(
+                select(Episode).where(
+                    Episode.series_id == series.id,
+                    Episode.season_number == parsed.season,
+                    Episode.episode_number == parsed.episode,
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
     if episode is None:
         episode = Episode(
@@ -743,12 +836,40 @@ def _sort_title(title: str) -> str:
 # --- Finishing up --------------------------------------------------------------------------
 
 
-def _sweep_missing(state: _State, seen: set[str], prefix: str) -> None:
+def _sweep_missing(
+    state: _State,
+    seen: set[str],
+    prefix: str,
+    *,
+    scanned_dirs: set[str] | None = None,
+    walked_dirs: set[str] | None = None,
+) -> None:
+    """Mark as missing what the scan should have seen and did not.
+
+    **The scoping is the whole safety of an incremental scan.** This walks `known` — every file
+    on record — and a scan that deliberately skipped directories saw none of their files. Left
+    unscoped it would mark the entire library missing on the first incremental run, silently,
+    and the result would look exactly like the mount having gone away.
+
+    So a row is only touched when either:
+      * its directory was actually examined this pass, and the file was not there; or
+      * its directory is gone from the walk altogether, which is a deleted folder and is the
+        case a naive scoping would miss.
+
+    `scanned_dirs is None` means a complete scan, where every directory was examined and the
+    old behaviour is exactly right.
+    """
     for path, row in state.known.items():
         if path in seen or row.status == MediaStatus.MISSING:
             continue
         if prefix and path != prefix and not path.startswith(f"{prefix}/"):
             continue
+        if scanned_dirs is not None:
+            directory = path.rsplit("/", 1)[0] if "/" in path else ""
+            examined = directory in scanned_dirs
+            vanished = walked_dirs is not None and directory not in walked_dirs
+            if not examined and not vanished:
+                continue
         row.status = MediaStatus.MISSING
         row.scanned_at = utcnow()
         state.report.files_missing += 1

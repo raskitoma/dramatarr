@@ -134,6 +134,23 @@ class Series(Base):
     )
 
 
+class ScanDirectory(Base):
+    """One row per folder on the library mount, holding the mtime the last scan saw.
+
+    A directory's mtime moves when a file is added, removed or renamed inside it — precisely
+    the events a scan exists to notice — so comparing it is one stat per folder instead of one
+    per file. It does **not** move when a file is rewritten in place, which is the limit of an
+    incremental scan and the reason `full` still exists.
+    """
+
+    __tablename__ = "scan_directories"
+
+    #: Relative to `LIBRARY_ROOT`, POSIX separators, "" for the root itself.
+    rel_path: Mapped[str] = mapped_column(String(1000), primary_key=True)
+    mtime: Mapped[float] = mapped_column(Float, nullable=False)
+    scanned_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
 class SeriesCast(Base):
     """Who is in a series, denormalized from DramaDex.
 

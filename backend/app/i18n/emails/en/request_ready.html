@@ -1,0 +1,27 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button, fallback_link %}
+
+{% block preheader %}"{{ title }}" is in the library now.{% endblock %}
+{% block heading %}It's here{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Hello{% if display_name %}, {{ display_name }}{% endif %}. You asked for
+  <strong>{{ title }}</strong>{% if series_year %} ({{ series_year }}){% endif %} and it is on {{ site_name }} now.
+</p>
+{% if admin_note %}
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  A note from whoever fetched it: {{ admin_note }}
+</p>
+{% endif %}
+{% endblock %}
+
+{% block action %}{{ button(series_url, "Watch it now") }}{% endblock %}
+
+{% block after %}
+{{ fallback_link(series_url, "Button not working? Copy this address into your browser:") }}
+{% endblock %}
+
+{% block footer %}
+You are getting this because you asked for this title on {{ site_name }}.
+{% endblock %}

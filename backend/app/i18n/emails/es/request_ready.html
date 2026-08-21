@@ -1,0 +1,27 @@
+{% extends "_layout.html" %}
+{% from "_macros.html" import button, fallback_link %}
+
+{% block preheader %}«{{ title }}» ya está en la biblioteca.{% endblock %}
+{% block heading %}Ya la tienes{% endblock %}
+
+{% block body %}
+<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Hola{% if display_name %}, {{ display_name }}{% endif %}. Pediste
+  <strong>{{ title }}</strong>{% if series_year %} ({{ series_year }}){% endif %} y ya está en {{ site_name }}.
+</p>
+{% if admin_note %}
+<p style="margin:0;font-size:15px;line-height:1.65;color:#3a3a48;">
+  Nota de quien la consiguió: {{ admin_note }}
+</p>
+{% endif %}
+{% endblock %}
+
+{% block action %}{{ button(series_url, "Verla ahora") }}{% endblock %}
+
+{% block after %}
+{{ fallback_link(series_url, "¿El botón no funciona? Copia esta dirección en tu navegador:") }}
+{% endblock %}
+
+{% block footer %}
+Recibes este correo porque pediste este título en {{ site_name }}.
+{% endblock %}

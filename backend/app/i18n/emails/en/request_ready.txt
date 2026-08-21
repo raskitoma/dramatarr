@@ -1,0 +1,8 @@
+Hello{% if display_name %}, {{ display_name }}{% endif %}. You asked for "{{ title }}"{% if series_year %} ({{ series_year }}){% endif %} and it is in the library now.
+
+{{ series_url }}
+
+{% if admin_note %}A note from whoever fetched it: {{ admin_note }}
+
+{% endif %}--
+You are getting this because you asked for this title on {{ site_name }}.

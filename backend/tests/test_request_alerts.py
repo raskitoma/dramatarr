@@ -123,3 +123,148 @@ async def test_a_request_answered_before_this_existed_is_still_news(db: AsyncSes
 
     assert row.seen_at is None
     assert row.awaits_the_requester is True
+
+
+# --- The mail, which is the half that reaches somebody not in the app --------------------------
+
+
+async def test_the_requester_is_told_when_it_lands(db: AsyncSession, monkeypatch) -> None:
+    from app.models import Series, UserRole
+    from app.schemas.requests import RequestPatchIn
+    from app.services import requests as requests_service
+
+    sent: list[tuple[str, str, dict]] = []
+
+    async def fake_send(_session, to, template, _locale, context):
+        sent.append((to, template, context))
+
+    monkeypatch.setattr(requests_service, "send_mail", fake_send)
+
+    admin = User(email="a@example.com", display_name="A", role=UserRole.ADMIN, locale="es")
+    user = await a_member(db, "wants@example.com")
+    series = Series(
+        title="Djinn Under Contract",
+        slug="djinn-under-contract",
+        sort_title="djinn",
+        library_path="Djinn",
+        year=2026,
+    )
+    db.add_all([admin, series])
+    await db.commit()
+    row = await a_request(db, user, RequestStatus.PENDING)
+
+    await requests_service.update(
+        db, admin, row.id, RequestPatchIn(status="fulfilled", seriesId=series.id)
+    )
+
+    assert len(sent) == 1
+    to, template, context = sent[0]
+    assert to == "wants@example.com"
+    assert template == "request_ready"
+    # The series' own title and a link that resolves, not the wishlist text the member typed.
+    assert context["title"] == "Djinn Under Contract"
+    assert context["series_url"].endswith("/series/djinn-under-contract")
+
+
+async def test_editing_a_delivered_request_does_not_announce_it_again(
+    db: AsyncSession, monkeypatch
+) -> None:
+    """Only the *transition* sends mail. An admin fixing a typo in the note on something
+    delivered last week must not post the announcement a second time."""
+    from app.models import UserRole
+    from app.schemas.requests import RequestPatchIn
+    from app.services import requests as requests_service
+
+    sent: list[str] = []
+
+    async def fake_send(_session, to, _template, _locale, _context):
+        sent.append(to)
+
+    monkeypatch.setattr(requests_service, "send_mail", fake_send)
+
+    admin = User(email="a2@example.com", display_name="A", role=UserRole.ADMIN, locale="es")
+    db.add(admin)
+    user = await a_member(db, "already@example.com")
+    row = await a_request(db, user, RequestStatus.FULFILLED)
+    await db.commit()
+
+    await requests_service.update(db, admin, row.id, RequestPatchIn(adminNote="typo fixed"))
+
+    assert sent == []
+
+
+async def test_a_decline_is_not_mailed(db: AsyncSession, monkeypatch) -> None:
+    """The in-app alert covers a decline — it carries the admin's reason, which is the point of
+    it. A mail saying no is a different decision and not one this makes on the owner's behalf."""
+    from app.models import UserRole
+    from app.schemas.requests import RequestPatchIn
+    from app.services import requests as requests_service
+
+    sent: list[str] = []
+
+    async def fake_send(_session, to, _template, _locale, _context):
+        sent.append(to)
+
+    monkeypatch.setattr(requests_service, "send_mail", fake_send)
+
+    admin = User(email="a3@example.com", display_name="A", role=UserRole.ADMIN, locale="es")
+    db.add(admin)
+    user = await a_member(db, "declined@example.com")
+    row = await a_request(db, user, RequestStatus.PENDING)
+    await db.commit()
+
+    await requests_service.update(db, admin, row.id, RequestPatchIn(status="declined"))
+
+    assert sent == []
+
+
+async def test_unconfigured_mail_does_not_break_the_admin_action(
+    db: AsyncSession, monkeypatch
+) -> None:
+    """A row that was delivered has been delivered whether or not SMTP was reachable."""
+    from app.errors import MailNotConfigured
+    from app.models import UserRole
+    from app.schemas.requests import RequestPatchIn
+    from app.services import requests as requests_service
+
+    async def refuse(*_args, **_kwargs):
+        raise MailNotConfigured()
+
+    monkeypatch.setattr(requests_service, "send_mail", refuse)
+
+    admin = User(email="a4@example.com", display_name="A", role=UserRole.ADMIN, locale="es")
+    db.add(admin)
+    user = await a_member(db, "nomail@example.com")
+    row = await a_request(db, user, RequestStatus.PENDING)
+    await db.commit()
+
+    out = await requests_service.update(db, admin, row.id, RequestPatchIn(status="fulfilled"))
+
+    assert out.status == "fulfilled"
+
+
+async def test_a_fulfilled_request_with_no_series_still_links_somewhere(
+    db: AsyncSession, monkeypatch
+) -> None:
+    """An admin can mark a request done without binding it, and a mail whose only link 404s is
+    worse than a mail with no link."""
+    from app.models import UserRole
+    from app.schemas.requests import RequestPatchIn
+    from app.services import requests as requests_service
+
+    captured: list[dict] = []
+
+    async def fake_send(_session, _to, _template, _locale, context):
+        captured.append(context)
+
+    monkeypatch.setattr(requests_service, "send_mail", fake_send)
+
+    admin = User(email="a5@example.com", display_name="A", role=UserRole.ADMIN, locale="es")
+    db.add(admin)
+    user = await a_member(db, "unbound@example.com")
+    row = await a_request(db, user, RequestStatus.PENDING)
+    await db.commit()
+
+    await requests_service.update(db, admin, row.id, RequestPatchIn(status="fulfilled"))
+
+    assert captured[0]["series_url"].endswith("/requests")

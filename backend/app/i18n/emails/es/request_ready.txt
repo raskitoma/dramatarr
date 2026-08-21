@@ -1,0 +1,8 @@
+Hola{% if display_name %}, {{ display_name }}{% endif %}. Pediste «{{ title }}»{% if series_year %} ({{ series_year }}){% endif %} y ya está en la biblioteca.
+
+{{ series_url }}
+
+{% if admin_note %}Nota de quien la consiguió: {{ admin_note }}
+
+{% endif %}--
+Recibes este correo porque pediste este título en {{ site_name }}.

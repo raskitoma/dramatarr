@@ -117,7 +117,13 @@ class ScanScheduler:
                 log.info("skipping scheduled scan; one is already queued or running")
                 return False
 
-            job = await enqueue(session, JobType.LIBRARY_SCAN, {"full": False})
+            # Incremental, because this one runs unattended every night on a network-backed
+            # mount and its whole job is noticing what moved. A manual scan stays complete:
+            # the blind spot here is a file rewritten in place, and the button somebody presses
+            # when they think something is wrong should not share it.
+            job = await enqueue(
+                session, JobType.LIBRARY_SCAN, {"full": False, "incremental": True}
+            )
             await session.commit()
             log.info("enqueued scheduled library scan %s", job.id)
             return True

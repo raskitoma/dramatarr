@@ -59,6 +59,8 @@ async def handle_library_scan(ctx: JobContext) -> None:
         kwargs["path"] = str(payload["path"])
     if "full" in payload:
         kwargs["full"] = bool(payload["full"])
+    if "incremental" in payload:
+        kwargs["incremental"] = bool(payload["incremental"])
 
     await ctx.progress(0.0, "Scanning library")
     report = await scan_library(ctx.session, ctx=ctx, **kwargs)

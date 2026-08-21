@@ -31,15 +31,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.errors import AppError, Conflict, NotFound
+from app.config import get_settings
+from app.errors import AppError, Conflict, MailNotConfigured, NotFound
 from app.models import RequestStatus, Series, SeriesRequest, SeriesTitle, User
 from app.schemas.library import DiscoveredIds
 from app.schemas.requests import (
@@ -53,18 +54,12 @@ from app.schemas.requests import (
     RequestSeriesRef,
     SeriesRequestOut,
 )
+from app.services import dramadex
 from app.services.images import avatar_url, is_request_poster
+from app.services.mail import send_mail
 from app.services.renamer import sanitize_filename
 from app.services.scanner.scan import safe_media_path
 from app.services.search.normalize import normalize
-from app.services import dramadex
-from app.services.settings import SettingsService
-from app.services.vocab import (
-    Provider,
-    configured_providers,
-    provider_domains,
-    provider_for_domain,
-)
 from app.utils.time import utcnow
 
 log = logging.getLogger(__name__)
@@ -830,6 +825,11 @@ async def update(
     if patch.admin_note is not None:
         row.admin_note = patch.admin_note.strip() or None
 
+    # Recorded before the commit, because after it the comparison is gone. Only a *transition*
+    # into fulfilled sends mail: an admin editing the note on a request that was already
+    # delivered must not post the announcement again.
+    became_ready = patch.status == RequestStatus.FULFILLED and row.status != RequestStatus.FULFILLED
+
     if patch.status is not None and patch.status != row.status:
         row.status = patch.status
         if patch.status in (RequestStatus.FULFILLED, RequestStatus.DECLINED):
@@ -841,8 +841,54 @@ async def update(
 
     await session.commit()
     await session.refresh(row)
+
+    if became_ready:
+        await _announce_ready(session, row)
     tally = await _also_requested_counts(session, [row])
     return admin_request_out(row, also_requested_by=tally.get(row.dedupe_key, 0))
+
+
+async def _announce_ready(session: AsyncSession, row: SeriesRequest) -> None:
+    """Tell the requester their title arrived.
+
+    Never raises. A wishlist row that was delivered has been delivered whether or not SMTP was
+    reachable, and turning a working admin action into a 500 over a mail server would be the
+    tail wagging the dog. The in-app alert (`seen_at`) is the reliable half; this is the half
+    that reaches somebody who is not in the app — which, for a household that travels, is when
+    it matters most.
+
+    Unconfigured SMTP is silent rather than logged as a warning: a fresh install has no mail
+    and that is a state, not a fault.
+    """
+    requester = row.user
+    if requester is None or not requester.email:
+        return
+
+    settings = get_settings()
+    public = settings.public_url.rstrip("/")
+    # The series when it is linked, the wishlist when it is not — an admin can mark a request
+    # fulfilled without binding it, and a mail whose only link 404s is worse than no link.
+    series = await session.get(Series, row.series_id) if row.series_id else None
+    target = f"{public}/series/{quote(series.slug)}" if series else f"{public}/requests"
+
+    try:
+        await send_mail(
+            session,
+            requester.email,
+            "request_ready",
+            requester.locale,
+            {
+                "display_name": requester.display_name or "",
+                "title": series.title if series else row.title,
+                "series_year": (series.year if series else row.year) or "",
+                "series_url": target,
+                "admin_note": row.admin_note or "",
+            },
+        )
+    except MailNotConfigured:
+        return
+    except Exception:
+        log.warning("Could not tell %s their request landed", requester.email, exc_info=True)
 
 
 async def delete_any(session: AsyncSession, request_id: str) -> None:
