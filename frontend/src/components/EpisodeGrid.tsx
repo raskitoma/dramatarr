@@ -30,9 +30,9 @@ import type { EpisodeSummary } from '@/api/types'
 import { IconButton } from '@/components/IconButton'
 import { ProgressBar } from '@/components/ProgressBar'
 import { cx } from '@/components/cx'
-import { CheckCircleIcon, CircleIcon, UnwatchIcon } from '@/components/icons'
+import { CheckCircleIcon, CircleIcon, DownloadIcon, UnwatchIcon } from '@/components/icons'
 
-import { usePlayable } from '@/offline/useOffline'
+import { usePlayable, useStoredEpisodes } from '@/offline/useOffline'
 
 import styles from './EpisodeGrid.module.css'
 
@@ -253,6 +253,7 @@ function EpisodeTile({
   /* Same question as the row asks, answered the same way: offline, "available" has to mean
      "downloaded here", or the grid offers episodes the player cannot open. */
   const canPlay = usePlayable()(episode)
+  const downloaded = useStoredEpisodes().has(episode.id)
   const { t } = useTranslation()
   const hintId = useId()
 
@@ -283,6 +284,14 @@ function EpisodeTile({
         !canPlay && styles.isUnavailable,
       )}
     >
+      {/* A corner mark rather than a badge: at this size the tile is a number, and anything
+          with words in it stops the grid being scannable. The name is spoken. */}
+      {downloaded ? (
+        <span className={styles.storedMark} title={t('downloads.episodeStored')}>
+          <DownloadIcon size="0.85em" />
+          <span className="sr-only">{t('downloads.episodeStored')}</span>
+        </span>
+      ) : null}
       {canPlay ? (
         <Link
           href={`/watch/${encodeURIComponent(episode.id)}`}

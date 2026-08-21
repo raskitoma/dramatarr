@@ -22,6 +22,7 @@ import { cx } from '@/components/cx'
 import {
   CheckCircleIcon,
   CheckIcon,
+  DownloadIcon,
   MoreIcon,
   PlayIcon,
   ReplayIcon,
@@ -29,7 +30,7 @@ import {
 } from '@/components/icons'
 import { formatDate, formatDuration } from '@/lib/format'
 
-import { usePlayable } from '@/offline/useOffline'
+import { usePlayable, useStoredEpisodes } from '@/offline/useOffline'
 
 import styles from './EpisodeRow.module.css'
 
@@ -55,6 +56,7 @@ export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
      the wrong one on a plane. Offline this becomes "downloaded on this device", so the row
      agrees with what the Play button will actually open. */
   const canPlay = usePlayable()(episode)
+  const downloaded = useStoredEpisodes().has(episode.id)
   const { t, i18n } = useTranslation()
   const hintId = useId()
 
@@ -154,6 +156,16 @@ export function EpisodeRow({ episode, overview }: EpisodeRowProps) {
       )}
 
       <div className={styles.aside}>
+        {/* Downloaded, which is a different fact from watched and from available: it says the
+            bytes are on *this* device. Deliberately the download glyph rather than a tick —
+            a second tick beside "Vista" would read as a second kind of watched. */}
+        {downloaded ? (
+          <span className={styles.downloaded} title={t('downloads.episodeStored')}>
+            <DownloadIcon size="1em" />
+            <span className="sr-only">{t('downloads.episodeStored')}</span>
+          </span>
+        ) : null}
+
         {episode.watched ? (
           <Badge tone="success">{t('series.watched')}</Badge>
         ) : hasProgress ? (

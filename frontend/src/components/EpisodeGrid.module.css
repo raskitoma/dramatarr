@@ -238,3 +238,22 @@
     border: 1px solid CanvasText;
   }
 }
+
+/* Top-trailing corner, out of the way of the episode number and the watched state, which
+   occupy the middle and the opposite corner. Sits above the poster wash with its own scrim so
+   it survives whatever frame it lands on. */
+.storedMark {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--accent);
+  pointer-events: none;
+}

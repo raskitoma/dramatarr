@@ -1033,6 +1033,7 @@
     "resumeSeries": "Reanudar la descarga",
     "removed": "Borramos la serie de este dispositivo.",
     "episodesOf": "{{done}} de {{total}}",
+    "episodeStored": "Descargado en este dispositivo",
     "state": {
       "queued": "En cola",
       "running": "Descargando",

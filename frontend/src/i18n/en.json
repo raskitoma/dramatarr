@@ -1033,6 +1033,7 @@
     "resumeSeries": "Resume the download",
     "removed": "Removed from this device.",
     "episodesOf": "{{done}} of {{total}}",
+    "episodeStored": "Downloaded on this device",
     "state": {
       "queued": "Queued",
       "running": "Downloading",

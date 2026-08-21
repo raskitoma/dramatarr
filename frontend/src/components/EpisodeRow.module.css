@@ -196,6 +196,16 @@ a.main:hover .playMark {
   flex: 0 0 auto;
 }
 
+/* Downloaded, in the accent rather than the success colour: success already means "watched"
+   two elements to the left, and two greens side by side saying different things is the kind of
+   thing you have to learn rather than read. */
+.downloaded {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--accent);
+}
+
 .unavailableTag {
   display: inline-flex;
   align-items: center;
