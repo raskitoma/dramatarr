@@ -150,6 +150,7 @@
     "alreadyAsked": "“{{title}}” was already on your list.",
     "alreadyInLibrary": "“{{title}}” is already in the library.",
     "inLibrary": "In the library",
+    "newAnswer": "New",
     "openSource": "Open on {{provider}}",
     "matchedCast": "Cast: “{{name}}”",
     "matchedCastUnnamed": "Matched by cast",

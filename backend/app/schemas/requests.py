@@ -147,6 +147,10 @@ class SeriesRequestOut(APIModel):
     #: True when the POST found an identical row instead of writing a new one. Lets the client
     #: say "already on your list" rather than claiming a second request was created.
     already_existed: bool = False
+    #: True while this member has not acknowledged a *terminal* answer to their own request.
+    #: What the alert counts — see `SeriesRequest.awaits_the_requester` for why `approved` is
+    #: not one of them.
+    unseen: bool = False
 
 
 class RequestRequester(APIModel):

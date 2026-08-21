@@ -150,6 +150,7 @@
     "alreadyAsked": "«{{title}}» ya estaba en tu lista.",
     "alreadyInLibrary": "«{{title}}» ya está en la biblioteca.",
     "inLibrary": "En la biblioteca",
+    "newAnswer": "Novedad",
     "openSource": "Abrir en {{provider}}",
     "matchedCast": "Reparto: «{{name}}»",
     "matchedCastUnnamed": "Coincide por reparto",

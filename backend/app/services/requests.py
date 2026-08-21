@@ -481,6 +481,7 @@ def request_out(row: SeriesRequest, *, already_existed: bool = False) -> SeriesR
         updated_at=row.updated_at,
         resolved_at=row.resolved_at,
         already_existed=already_existed,
+        unseen=row.awaits_the_requester,
     )
 
 
@@ -511,6 +512,37 @@ async def list_for_user(session: AsyncSession, user: User) -> list[SeriesRequest
         )
     ).scalars()
     return [request_out(row) for row in rows]
+
+
+async def acknowledge(session: AsyncSession, user: User) -> int:
+    """Mark this member's terminal answers as seen. Returns how many were.
+
+    All of them at once, on visiting the wishlist, rather than one per row: the alert says
+    "there is news", the page *is* the news, and asking somebody to dismiss six things they
+    have just read is a chore invented by the software.
+
+    Scoped to `user.id` in the query itself. A member acknowledging somebody else's request
+    would be a quiet cross-account write, and this route is reachable by every member.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(SeriesRequest).where(
+                    SeriesRequest.user_id == user.id,
+                    SeriesRequest.seen_at.is_(None),
+                    SeriesRequest.status.in_([RequestStatus.FULFILLED, RequestStatus.DECLINED]),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.seen_at = now
+    if rows:
+        await session.commit()
+    return len(rows)
 
 
 async def get_or_404(session: AsyncSession, request_id: str) -> SeriesRequest:

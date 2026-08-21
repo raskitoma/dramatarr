@@ -107,6 +107,9 @@ export interface SeriesRequest {
   resolvedAt: string | null
   /** True when the POST reached a row that already existed rather than writing a new one. */
   alreadyExisted: boolean
+  /** True while this member has not seen a terminal answer to their own request. What the
+   *  alert counts; `approved` does not qualify, because "not yet" is not news. */
+  unseen: boolean
 }
 
 export interface RequestRequester {
@@ -193,6 +196,29 @@ export function useRequestSearch(query: string, shortDrama = false) {
     // The indexer answers this over the network; re-running it because a component remounted
     // would cost a member a second wait for an answer that has not changed.
     staleTime: 60_000,
+  })
+}
+
+/** How many answered requests this member has not seen yet.
+ *
+ * Read from the member's own list rather than a counting endpoint: it is a handful of rows for
+ * a household, the wishlist page needs it anyway, and one query answers both — a second route
+ * would be a second thing to keep in step with the first.
+ */
+export function useUnseenRequests(): number {
+  const mine = useMyRequests()
+  return (mine.data ?? []).filter((row) => row.unseen).length
+}
+
+/** Mark the answers as read. The wishlist page *is* the notification, so it calls this on
+ *  opening rather than offering a dismiss button for something already read. */
+export function useAcknowledgeRequests() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<{ ok: boolean }>('/requests/acknowledge', {}),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: requestKeys.mine() })
+    },
   })
 }
 

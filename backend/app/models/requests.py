@@ -112,6 +112,12 @@ class SeriesRequest(Base):
     )
     resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
+    #: When the *requester* acknowledged a terminal answer. NULL means they have not been told
+    #: yet, which is what the alert counts. Server-side rather than in the browser because this
+    #: household reads the app on three devices, and a badge that clears on one and nags on the
+    #: other two is worse than no badge.
+    seen_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = created_column()
     updated_at: Mapped[datetime] = updated_column()
 
@@ -136,6 +142,19 @@ class SeriesRequest(Base):
     @property
     def is_open(self) -> bool:
         return self.status in OPEN_STATUSES
+
+    @property
+    def awaits_the_requester(self) -> bool:
+        """An answer this member has not seen.
+
+        Only terminal answers count. `pending` and `approved` are the admin saying "not yet",
+        and nagging somebody about a thing that has not happened is how people learn to ignore
+        a badge.
+        """
+        return self.seen_at is None and self.status in {
+            RequestStatus.FULFILLED,
+            RequestStatus.DECLINED,
+        }
 
 
 __all__ = ["OPEN_STATUSES", "RequestStatus", "SeriesRequest"]

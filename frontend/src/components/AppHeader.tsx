@@ -22,7 +22,7 @@ import { avatarUrlOf, type User } from '@/api/types'
 import { useAuth } from '@/hooks/useAuth'
 
 import { Avatar } from '@/components/Avatar'
-import { useRequestCounts } from '@/api/requests'
+import { useRequestCounts, useUnseenRequests } from '@/api/requests'
 import { useDownloadCount } from '@/offline/useDownloads'
 import { HeaderSearch } from '@/components/HeaderSearch'
 import { IconButton } from '@/components/IconButton'
@@ -118,6 +118,11 @@ function AvatarMenu({ user }: { user: User }) {
      below say which. Only fetched for admins; `useRequestCounts` hits an admin-only route. */
   const requestCounts = useRequestCounts(isAdmin)
   const pendingRequests = isAdmin ? (requestCounts.data?.pending ?? 0) : 0
+  /* And every member carries the other direction: an answer to something *they* asked for.
+     A fulfilled request used to change colour on a screen nobody had a reason to open, which
+     for the way this household uses the app — ask, forget, come back weeks later — means
+     finding out late or not at all. */
+  const answered = useUnseenRequests()
   const toast = useToast()
   const [, navigate] = useLocation()
   const [open, setOpen] = useState(false)
@@ -179,7 +184,7 @@ function AvatarMenu({ user }: { user: User }) {
         type="button"
         ref={triggerRef}
         className={styles.avatarButton}
-        data-busy={downloading > 0 || pendingRequests > 0 ? 'true' : undefined}
+        data-busy={downloading > 0 || pendingRequests > 0 || answered > 0 ? 'true' : undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -229,6 +234,10 @@ function AvatarMenu({ user }: { user: User }) {
               person. Downloads are per-browser — what is here is not on the phone — so the
               account menu is where they read as personal rather than as a section of the
               library. */}
+          <Link href="/requests" role="menuitem" className={styles.menuItem}>
+            {t('nav.requests')}
+            {answered > 0 ? <span className={styles.menuCount}>{answered}</span> : null}
+          </Link>
           <Link href="/downloads" role="menuitem" className={styles.menuItem}>
             {t('nav.downloads')}
             {downloading > 0 ? (

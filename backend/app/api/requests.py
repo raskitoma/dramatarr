@@ -61,6 +61,17 @@ async def search_requests(
     return await requests_service.search(session, user, q, limit=limit, short_drama=short_drama)
 
 
+@router.post("/acknowledge", response_model=Ok)
+async def acknowledge(session: SessionDep, user: CurrentUser) -> Ok:
+    """Mark this member's answered requests as read.
+
+    Called by the wishlist when it opens, because the page is the notification — there is
+    nothing to click "dismiss" on that reading it has not already done.
+    """
+    await requests_service.acknowledge(session, user)
+    return Ok()
+
+
 @router.get("", response_model=list[SeriesRequestOut])
 @router.get("/", response_model=list[SeriesRequestOut], include_in_schema=False)
 async def my_requests(session: SessionDep, user: CurrentUser) -> list[SeriesRequestOut]:

@@ -75,6 +75,7 @@ function results(rows: RequestCandidate[]): RequestSearchResults {
 }
 
 const MY_REQUEST: SeriesRequest = {
+  unseen: false,
   id: 'r1',
   title: 'Otra Serie',
   year: null,

@@ -16,7 +16,7 @@
  * — after the request has sat in a queue for a day — would be strictly worse.
  */
 
-import { useEffect, useId, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'wouter'
 
@@ -24,6 +24,7 @@ import {
   externalLinks,
   requestFromCandidate,
   requestStatusKey,
+  useAcknowledgeRequests,
   useCancelRequest,
   useCreateRequest,
   useMyRequests,
@@ -104,6 +105,20 @@ export function RequestsPage() {
 
   const search = useRequestSearch(query, true)
   const mine = useMyRequests()
+
+  /* Opening this page is reading the news, so it clears the alert — there is nothing left to
+     dismiss. Fired once per mount and only when there is actually something to clear, so it
+     does not post on every visit. */
+  const acknowledge = useAcknowledgeRequests()
+  const unseen = (mine.data ?? []).some((row) => row.unseen)
+  const acknowledged = useRef(false)
+  useEffect(() => {
+    if (!unseen || acknowledged.current) return
+    acknowledged.current = true
+    acknowledge.mutate()
+    // `acknowledge` is recreated each render; the effect is keyed on there being news.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unseen])
   const create = useCreateRequest()
   const cancel = useCancelRequest()
 
@@ -399,6 +414,9 @@ function MyRequestRow({ row, busy, onCancel }: MyRequestRowProps) {
 
         <div className={styles.mineMeta}>
           <StatusChip status={row.status} />
+          {/* Marks the row the alert was about, so a list of eight does not make you compare
+              it against memory to find which one changed. */}
+          {row.unseen ? <Badge tone="accent">{t('requests.newAnswer')}</Badge> : null}
           {row.provider ? <span className={styles.provider}>{row.provider}</span> : null}
         </div>
 
