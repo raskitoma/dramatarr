@@ -7,6 +7,7 @@ does not hand over live sessions.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, Request, Response
@@ -19,7 +20,7 @@ from app.db import get_session
 from app.errors import Forbidden, Unauthorized
 from app.models import AuthSession, User, UserRole
 from app.utils.ids import new_token
-from app.utils.time import in_days, is_expired, utcnow
+from app.utils.time import as_aware, in_days, is_expired, utcnow
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -56,7 +57,11 @@ async def create_session(
     response.set_cookie(
         key=settings.session_cookie_name,
         value=raw,
-        max_age=settings.session_ttl_days * 86400,
+        # The cookie is kept for the *absolute* lifetime while the database holds the real,
+        # shorter idle expiry. Otherwise a session refreshed on the server would still vanish
+        # from the browser at the idle mark, and the member would be signed out by a cookie
+        # nobody had decided to expire.
+        max_age=settings.session_max_days * 86400,
         httponly=True,
         secure=settings.use_secure_cookie,
         samesite="lax",
@@ -92,6 +97,26 @@ async def revoke_current_session(session: AsyncSession, request: Request, respon
 # --- Current user --------------------------------------------------------------------------
 
 
+def _refresh_expiry(auth: AuthSession, now: datetime) -> None:
+    """Push a live session's expiry forward, up to the absolute ceiling.
+
+    Without this the window is counted from signing in and never moves, so somebody using the
+    app daily is signed out on a schedule they cannot see. With it, `session_ttl_days` becomes
+    what it says — how long a session survives *unused* — and `session_max_days` is the line
+    nothing crosses.
+
+    Only ever extends. A clock that went backwards, or a ceiling already reached, leaves the
+    row alone rather than shortening a session somebody is in the middle of using.
+    """
+    settings = get_settings()
+    created = as_aware(auth.created_at) or now
+    ceiling = created + timedelta(days=settings.session_max_days)
+    target = min(now + timedelta(days=settings.session_ttl_days), ceiling)
+    current = as_aware(auth.expires_at)
+    if current is None or target > current:
+        auth.expires_at = target
+
+
 async def get_current_user_optional(request: Request, session: SessionDep) -> User | None:
     """Never raises. Used by `GET /api/auth/session`, which must answer for anonymous callers."""
     settings = get_settings()
@@ -112,10 +137,14 @@ async def get_current_user_optional(request: Request, session: SessionDep) -> Us
     if auth.user is None or not auth.user.is_active:
         return None
 
-    # Cheap liveness stamp; avoid a write on every single request.
+    # Cheap liveness stamp; avoid a write on every single request. The expiry rides the same
+    # five-minute cadence, so a session in daily use is renewed for the cost of a stamp already
+    # being written.
     now = utcnow()
-    if (now - auth.last_seen_at).total_seconds() > 300:
+    last_seen = as_aware(auth.last_seen_at) or now
+    if (now - last_seen).total_seconds() > 300:
         auth.last_seen_at = now
+        _refresh_expiry(auth, now)
 
     return auth.user
 

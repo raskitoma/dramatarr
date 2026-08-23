@@ -42,7 +42,18 @@ class Settings(BaseSettings):
     webauthn_origin: str = "http://localhost:8080"
 
     # --- Sessions -------------------------------------------------------------------------
-    session_ttl_days: int = 30
+    #: How long a session survives **without being used**. Refreshed on use, so an active
+    #: member is never signed out mid-trip; this is the idle window, not the lifetime.
+    #:
+    #: Ninety, not thirty. Thirty left nine days of margin over a three-week trip with the NAS
+    #: switched off — nothing reaches the server to refresh anything while somebody is away, so
+    #: the window has to outlast the absence by a comfortable margin rather than a nervous one.
+    #: Three months of never opening the app still signs you out.
+    session_ttl_days: int = 90
+    #: The lifetime nothing extends past, counted from the moment of signing in. The owner's
+    #: number: "que no caduque… por razones de seguridad se podría poner un límite de 365
+    #: días." A refresh is capped here, so a session cannot roll forward for ever.
+    session_max_days: int = 365
     session_cookie_name: str = "dramatarr_session"
     cookie_secure: bool | None = None  # None → inferred from public_url scheme
 

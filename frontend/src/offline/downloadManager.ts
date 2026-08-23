@@ -199,6 +199,53 @@ function episodeLabel(episode: { seasonNumber: number; episodeNumber: number; ti
  * whole point: press Download, go and look at something else, and watch the count climb on the
  * Downloads screen.
  */
+/**
+ * Cache the screens a downloaded series is reached *through*, not just the series itself.
+ *
+ * The worker caches API responses network-first, which means a page only works offline if it
+ * happened to be opened while there was a server. Downloading a series and flying is the case
+ * that has to work without that coincidence: the owner's words were that the host will be off
+ * and they do not want to lose access to what they already have.
+ *
+ * So the download also takes the poster, the series' own record, the session (or the app sends
+ * you to a login form it cannot submit), the config, and Home's two shelves — which is what
+ * makes the app open onto something rather than an error.
+ *
+ * Failure is per-URL and silent. None of this is the download; a shelf that does not render is
+ * worth less than the episodes, and losing the episodes over it would be absurd.
+ */
+async function prefetchShell(detail: SeriesDetail): Promise<void> {
+  // Requested through `api`, not by hand-built URLs, so the address is identical to the one the
+  // page will ask for — down to the query-string order. A prefetch that differs by a parameter
+  // misses in silence and looks exactly like a prefetch that never ran. The service worker
+  // caches each of these on the way past; nothing here writes to a cache itself.
+  await Promise.all(
+    [
+      () => api.get(`/library/series/${encodeURIComponent(detail.slug)}`),
+      () => api.get('/auth/session'),
+      () => api.get('/config'),
+      () => api.get('/me/continue-watching'),
+      // Exactly what `useRecentlyAdded(20)` asks for on Home.
+      () => api.get('/library/series', { sort: 'added', page: 1, pageSize: 20 }),
+    ].map(async (ask) => {
+      try {
+        await ask()
+      } catch {
+        /* One missing shelf is worth far less than the episodes; never fail a download for it. */
+      }
+    }),
+  )
+
+  // The poster is not an API call, so it is the one thing cached here directly.
+  if (detail.posterUrl) {
+    try {
+      await (await caches.open(API_CACHE)).add(detail.posterUrl)
+    } catch {
+      /* `Poster` already degrades to a glyph. */
+    }
+  }
+}
+
 export async function start(detail: SeriesDetail, measured?: Measured): Promise<void> {
   if (!offlineSupported()) throw new Error('offline storage is unavailable on this origin')
   cancelled.delete(detail.id)
@@ -237,14 +284,7 @@ export async function start(detail: SeriesDetail, measured?: Measured): Promise<
     row.bytesTotal = plan.bytes
     await save(row)
 
-    // The poster, so the downloads shelf is not a row of grey rectangles on the plane.
-    if (detail.posterUrl) {
-      try {
-        await (await caches.open(API_CACHE)).add(detail.posterUrl)
-      } catch {
-        /* Artwork is not worth failing a download over; Poster already degrades to a glyph. */
-      }
-    }
+    await prefetchShell(detail)
   } catch (error) {
     row.state = 'error'
     row.error = error instanceof Error ? error.message : 'failed'
