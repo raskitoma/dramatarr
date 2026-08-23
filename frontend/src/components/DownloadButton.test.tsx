@@ -23,7 +23,10 @@ vi.mock('@/offline/downloadManager', () => ({
   pause: vi.fn(),
   erase: vi.fn(),
 }))
-vi.mock('@/offline/register', () => ({ offlineSupported: () => true }))
+vi.mock('@/offline/register', () => ({
+  offlineSupported: () => true,
+  useOfflineBlocked: () => false,
+}))
 vi.mock('@/offline/useDownloads', () => ({ useSeriesDownload: () => null }))
 vi.mock('@/components/Toast', () => ({ useToast: () => ({ show: (...a: unknown[]) => show(...a) }) }))
 
@@ -162,7 +165,10 @@ describe('DownloadButton', () => {
 
   it('says why it cannot work on an origin with no service worker', async () => {
     vi.resetModules()
-    vi.doMock('@/offline/register', () => ({ offlineSupported: () => false }))
+    vi.doMock('@/offline/register', () => ({
+      offlineSupported: () => false,
+      useOfflineBlocked: () => false,
+    }))
     const { DownloadButton: Unsupported } = await import('./DownloadButton')
 
     render(<Unsupported detail={detail} />)
@@ -187,5 +193,22 @@ describe('DownloadButton', () => {
     await waitFor(() =>
       expect(show).toHaveBeenCalledWith(expect.stringContaining('QuotaExceededError'), 'error'),
     )
+  })
+
+  it('refuses outright in a browser that cannot register a worker', async () => {
+    /* Edge and Chrome on iPhone: the API is present and `register()` rejects, because Apple
+       exposes service workers only to Safari and Home Screen web apps. Checking for the API
+       says yes on the one platform where the answer is no. */
+    vi.resetModules()
+    vi.doMock('@/offline/register', () => ({
+      offlineSupported: () => true,
+      useOfflineBlocked: () => true,
+    }))
+    const { DownloadButton: Blocked } = await import('./DownloadButton')
+
+    render(<Blocked detail={detail} />)
+
+    expect(screen.getByRole('button')).toHaveProperty('disabled', true)
+    expect(screen.getByText('No sirve en este navegador')).toBeTruthy()
   })
 })

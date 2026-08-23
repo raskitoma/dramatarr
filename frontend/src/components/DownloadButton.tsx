@@ -25,7 +25,7 @@ import {
   start,
   type Measured,
 } from '@/offline/downloadManager'
-import { offlineSupported } from '@/offline/register'
+import { offlineSupported, useOfflineBlocked } from '@/offline/register'
 import { useSeriesDownload } from '@/offline/useDownloads'
 import { formatBytes } from '@/lib/format'
 
@@ -39,7 +39,13 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
   const [measuring, setMeasuring] = useState(false)
   const [plan, setPlan] = useState<Measured | null>(null)
 
-  const supported = offlineSupported()
+  /* Two different noes. `offlineSupported` is false where there is no API at all — the LAN
+     address, which is not a secure context. `blocked` is a browser that has the API and refused
+     to register: Edge and Chrome on iPhone, where Apple exposes service workers only to Safari
+     and Home Screen web apps. The second is the one that would otherwise take a 1.4 GB
+     download and quietly produce nothing openable. */
+  const blocked = useOfflineBlocked()
+  const supported = offlineSupported() && !blocked
   const done = row?.state === 'done'
   const busy = row?.state === 'running' || row?.state === 'queued'
   const available = (detail.seasons ?? [])
@@ -68,9 +74,15 @@ export function DownloadButton({ detail }: { detail: SeriesDetail }) {
 
   if (!supported) {
     return (
-      <Button variant="secondary" disabled title={t('downloads.unsupportedHint')}>
+      <Button
+        variant="secondary"
+        disabled
+        title={blocked ? t('downloads.blockedHint') : t('downloads.unsupportedHint')}
+      >
         <DownloadIcon />
-        <span className={styles.label}>{t('downloads.unsupported')}</span>
+        <span className={styles.label}>
+          {blocked ? t('downloads.blocked') : t('downloads.unsupported')}
+        </span>
       </Button>
     )
   }

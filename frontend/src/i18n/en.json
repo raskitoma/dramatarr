@@ -1051,6 +1051,8 @@
     "confirmNote": "Stored in the browser, not in your camera roll or Downloads. Each device keeps its own.",
     "unsupported": "Not available here",
     "unsupportedHint": "Downloads need HTTPS. Use dramatarr.raskitoma.com rather than the LAN address.",
+    "blocked": "Not possible in this browser",
+    "blockedHint": "On iPhone and iPad only Safari can store content offline. Open dramatarr in Safari and add it to the Home Screen.",
     "empty": "Nothing downloaded on this device yet.",
     "emptyHint": "Open a series and press Download. What is stored here opens with the server off.",
     "deviceTitle": "This device",

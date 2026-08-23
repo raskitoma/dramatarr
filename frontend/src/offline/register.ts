@@ -9,6 +9,14 @@
 import { useSyncExternalStore } from 'react'
 
 let waiting: ServiceWorker | null = null
+/** Set when the browser refused to register the worker at all.
+ *
+ * The case this exists for is **Edge or Chrome on iPhone**. Every browser on iOS is WebKit, but
+ * Apple exposes the Service Worker API only to Safari, `SFSafariViewController` and Home Screen
+ * web apps — so in a third-party iOS browser `navigator.serviceWorker` is present and
+ * `register()` rejects. Checking for the API therefore says yes on the one platform where the
+ * answer is no, and somebody would spend 1.4 GB on a download that can never open offline. */
+let blocked = false
 const listeners = new Set<() => void>()
 
 function announce(): void {
@@ -27,6 +35,22 @@ export function offlineSupported(): boolean {
  *  answers nothing. */
 export function offlineReady(): boolean {
   return offlineSupported() && navigator.serviceWorker.controller !== null
+}
+
+/** The browser said no. Distinct from "not ready yet": this one never becomes true. */
+export function offlineBlocked(): boolean {
+  return blocked
+}
+
+export function useOfflineBlocked(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    () => blocked,
+    () => false,
+  )
 }
 
 /** Push everything watched offline back to the server, one terminal write per episode.
@@ -83,6 +107,9 @@ export function registerServiceWorker(): void {
         }
       })
     })
+  }).catch(() => {
+    blocked = true
+    announce()
   })
 
   // The page is being controlled by a different worker than the one that loaded it, which only
