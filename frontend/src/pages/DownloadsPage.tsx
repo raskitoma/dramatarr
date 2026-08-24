@@ -23,7 +23,7 @@ import { CheckIcon, CircleIcon, DownloadIcon, PauseIcon, TrashIcon } from '@/com
 import { formatBytes } from '@/lib/format'
 import { erase, pause, reconcile, resume } from '@/offline/downloadManager'
 import { pendingCount } from '@/offline/progress'
-import { offlineReady, offlineSupported } from '@/offline/register'
+import { installedAsApp, isIOS, offlineReady, offlineSupported } from '@/offline/register'
 import { useDownloads } from '@/offline/useDownloads'
 import type { DownloadRow } from '@/offline/db'
 
@@ -38,6 +38,8 @@ export function DownloadsPage() {
   const rows = useDownloads()
   const [facts, setFacts] = useState<DeviceFacts | null>(null)
   const [pending, setPending] = useState(0)
+  const ios = isIOS()
+  const installed = installedAsApp()
 
   useEffect(() => {
     void reconcile()
@@ -77,21 +79,45 @@ export function DownloadsPage() {
               </Badge>
             </dd>
           </div>
-          <div className={styles.fact}>
-            <dt>{t('downloads.devicePersisted')}</dt>
-            <dd>
-              <Badge tone={facts?.persisted ? 'success' : 'warning'}>
-                {facts?.persisted ? t('downloads.yes') : t('downloads.no')}
-              </Badge>
-            </dd>
-          </div>
+          {/* On iOS this is the row that decides whether a download survives, and it is not
+              the one `persist()` answers — WebKit defaults to refusing, so an iPhone reports
+              "no" even when the storage is perfectly safe. A Home Screen web app is not part of
+              Safari: it has its own counter of days of use, reset by using it. */}
+          {ios ? (
+            <div className={styles.fact}>
+              <dt>{t('downloads.deviceInstalled')}</dt>
+              <dd>
+                <Badge tone={installed ? 'success' : 'warning'}>
+                  {installed ? t('downloads.yes') : t('downloads.no')}
+                </Badge>
+              </dd>
+            </div>
+          ) : (
+            <div className={styles.fact}>
+              <dt>{t('downloads.devicePersisted')}</dt>
+              <dd>
+                <Badge tone={facts?.persisted ? 'success' : 'warning'}>
+                  {facts?.persisted ? t('downloads.yes') : t('downloads.no')}
+                </Badge>
+              </dd>
+            </div>
+          )}
           <div className={styles.fact}>
             <dt>{t('downloads.deviceUsage')}</dt>
             <dd className={styles.number}>{formatBytes(mine)}</dd>
           </div>
         </dl>
         {!offlineReady() ? <p className={styles.hint}>{t('downloads.offlineHint')}</p> : null}
-        {!facts?.persisted ? <p className={styles.hint}>{t('downloads.persistHint')}</p> : null}
+        {/* One sentence, and it has to be the right one for the platform: telling an iPhone
+            owner to "grant persistent storage" sends them looking for a setting that does not
+            exist. */}
+        {ios && !installed ? (
+          <p className={styles.hint}>{t('downloads.iosInstallHint')}</p>
+        ) : ios ? (
+          <p className={styles.hint}>{t('downloads.iosInstalledHint')}</p>
+        ) : !facts?.persisted ? (
+          <p className={styles.hint}>{t('downloads.persistHint')}</p>
+        ) : null}
         {pending > 0 ? (
           <p className={styles.hint}>{t('downloads.pendingProgress', { count: pending })}</p>
         ) : null}

@@ -37,6 +37,33 @@ export function offlineReady(): boolean {
   return offlineSupported() && navigator.serviceWorker.controller !== null
 }
 
+/**
+ * Running from the Home Screen / installed icon rather than inside a browser tab.
+ *
+ * On iOS this is the fact that actually decides whether a download survives, and it is not the
+ * one `persist()` answers. WebKit grants persistence on heuristics and defaults to refusing, so
+ * `persisted()` reports false on an iPhone even when the storage is perfectly safe. What keeps
+ * it safe is being a Home Screen web app: those are not part of Safari, they carry their own
+ * counter of days of use which resets when the app is used, and Apple does not expect their
+ * first-party data to be deleted.
+ *
+ * `navigator.standalone` is the iOS-only signal and predates the standard one; the media query
+ * is what everything else answers. Both are checked because neither covers both worlds.
+ */
+export function installedAsApp(): boolean {
+  if (typeof window === 'undefined') return false
+  const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
+  return iosStandalone || window.matchMedia('(display-mode: standalone)').matches
+}
+
+/** True on iPhone and iPad, where the rules above are different from everywhere else. */
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  // iPadOS 13+ reports itself as a Mac; the touch points are what give it away.
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+}
+
 /** The browser said no. Distinct from "not ready yet": this one never becomes true. */
 export function offlineBlocked(): boolean {
   return blocked
