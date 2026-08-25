@@ -98,6 +98,29 @@ class StudioLink:
 
 
 @dataclass(frozen=True)
+class Edition:
+    """One language a platform published this show in.
+
+    A platform that runs a separate catalogue per language lists the same show more than once —
+    its own title, its own synopsis, and its own page. `is_primary` marks the one the indexer
+    resolved `primary_title` from, which is whichever edition it saw first and therefore says
+    nothing about which language a reader wants.
+
+    Measured against the live index on 2026-08-25, this is very nearly empty: 3,667 links are
+    tagged `en` and exactly **one** is tagged `es`. The plumbing works — verified end to end on
+    title 1065 — but the Spanish catalogue crawl has not populated behind it yet. So everything
+    downstream of this has to keep working, unchanged, for a title with no editions at all.
+    """
+
+    lang: str
+    title: str
+    synopsis: str | None = None
+    watch_url: str | None = None
+    is_primary: bool = False
+    source: str = ""
+
+
+@dataclass(frozen=True)
 class Rating:
     source: str
     value: float
@@ -131,6 +154,27 @@ class DramadexTitle:
     tags: tuple[tuple[str, str], ...] = ()
     cast: tuple[CastMember, ...] = ()
     ratings: tuple[Rating, ...] = ()
+    editions: tuple[Edition, ...] = ()
+
+    def edition_for(self, locale: str) -> Edition | None:
+        """The edition published in the household's language, when there is one.
+
+        Matched on the primary subtag, so a household set to `es` still finds an edition the
+        indexer labelled `es-MX`. Returns None rather than falling back to the primary: the
+        caller has to be able to tell "we have this in your language" from "we do not", because
+        the two lead to different text on the page.
+        """
+        want = (locale or "").strip().lower().split("-")[0].split("_")[0]
+        if not want:
+            return None
+        return next(
+            (e for e in self.editions if e.lang.strip().lower().split("-")[0] == want), None
+        )
+
+    @property
+    def primary_lang(self) -> str | None:
+        """The language `primary_title` and `synopsis` are actually in, when it is recorded."""
+        return next((e.lang for e in self.editions if e.is_primary and e.lang), None)
 
     @property
     def genuine_ratings(self) -> tuple[Rating, ...]:
@@ -236,6 +280,19 @@ def _title(raw: Any) -> DramadexTitle | None:
         if isinstance(r, dict) and isinstance(r.get("value"), (int, float))
     )
 
+    editions = tuple(
+        Edition(
+            lang=str(e.get("lang") or "").strip(),
+            title=str(e.get("title") or "").strip(),
+            synopsis=(str(e.get("synopsis")).strip() or None) if e.get("synopsis") else None,
+            watch_url=(str(e.get("watch_url")).strip() or None) if e.get("watch_url") else None,
+            is_primary=bool(e.get("is_primary")),
+            source=str(e.get("source") or "").strip(),
+        )
+        for e in raw.get("editions") or []
+        if isinstance(e, dict) and str(e.get("lang") or "").strip()
+    )
+
     return DramadexTitle(
         id=int(raw["id"]),
         primary_title=name,
@@ -254,6 +311,7 @@ def _title(raw: Any) -> DramadexTitle | None:
         tags=tags,
         cast=cast,
         ratings=ratings,
+        editions=editions,
     )
 
 

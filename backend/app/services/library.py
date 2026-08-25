@@ -2913,18 +2913,41 @@ async def apply_dramadex_title(
         OverviewSource.TMDB,
         OverviewSource.WIKIPEDIA,
     )
+    # The household's own language, when the platform published this show in it.
+    #
+    # This is the half of the edition data worth the most: the synopsis is the paragraph a
+    # member actually reads, and until now it was always the English one — with
+    # `overview_source_lang` hardcoded to `"en"`, which was a guess even before editions
+    # existed, since `primary_title` resolves to whichever edition the indexer saw first.
+    #
+    # `site.default_locale` rather than the reader's own: `overview` is one column shared by
+    # everybody, so it cannot be per-viewer. Changing that setting and refreshing is what moves
+    # it, which is the same rule every other household-wide choice follows.
+    from app.services.settings import SettingsService
+
+    household_locale = await SettingsService(session).get_str("site.default_locale", "es")
+    local = found.edition_for(household_locale)
+    synopsis = (local.synopsis if local and local.synopsis else None) or found.synopsis
+    synopsis_lang = (
+        local.lang if local and local.synopsis else (found.primary_lang or "en")
+    )
+
     take_overview = (
         wanted("overview")
-        and bool(found.synopsis)
+        and bool(synopsis)
         and (not series.overview or (only is not None) or (overwrite and overview_is_ours))
     )
     if take_overview:
-        if series.overview != found.synopsis:
-            series.overview = found.synopsis
+        if series.overview != synopsis:
+            series.overview = synopsis
             filled.append("overview")
         series.overview_source = OverviewSource.DRAMADEX
-        series.overview_source_lang = "en"
-        watch = next((s.watch_url for s in found.studios if s.is_watchable), None)
+        series.overview_source_lang = synopsis_lang
+        # The page the text came from, which for a localised synopsis is that edition's page
+        # rather than the English one — the attribution has to point at what was quoted.
+        watch = (local.watch_url if local and local.synopsis else None) or next(
+            (s.watch_url for s in found.studios if s.is_watchable), None
+        )
         if watch:
             series.overview_source_url = watch[:1000]
 
@@ -2990,13 +3013,22 @@ async def apply_dramadex_title(
             if not link.is_watchable or link.key in seen_studios:
                 continue
             seen_studios.add(link.key)
+            # A localised edition is a *different page* on the platform, not a translation of
+            # the same one — so sending a Spanish-speaking reader to the English id is sending
+            # them to the wrong place. When this platform published the edition this household
+            # reads, that is the link the button should carry.
+            url = (
+                local.watch_url
+                if local and local.watch_url and local.source == link.key
+                else link.watch_url
+            )
             session.add(
                 SeriesLink(
                     series_id=series.id,
                     studio_key=link.key[:32],
                     studio_name=link.name[:64],
                     external_id=link.external_id[:128],
-                    url=link.watch_url[:1000],
+                    url=url[:1000],
                 )
             )
         filled.append("links")
@@ -3013,8 +3045,18 @@ async def apply_dramadex_title(
                 )
             ).scalars()
         }
-        for alias in found.aliases:
-            slug = normalize(alias)
+        # Editions first, so the labelled row wins the `known` check against the identical
+        # string arriving again through `aliases`, which still carries every edition title.
+        # `language` and `kind` have been on this table since it was written and have held ""
+        # and "alternate" for every indexer row, because a flat list of strings is all there
+        # was to put in them. An edition says which language it is, so now they can be true.
+        labelled: list[tuple[str, str, str]] = [
+            (e.title, e.lang, TitleKind.OFFICIAL) for e in found.editions if e.title
+        ]
+        labelled += [(alias, "", TitleKind.ALTERNATE) for alias in found.aliases]
+
+        for text, language, kind in labelled:
+            slug = normalize(text)
             if not slug or slug in known:
                 continue
             known.add(slug)
@@ -3022,9 +3064,9 @@ async def apply_dramadex_title(
             session.add(
                 SeriesTitle(
                     series_id=series.id,
-                    language="",
-                    title=alias[:500],
-                    kind=TitleKind.ALTERNATE,
+                    language=language[:16],
+                    title=text[:500],
+                    kind=kind,
                     source=TitleSource.MANUAL,
                     normalized=slug,
                 )
