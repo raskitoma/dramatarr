@@ -55,13 +55,13 @@ async def test_an_index_from_before_the_counter_is_rebuilt_once(db: AsyncSession
     await db.commit()
     assert await stored_generation(db) == 0
 
-    before = await search_library(db, "Adam Daniel")
+    before = await search_library(db, "Adam Daniel", sees_restricted=True)
     assert before.series == [], "the fixture did not reproduce the pre-upgrade index"
 
     assert await ensure_generation(db) is True
     assert await stored_generation(db) == INDEX_GENERATION
 
-    after = await search_library(db, "Adam Daniel")
+    after = await search_library(db, "Adam Daniel", sees_restricted=True)
     assert [hit.series.slug for hit in after.series] == ["feast-of-power"]
     await ensure_index(db)
 

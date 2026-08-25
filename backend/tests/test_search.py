@@ -128,7 +128,7 @@ async def indexed_series(db):
 async def test_series_found_across_languages(db, indexed_series, query: str) -> None:
     from app.services.search.service import search_library
 
-    results = await search_library(db, query)
+    results = await search_library(db, query, sees_restricted=True)
     found = {hit.series.id for hit in results.series}
     assert indexed_series.id in found, f"{query!r} did not find the series"
 
@@ -137,7 +137,7 @@ async def test_result_reports_which_title_matched(db, indexed_series) -> None:
     """A cross-language hit looks like a bug unless the UI can explain it."""
     from app.services.search.service import search_library
 
-    results = await search_library(db, "miqing")
+    results = await search_library(db, "miqing", sees_restricted=True)
     hit = next(h for h in results.series if h.series.id == indexed_series.id)
     assert hit.matched_title
 
@@ -145,5 +145,5 @@ async def test_result_reports_which_title_matched(db, indexed_series) -> None:
 async def test_unrelated_query_returns_nothing(db, indexed_series) -> None:
     from app.services.search.service import search_library
 
-    results = await search_library(db, "completely unrelated zzzz")
+    results = await search_library(db, "completely unrelated zzzz", sees_restricted=True)
     assert indexed_series.id not in {hit.series.id for hit in results.series}

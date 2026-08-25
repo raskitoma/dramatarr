@@ -36,29 +36,26 @@ from app.models import Episode, JobType, MediaFile, Series, SeriesTitle
 from app.schemas.common import Ok, Page
 from app.schemas.library import (
     ArtworkApplied,
+    ArtworkFromDramadexIn,
     ArtworkSelectIn,
     AssignIn,
     CleanupIn,
     CleanupResult,
-    DiscoveryResults,
-    ArtworkFromDramadexIn,
     DramadexApplyIn,
     DramadexHit,
     DramadexHits,
-    MetadataDiffRow,
-    MetadataPreview,
-    PersonCredits,
     EpisodeDetail,
     EpisodePatch,
     EpisodeSummary,
     GenreFacet,
-    ImdbApplyIn,
     ImportApplied,
     ImportApplyIn,
     ImportPlanIn,
     ImportPlanOut,
     JobRef,
-    MatchIn,
+    MetadataDiffRow,
+    MetadataPreview,
+    PersonCredits,
     RenameItemOut,
     RenamePlanOut,
     SeriesBulkPatch,
@@ -92,15 +89,6 @@ from app.services.library import SortKey
 from app.services.search.index import reindex_series
 from app.services.search.normalize import normalize
 from app.services.search.service import search_library
-from app.services.settings import SettingsService
-from app.services.vocab import (
-    Provider,
-    canonical_content_rating,
-    canonical_network,
-    configured_providers,
-    normalize_genres,
-    provider_domains,
-)
 from app.utils.time import utcnow
 from app.workers.queue import enqueue
 
@@ -151,6 +139,7 @@ async def list_series(
         available_only=available_only,
         page=page,
         page_size=page_size,
+        sees_restricted=user.sees_restricted,
     )
 
 
@@ -181,17 +170,18 @@ async def search(
         status=status,
         language=language,
         available_only=available_only,
+        sees_restricted=user.sees_restricted,
     )
 
 
 @router.get("/genres", response_model=list[GenreFacet])
 async def genres(session: SessionDep, user: CurrentUser) -> list[GenreFacet]:
-    return await library_service.genre_facets(session)
+    return await library_service.genre_facets(session, sees_restricted=user.sees_restricted)
 
 
 @router.get("/years", response_model=list[YearFacet])
 async def years(session: SessionDep, user: CurrentUser) -> list[YearFacet]:
-    return await library_service.year_facets(session)
+    return await library_service.year_facets(session, sees_restricted=user.sees_restricted)
 
 
 @router.get("/unmatched", response_model=Page[UnmatchedFileOut])
@@ -204,27 +194,25 @@ async def unmatched(
     return await library_service.list_unmatched(session, page=page, page_size=page_size)
 
 
-
-
-
-
 @router.get("/series/{id_or_slug}", response_model=SeriesDetail)
 async def series_detail(session: SessionDep, user: CurrentUser, id_or_slug: str) -> SeriesDetail:
-    series = await library_service.get_series_or_404(session, id_or_slug)
-    return await library_service.series_detail(session, series, user.id)
+    series = await library_service.get_series_or_404(session, id_or_slug, viewer=user)
+    return await library_service.series_detail(
+        session, series, user.id, sees_restricted=user.sees_restricted
+    )
 
 
 @router.get("/series/{series_id}/episodes", response_model=list[EpisodeSummary])
 async def series_episodes(
     session: SessionDep, user: CurrentUser, series_id: str
 ) -> list[EpisodeSummary]:
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=user)
     return await library_service.series_episodes(session, series.id, user.id)
 
 
 @router.get("/episodes/{episode_id}", response_model=EpisodeDetail)
 async def episode_detail(session: SessionDep, user: CurrentUser, episode_id: str) -> EpisodeDetail:
-    episode = await library_service.get_episode_or_404(session, episode_id)
+    episode = await library_service.get_episode_or_404(session, episode_id, viewer=user)
     return await library_service.episode_detail(session, episode, user.id)
 
 
@@ -235,7 +223,7 @@ async def episode_detail(session: SessionDep, user: CurrentUser, episode_id: str
 async def patch_series(
     session: SessionDep, admin: AdminUser, series_id: str, body: SeriesPatch
 ) -> SeriesDetail:
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     # Canonicalizing, locking and re-indexing all live in the service, so that this route and
     # the bulk one below cannot drift apart. See `library_service.apply_series_patch`.
     await library_service.apply_series_patch(
@@ -244,7 +232,9 @@ async def patch_series(
         body.model_dump(exclude_unset=True),
         metadata_locked=body.metadata_locked,
     )
-    return await library_service.series_detail(session, series, admin.id)
+    return await library_service.series_detail(
+        session, series, admin.id, sees_restricted=admin.sees_restricted
+    )
 
 
 @router.post("/series/bulk", response_model=SeriesBulkResult)
@@ -270,9 +260,7 @@ async def bulk_patch_series(
     if not changes and body.patch.metadata_locked is None:
         raise AppError("SERIES_BULK_EMPTY", "The patch changes nothing", 400)
 
-    found = (
-        (await session.execute(select(Series).where(Series.id.in_(body.ids)))).scalars().all()
-    )
+    found = (await session.execute(select(Series).where(Series.id.in_(body.ids)))).scalars().all()
     by_id = {series.id: series for series in found}
 
     for series in found:
@@ -292,7 +280,7 @@ async def bulk_patch_series(
 async def patch_episode(
     session: SessionDep, admin: AdminUser, episode_id: str, body: EpisodePatch
 ) -> EpisodeDetail:
-    episode = await library_service.get_episode_or_404(session, episode_id)
+    episode = await library_service.get_episode_or_404(session, episode_id, viewer=admin)
     changes = body.model_dump(exclude_unset=True)
 
     titles_changed = False
@@ -328,7 +316,7 @@ async def patch_episode(
 async def add_series_title(
     session: SessionDep, admin: AdminUser, series_id: str, body: SeriesTitleIn
 ) -> SeriesTitleOut:
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     title = SeriesTitle(
         series_id=series.id,
         language=body.language,
@@ -358,7 +346,7 @@ async def add_series_title(
 async def delete_series_title(
     session: SessionDep, admin: AdminUser, series_id: str, title_id: str
 ) -> Ok:
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     title = await session.get(SeriesTitle, title_id)
     if title is None or title.series_id != series.id:
         raise NotFound("Title", "TITLE_NOT_FOUND")
@@ -370,7 +358,7 @@ async def delete_series_title(
 
 @router.post("/series/{series_id}/refresh", response_model=JobRef, status_code=202)
 async def refresh_series(session: SessionDep, admin: AdminUser, series_id: str) -> JobRef:
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     job = await enqueue(
         session,
         JobType.METADATA_REFRESH,
@@ -379,7 +367,6 @@ async def refresh_series(session: SessionDep, admin: AdminUser, series_id: str) 
         series_id=series.id,
     )
     return JobRef(id=job.id, type=job.type, status=job.status)
-
 
 
 @router.post("/series/{series_id}/unlink", response_model=SeriesUnlinked)
@@ -398,7 +385,7 @@ async def unlink_series(session: SessionDep, admin: AdminUser, series_id: str) -
 
     The inverse of `POST /match`, which clears the lock and binds an id.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     previous = series.tmdb_id
     series.tmdb_id = None
     series.metadata_locked = True
@@ -445,9 +432,7 @@ async def _apply_artwork(
         series_id=series.id,
         kind=kind,
         stored_path=stored,
-        url=library_service.image_url(
-            stored, POSTER_SIZE if kind == "poster" else BACKDROP_SIZE
-        ),
+        url=library_service.image_url(stored, POSTER_SIZE if kind == "poster" else BACKDROP_SIZE),
         artwork_locked=series.artwork_locked,
     )
 
@@ -469,7 +454,7 @@ async def set_series_artwork(
     internet, so they arrive here with no more standing than a link off a forum. The two are
     deliberately governed by different rules; see the SSRF note in `app.services.images`.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     data = await fetch_remote_image(body.url, max_bytes=MAX_ARTWORK_BYTES)
     return await _apply_artwork(session, series, body.kind, data)
 
@@ -483,7 +468,7 @@ async def upload_series_artwork(
     file: Annotated[UploadFile, File()],
 ) -> ArtworkApplied:
     """Same pipeline for a file the admin has locally — a scan, or art they made themselves."""
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     data = await read_capped(file, MAX_ARTWORK_BYTES, "ARTWORK_TOO_LARGE")
     return await _apply_artwork(session, series, kind, data)
 
@@ -495,7 +480,7 @@ async def assign_unmatched(
     media = await session.get(MediaFile, file_id)
     if media is None:
         raise NotFound("Media file", "MEDIA_FILE_NOT_FOUND")
-    series = await library_service.get_series_or_404(session, body.series_id)
+    series = await library_service.get_series_or_404(session, body.series_id, viewer=admin)
 
     episode = (
         (
@@ -631,7 +616,6 @@ async def unmatched_rename_script(
 # directories; never overwrite; database follows disk, one file at a time.
 
 
-
 @router.get("/series/{series_id}/rename-plan", response_model=RenamePlanOut)
 async def series_rename_plan(
     session: SessionDep, admin: AdminUser, series_id: str
@@ -670,7 +654,7 @@ async def rename_series_files(session: SessionDep, admin: AdminUser, series_id: 
     The plan is recomputed by the worker. What an admin approved may be minutes old, and the
     filesystem is the authority on what is safe to do now.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     job = await enqueue(
         session,
         JobType.LIBRARY_RENAME,
@@ -691,14 +675,14 @@ async def series_deletion_preview(
     because a delete whose files are still there is undone by the next scan and the admin has
     to know that before they confirm.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     return await library_service.deletion_preview(session, series)
 
 
 @router.delete("/series/{series_id}", response_model=SeriesDeleted)
 async def delete_series(session: SessionDep, admin: AdminUser, series_id: str) -> SeriesDeleted:
     """Remove a series from the catalogue. No file under `LIBRARY_ROOT` is touched."""
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     return await library_service.delete_series(session, series, actor_id=admin.id)
 
 
@@ -733,7 +717,9 @@ def _hit(payload: dict[str, Any], found: dramadex.DramadexTitle) -> DramadexHit:
     return DramadexHit(**payload)
 
 
-async def _known_dramadex_slugs(session: AsyncSession, ids: list[int]) -> dict[int, str]:
+async def _known_dramadex_slugs(
+    session: AsyncSession, ids: list[int], *, sees_restricted: bool
+) -> dict[int, str]:
     """DramaDex id → the local series' slug, for the ones this household already has.
 
     Was a `set` of ids, which answered "do we have it" and not "where is it" — so every screen
@@ -742,8 +728,13 @@ async def _known_dramadex_slugs(session: AsyncSession, ids: list[int]) -> dict[i
     """
     if not ids:
         return {}
+    # Filtered, because "we have this" about a hidden series discloses it as surely as showing
+    # the row would — and suppressing only the slug still leaves the badge saying so.
     rows = await session.execute(
-        select(Series.dramadex_id, Series.slug).where(Series.dramadex_id.in_(ids))
+        select(Series.dramadex_id, Series.slug).where(
+            Series.dramadex_id.in_(ids),
+            *library_service.restriction_conditions(sees_restricted=sees_restricted),
+        )
     )
     return {int(dramadex_id): slug for dramadex_id, slug in rows.all() if dramadex_id is not None}
 
@@ -770,7 +761,7 @@ async def dramadex_search(
         return DramadexHits(configured=False, query=q)
 
     page = await client.search(q, limit=limit)
-    known = await _known_dramadex_slugs(session, [t.id for t in page.items])
+    known = await _known_dramadex_slugs(session, [t.id for t in page.items], sees_restricted=True)
     return DramadexHits(
         configured=True,
         query=q,
@@ -799,6 +790,19 @@ async def dramadex_poster(session: SessionDep, user: CurrentUser, title_id: int)
     wishlist card — so while it was admin-only, every other member got a 403 and a blank
     rectangle, with nothing on screen to say why.
     """
+    # A poster is content, and this one is addressed by a small guessable integer. Measured on
+    # the live library, the restricted series' key art came back here in full to a plain member
+    # even once the library's own image route refused it — closing one and not the other would
+    # have been a filter with a hole exactly the shape of a poster.
+    if not user.sees_restricted:
+        hidden = await session.scalar(
+            select(Series.id).where(
+                Series.dramadex_id == title_id, Series.restricted.is_(True)
+            )
+        )
+        if hidden:
+            raise NotFound("Poster", "DRAMADEX_POSTER_NOT_FOUND")
+
     client = await dramadex.require_client(session)
     fetched = await client.poster_bytes(title_id)
     if fetched is None:
@@ -837,7 +841,7 @@ async def preview_dramadex(
     different repairs, and one red box for all of them makes the admin guess which. Only a
     genuine transport failure raises.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
 
     client = await dramadex.try_client(session)
     if client is None:
@@ -897,7 +901,7 @@ async def apply_dramadex(
     Returns the whole `SeriesDetail` synchronously, so the editor stops showing the values it
     had a moment ago.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     client = await dramadex.require_client(session)
 
     title_id = body.dramadex_id or series.dramadex_id
@@ -934,7 +938,9 @@ async def apply_dramadex(
                 filled.append("poster")
 
     log.info("dramadex: filled %s on %s", ", ".join(filled) or "nothing", series.id)
-    return await library_service.series_detail(session, series, admin.id)
+    return await library_service.series_detail(
+        session, series, admin.id, sees_restricted=admin.sees_restricted
+    )
 
 
 @router.post("/series/{series_id}/artwork/dramadex", response_model=ArtworkApplied)
@@ -955,7 +961,7 @@ async def artwork_from_dramadex(
     Unlike the metadata dialog's poster row, this **does** set `artwork_locked`: reaching this
     route means somebody looked at the options and chose.
     """
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=admin)
     client = await dramadex.require_client(session)
 
     fetched = await client.poster_bytes(body.title_id)
@@ -966,9 +972,7 @@ async def artwork_from_dramadex(
 
 
 @router.get("/dramadex/people/{person_id}", response_model=PersonCredits)
-async def dramadex_person(
-    session: SessionDep, user: CurrentUser, person_id: int
-) -> PersonCredits:
+async def dramadex_person(session: SessionDep, user: CurrentUser, person_id: int) -> PersonCredits:
     """An actor and everything the indexer has them in.
 
     Open to any signed-in member, not just admins: following a performer from a series to
@@ -981,7 +985,9 @@ async def dramadex_person(
     if person is None:
         raise NotFound("Person", "DRAMADEX_PERSON_NOT_FOUND")
 
-    known = await _known_dramadex_slugs(session, [t.id for t in person.titles])
+    known = await _known_dramadex_slugs(
+        session, [t.id for t in person.titles], sees_restricted=user.sees_restricted
+    )
     return PersonCredits(
         id=person.id,
         name=person.name,
@@ -989,22 +995,16 @@ async def dramadex_person(
         # `person.id`, not `person_id`: the indexer de-duplicated its people, so a request for
         # an alias comes back as the canonical row. Building the URL from what it answered
         # means two routes to the same actor share one browser cache entry.
-        photo_url=(
-            f"/api/library/dramadex/people/{person.id}/photo" if person.photo_url else None
-        ),
+        photo_url=(f"/api/library/dramadex/people/{person.id}/photo" if person.photo_url else None),
         credits=[
-            _hit(
-                dramadex.hit_from(t, in_library=t.id in known, library_slug=known.get(t.id)), t
-            )
+            _hit(dramadex.hit_from(t, in_library=t.id in known, library_slug=known.get(t.id)), t)
             for t in person.titles
         ],
     )
 
 
 @router.get("/dramadex/people/{person_id}/photo")
-async def dramadex_person_photo(
-    session: SessionDep, user: CurrentUser, person_id: int
-) -> Response:
+async def dramadex_person_photo(session: SessionDep, user: CurrentUser, person_id: int) -> Response:
     """Proxy an actor's photo, for the same reason `dramadex_poster` proxies key art.
 
     A person the indexer has no picture for is a 404 here, not an error worth logging: about

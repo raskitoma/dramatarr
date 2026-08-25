@@ -1,6 +1,12 @@
 /** Wire types. These mirror the backend Pydantic schemas exactly — camelCase, ISO-8601 dates. */
 
-export type Role = 'admin' | 'viewer'
+/** Who somebody is, which here is also what they may see. `viewer_r` — "Espectador-R" — is an
+ *  ordinary member who may also reach series an admin marked restricted.
+ *
+ *  Widening this is deliberately a compile error at every site that maps over it: the two
+ *  places that used to write `role === 'admin' ? … : …` would otherwise have gone on labelling
+ *  an Espectador-R as "Espectador", silently and in the admin's own audit view. */
+export type Role = 'admin' | 'viewer' | 'viewer_r'
 export type ThemePreference = 'auto' | 'light' | 'dark'
 export type SeriesStatus = 'ongoing' | 'completed' | 'unknown'
 export type MediaStatus = 'present' | 'missing' | 'error'
@@ -151,6 +157,14 @@ export interface SeriesSummary {
   declaredEpisodeCount: number | null
   watchedEpisodeCount: number
   progressPercent: number
+  /**
+   * Adults only — whether a plain `viewer` may reach this series at all.
+   *
+   * On the summary because the admin table is where a row gets classified, and an admin
+   * scanning the library has to see which rows nobody has decided about yet. For a plain
+   * member it is false by construction: they never receive a row for which it would be true.
+   */
+  restricted: boolean
   /**
    * The DramaDex title this series is bound to, or null when it is bound to none.
    *

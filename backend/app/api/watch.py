@@ -39,7 +39,7 @@ async def post_complete(session: SessionDep, user: CurrentUser, episode_id: str)
 
 @router.delete("/{episode_id}/progress", response_model=Ok)
 async def delete_progress(session: SessionDep, user: CurrentUser, episode_id: str) -> Ok:
-    await library_service.get_episode_or_404(session, episode_id)
+    await library_service.get_episode_or_404(session, episode_id, viewer=user)
     await watch_service.clear_progress(session, user.id, episode_id)
     return Ok()
 
@@ -48,7 +48,7 @@ async def delete_progress(session: SessionDep, user: CurrentUser, episode_id: st
 async def post_series_watched(
     session: SessionDep, user: CurrentUser, series_id: str, body: SeriesWatchedIn
 ) -> SeriesWatchStateOut:
-    series = await library_service.get_series_or_404(session, series_id)
+    series = await library_service.get_series_or_404(session, series_id, viewer=user)
     await watch_service.set_series_watched(session, user.id, series.id, body.watched)
     progress = await library_service.series_progress(session, series, user.id)
     return SeriesWatchStateOut(series_id=series.id, progress=progress)

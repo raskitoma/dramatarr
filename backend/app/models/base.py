@@ -71,8 +71,26 @@ def updated_column() -> Mapped[datetime]:
 
 
 class UserRole(enum.StrEnum):
+    """Who somebody is, which here is also what they may see.
+
+    Three values, not a boolean plus a flag, because the household's question is genuinely one
+    of three answers. `VIEWER_R` — "Espectador-R" — is an ordinary member who may also reach
+    series an admin has marked restricted.
+
+    Stored as `String(16)`, so a new member costs no migration. **Nothing may assume that
+    "not admin" means `VIEWER`**: that inference was true for the app's whole life until this
+    value existed, and it is the shape of bug that ships without a sound.
+    """
+
     ADMIN = "admin"
     VIEWER = "viewer"
+    VIEWER_R = "viewer_r"
+
+    @property
+    def sees_restricted(self) -> bool:
+        """Whether this role reaches series marked restricted. Asked rather than compared, so
+        adding a fourth role later is one edit here instead of a search across the codebase."""
+        return self in (UserRole.ADMIN, UserRole.VIEWER_R)
 
 
 class Theme(enum.StrEnum):

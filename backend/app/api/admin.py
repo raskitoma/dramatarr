@@ -27,6 +27,7 @@ from app.config import get_settings
 from app.db import get_sessionmaker
 from app.errors import AppError, Conflict, MailNotConfigured, NotFound
 from app.models import (
+    AuthSession,
     Episode,
     Invite,
     Job,
@@ -67,11 +68,10 @@ from app.schemas.requests import (
     RequestPatchIn,
     RequestStatusName,
 )
-from app.services import audit
+from app.services import audit, dramadex
 from app.services import oauth as oauth_service
 from app.services import requests as requests_service
 from app.services.mail import send_mail
-from app.services import dramadex
 from app.services.settings import SettingsService
 from app.services.vocab import CONTENT_RATINGS, PROVIDERS
 from app.utils.ids import new_token
@@ -568,7 +568,15 @@ async def patch_user(
     changes: dict[str, Any] = {}
     if payload.role is not None and payload.role != user.role:
         changes["role"] = {"from": user.role, "to": str(payload.role)}
-        user.role = payload.role
+        # `.value`, not the enum: the column is a string, and a row carrying an enum instance is
+        # what let `UserRole(self.role)` pass in tests while failing against a real read.
+        user.role = UserRole(payload.role).value
+        # Every session of theirs, on every device, ends. Enforcement is already immediate —
+        # each request re-reads the user row — but a client keeps a cached copy of its own role
+        # and an offline one keeps a cached `/api/auth/session`. Making them sign in again is
+        # what forces the new answer onto the device rather than waiting for a cache to lapse.
+        for auth_session in await _sessions_of(session, user.id):
+            auth_session.revoked_at = utcnow()
     if payload.is_active is not None and payload.is_active != user.is_active:
         changes["isActive"] = {"from": user.is_active, "to": payload.is_active}
         user.is_active = payload.is_active
@@ -580,6 +588,15 @@ async def patch_user(
     if changes:
         await audit.record(session, admin.id, "user.update", "user", user.id, changes)
     return _user_out(user)
+
+
+async def _sessions_of(session: SessionDep, user_id: str) -> list[AuthSession]:
+    rows = await session.execute(
+        select(AuthSession).where(
+            AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None)
+        )
+    )
+    return list(rows.scalars())
 
 
 @router.delete("/users/{user_id}", response_model=Ok)

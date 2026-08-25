@@ -412,6 +412,14 @@ function SeriesTab() {
                             <Badge tone="warning">{t('admin.library.locked')}</Badge>
                           </span>
                         ) : null}
+                        {/* Scanning for what nobody has classified yet is the whole job here,
+                            and it is a scan of absences — so the marker has to be on the row,
+                            not one click into each series. */}
+                        {row.restricted ? (
+                          <span className={styles.lockBadge}>
+                            <Badge tone="danger">{t('admin.library.restrictedBadge')}</Badge>
+                          </span>
+                        ) : null}
                       </span>
                     </div>
                   </th>

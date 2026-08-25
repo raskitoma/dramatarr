@@ -558,7 +558,7 @@ async def refresh_series(session: AsyncSession, series_id: str, *, ctx: Any = No
     from app.models import Series
     from app.services.library import apply_dramadex_title, get_series_or_404
 
-    series = await get_series_or_404(session, series_id)
+    series = await get_series_or_404(session, series_id, viewer=None)
     if series.dramadex_id is None:
         log.info("dramadex refresh: %s is not bound to a title", series_id)
         return []

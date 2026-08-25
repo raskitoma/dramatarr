@@ -38,6 +38,7 @@ import RenamePanel from '@/components/admin/RenamePanel'
 import MetadataDialog from '@/components/admin/MetadataDialog'
 import { TocLayout } from '@/components/admin/TocLayout'
 import Badge from '@/components/Badge'
+import Switch from '@/components/Switch'
 import Button from '@/components/Button'
 import Dialog from '@/components/Dialog'
 import ErrorState from '@/components/ErrorState'
@@ -336,6 +337,21 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
     },
   })
 
+  /**
+   * Who may see this series at all. Saved on the switch rather than on the form's submit: an
+   * admin who flips it and walks away must not leave the household one forgotten "Guardar"
+   * away from showing adult content to everybody.
+   */
+  const restrict = useMutation({
+    mutationFn: (value: boolean) => patchSeries(seriesId, { restricted: value }),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(adminKeys.seriesDetail(seriesId), updated)
+      show(t('common.saved'), 'success')
+      await queryClient.invalidateQueries({ queryKey: adminKeys.series() })
+    },
+    onError: () => show(t('errors.generic'), 'error'),
+  })
+
   const unlock = useMutation({
     mutationFn: () => patchSeries(seriesId, { metadataLocked: false }),
     onSuccess: async (updated) => {
@@ -501,6 +517,19 @@ export function AdminSeriesEditPage({ params }: AdminSeriesEditPageProps = {}) {
       ) : (
         <p className={styles.lockHint}>{t('admin.library.lockOnEditHint')}</p>
       )}
+
+      <div
+        className={cx(styles.restrictBanner, detail.restricted && styles.restrictBannerOn)}
+        id="series-restricted"
+      >
+        <Switch
+          checked={detail.restricted}
+          onChange={(value) => restrict.mutate(value)}
+          disabled={restrict.isPending}
+          label={t('admin.library.restricted')}
+          hint={t('admin.library.restrictedHint')}
+        />
+      </div>
 
       <TocLayout sections={EDIT_SECTIONS} labelKey="admin.library.tocLabel">
       {/* --- Metadata ------------------------------------------------------------------- */}

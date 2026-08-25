@@ -339,6 +339,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "es": "DramaDex no tiene esa persona.",
         "en": "DramaDex has no such person.",
     },
+    "IMAGE_NOT_FOUND": {
+        "es": "No encontramos esa imagen.",
+        "en": "We could not find that image.",
+    },
     "DRAMADEX_PERSON_PHOTO_NOT_FOUND": {
         "es": "DramaDex no tiene foto de esa persona.",
         "en": "DramaDex has no photo for that person.",

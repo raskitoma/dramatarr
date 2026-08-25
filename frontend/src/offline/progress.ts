@@ -83,27 +83,48 @@ export async function pendingCount(): Promise<number> {
   return rows.filter((row) => !row.synced).length
 }
 
+/** A refusal that will still be a refusal tomorrow.
+ *
+ * The episode was deleted, or its series was marked adults-only while this device was away.
+ * Retrying costs the same 404 forever — and because the sync stops at its first failure to keep
+ * the writes in order, one such row would hold back every write behind it for good: a trip's
+ * worth of watch state on other series, stuck behind one episode nobody can reach any more.
+ *
+ * 401 is deliberately *not* here. That is a session to renew, not a permission withdrawn, and
+ * discarding the queue over it would throw away the trip on the way in the door.
+ */
+function isPermanent(error: unknown): boolean {
+  const status = (error as { status?: unknown })?.status
+  return status === 403 || status === 404
+}
+
 export async function syncPending(
   send: (write: PendingWrite) => Promise<void>,
-): Promise<{ sent: number; failed: number }> {
+): Promise<{ sent: number; failed: number; discarded: number }> {
   const rows = await all<ProgressRow>(PROGRESS)
   const writes = collapse(rows)
   let sent = 0
+  let discarded = 0
   let failed = 0
 
-  for (const write of writes) {
+  for (const [index, write] of writes.entries()) {
     try {
       await send(write)
       // Dropped rather than flagged: a synced row has served its purpose, and keeping it means
       // deciding later how long to keep it.
       await remove(PROGRESS, write.episodeId)
       sent += 1
-    } catch {
-      // Stop at the first failure. The rest stay pending and keep their order for next time —
-      // sending the tail out of sequence is exactly what rewinds an episode.
-      failed = writes.length - sent
+    } catch (error) {
+      if (isPermanent(error)) {
+        await remove(PROGRESS, write.episodeId)
+        discarded += 1
+        continue
+      }
+      // Stop at the first *transient* failure. The rest stay pending and keep their order for
+      // next time — sending the tail out of sequence is exactly what rewinds an episode.
+      failed = writes.length - index
       break
     }
   }
-  return { sent, failed }
+  return { sent, failed, discarded }
 }

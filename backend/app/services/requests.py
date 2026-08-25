@@ -186,7 +186,23 @@ def safe_poster_url(value: str | None) -> str | None:
 # --- Searching ---------------------------------------------------------------------------------
 
 
-async def _mark_in_library(session: AsyncSession, candidates: Sequence[RequestCandidate]) -> None:
+def _visible(sees_restricted: bool) -> list[Any]:
+    """Restriction predicate, imported lazily to keep this module free of a library import cycle.
+
+    For a member who may not see a restricted series, a match against one must read as **no
+    match** — "we already have this" discloses the title just as plainly as listing it. The
+    consequence is deliberate: they can file an ordinary request for something the household
+    already holds, the admin sees it and declines. That is better than an error message quoting
+    a hidden title back at them.
+    """
+    from app.services.library import restriction_conditions
+
+    return list(restriction_conditions(sees_restricted=sees_restricted))
+
+
+async def _mark_in_library(
+    session: AsyncSession, candidates: Sequence[RequestCandidate], *, sees_restricted: bool
+) -> None:
     """Flag the cards the household already owns.
 
     Two ways in, because the two sources identify things differently: a TMDB id matches
@@ -204,7 +220,9 @@ async def _mark_in_library(session: AsyncSession, candidates: Sequence[RequestCa
     by_tmdb: dict[int, tuple[str, str]] = {}
     if tmdb_ids:
         rows = await session.execute(
-            select(Series.tmdb_id, Series.id, Series.slug).where(Series.tmdb_id.in_(tmdb_ids))
+            select(Series.tmdb_id, Series.id, Series.slug).where(
+                Series.tmdb_id.in_(tmdb_ids), *_visible(sees_restricted)
+            )
         )
         by_tmdb = {int(t): (sid, slug) for t, sid, slug in rows if t is not None}
 
@@ -213,7 +231,7 @@ async def _mark_in_library(session: AsyncSession, candidates: Sequence[RequestCa
         rows = await session.execute(
             select(SeriesTitle.normalized, Series.id, Series.slug)
             .join(Series, Series.id == SeriesTitle.series_id)
-            .where(SeriesTitle.normalized.in_(list(normalized)))
+            .where(SeriesTitle.normalized.in_(list(normalized)), *_visible(sees_restricted))
         )
         for norm, sid, slug in rows:
             by_title.setdefault(str(norm), (sid, slug))
@@ -404,7 +422,7 @@ async def search(
     # the show.
     dramadex_cards, reached = await _dramadex_search(session, text, limit)
     if dramadex_cards:
-        await _mark_in_library(session, dramadex_cards)
+        await _mark_in_library(session, dramadex_cards, sees_restricted=user.sees_restricted)
         await _mark_requested(session, user.id, dramadex_cards)
         return RequestSearchResults(
             query=text,
@@ -452,14 +470,25 @@ def _ids_of(row: SeriesRequest) -> DiscoveredIds:
     )
 
 
-def _series_ref(row: SeriesRequest) -> RequestSeriesRef | None:
+def _series_ref(row: SeriesRequest, *, sees_restricted: bool) -> RequestSeriesRef | None:
+    """The link from a wishlist row to the series that answered it.
+
+    A request fulfilled with a series this member may not see reads exactly like one an admin
+    marked fulfilled without binding anything: status `fulfilled`, no link. That shape already
+    exists and the member already understands it, so nothing new has to be explained to them —
+    and the title they see stays the one they typed, never the one on the shelf.
+    """
     series = row.series
     if series is None:
+        return None
+    if series.restricted and not sees_restricted:
         return None
     return RequestSeriesRef(id=series.id, slug=series.slug, title=series.title)
 
 
-def request_out(row: SeriesRequest, *, already_existed: bool = False) -> SeriesRequestOut:
+def request_out(
+    row: SeriesRequest, *, sees_restricted: bool, already_existed: bool = False
+) -> SeriesRequestOut:
     return SeriesRequestOut(
         id=row.id,
         title=row.title,
@@ -471,7 +500,7 @@ def request_out(row: SeriesRequest, *, already_existed: bool = False) -> SeriesR
         note=row.note,
         status=row.status,  # type: ignore[arg-type]
         admin_note=row.admin_note,
-        series=_series_ref(row),
+        series=_series_ref(row, sees_restricted=sees_restricted),
         created_at=row.created_at,
         updated_at=row.updated_at,
         resolved_at=row.resolved_at,
@@ -481,7 +510,9 @@ def request_out(row: SeriesRequest, *, already_existed: bool = False) -> SeriesR
 
 
 def admin_request_out(row: SeriesRequest, *, also_requested_by: int = 0) -> AdminSeriesRequestOut:
-    base = request_out(row)
+    # Admin-facing, and an admin sees everything: this must not be filtered, or the person
+    # doing the classifying would be the one person unable to see what they classified.
+    base = request_out(row, sees_restricted=True)
     requester = row.user
     return AdminSeriesRequestOut(
         **base.model_dump(),
@@ -506,7 +537,7 @@ async def list_for_user(session: AsyncSession, user: User) -> list[SeriesRequest
             .limit(MAX_OWN_REQUESTS)
         )
     ).scalars()
-    return [request_out(row) for row in rows]
+    return [request_out(row, sees_restricted=user.sees_restricted) for row in rows]
 
 
 async def acknowledge(session: AsyncSession, user: User) -> int:
@@ -550,16 +581,29 @@ async def get_or_404(session: AsyncSession, request_id: str) -> SeriesRequest:
 # --- Asking ------------------------------------------------------------------------------------
 
 
-async def _already_in_library(session: AsyncSession, payload: RequestCreateIn) -> Series | None:
+async def _already_in_library(
+    session: AsyncSession, payload: RequestCreateIn, *, sees_restricted: bool
+) -> Series | None:
     """The series the household already has, when this request names one.
 
     Same two routes as the search's badge, run again at write time rather than trusted from
     the client: the search result a member is acting on may be minutes old, and in that window
     somebody may have added the show.
+
+    Filtered on the same predicate as the badge, and for the same reason: the conflict this
+    feeds raises `REQUEST_ALREADY_IN_LIBRARY` *quoting the title back*, so an unfiltered lookup
+    would answer "we have Fatal Seduction" to the one member who is not allowed to know that.
     """
     if payload.ids.tmdb_id:
         found = (
-            (await session.execute(select(Series).where(Series.tmdb_id == payload.ids.tmdb_id)))
+            (
+                await session.execute(
+                    select(Series).where(
+                        Series.tmdb_id == payload.ids.tmdb_id,
+                        *_visible(sees_restricted),
+                    )
+                )
+            )
             .scalars()
             .first()
         )
@@ -578,7 +622,8 @@ async def _already_in_library(session: AsyncSession, payload: RequestCreateIn) -
                     or_(
                         SeriesTitle.normalized == normalized,
                         Series.sort_title == normalized,
-                    )
+                    ),
+                    *_visible(sees_restricted),
                 )
                 .limit(1)
             )
@@ -599,7 +644,9 @@ async def create(session: AsyncSession, user: User, payload: RequestCreateIn) ->
       answer was *no*: burying a decline under a fresh identical request helps nobody.
     * Otherwise → a new pending row.
     """
-    existing_series = await _already_in_library(session, payload)
+    existing_series = await _already_in_library(
+        session, payload, sees_restricted=user.sees_restricted
+    )
     if existing_series is not None:
         raise Conflict(
             "REQUEST_ALREADY_IN_LIBRARY",
@@ -619,7 +666,7 @@ async def create(session: AsyncSession, user: User, payload: RequestCreateIn) ->
         .first()
     )
     if duplicate is not None:
-        return request_out(duplicate, already_existed=True)
+        return request_out(duplicate, sees_restricted=user.sees_restricted, already_existed=True)
 
     source_url = payload.source_url if _is_http_url(payload.source_url) else None
     row = SeriesRequest(
@@ -659,11 +706,11 @@ async def create(session: AsyncSession, user: User, payload: RequestCreateIn) ->
         )
         if winner is None:
             raise
-        return request_out(winner, already_existed=True)
+        return request_out(winner, sees_restricted=user.sees_restricted, already_existed=True)
 
     await session.commit()
     await session.refresh(row)
-    return request_out(row)
+    return request_out(row, sees_restricted=user.sees_restricted)
 
 
 async def delete_own(session: AsyncSession, user: User, request_id: str) -> None:
@@ -869,6 +916,12 @@ async def _announce_ready(session: AsyncSession, row: SeriesRequest) -> None:
     # The series when it is linked, the wishlist when it is not — an admin can mark a request
     # fulfilled without binding it, and a mail whose only link 404s is worse than no link.
     series = await session.get(Series, row.series_id) if row.series_id else None
+    # Same rule for a series this requester may not see: the link would 404 on them and the
+    # subject line would carry a title they are not allowed to be told. Treated as unbound —
+    # they still learn their request was answered, and the mail sends them to their wishlist,
+    # where it reads fulfilled with no link, exactly as the page shows it.
+    if series is not None and series.restricted and not requester.sees_restricted:
+        series = None
     target = f"{public}/series/{quote(series.slug)}" if series else f"{public}/requests"
 
     try:

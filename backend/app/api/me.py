@@ -198,7 +198,9 @@ async def continue_watching(
     user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=30)] = 30,
 ) -> list[ContinueWatchingItem]:
-    return await library_service.continue_watching(session, user.id, limit=limit)
+    return await library_service.continue_watching(
+        session, user.id, limit=limit, sees_restricted=user.sees_restricted
+    )
 
 
 @router.get("/history", response_model=Page[HistoryItem])
@@ -208,7 +210,9 @@ async def history(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(alias="pageSize", ge=1, le=100)] = 30,
 ) -> Page[HistoryItem]:
-    return await library_service.watch_history(session, user.id, page=page, page_size=page_size)
+    return await library_service.watch_history(
+        session, user.id, page=page, page_size=page_size, sees_restricted=user.sees_restricted
+    )
 
 
 __all__ = ["MeOut", "MePatch", "SessionOut", "router"]

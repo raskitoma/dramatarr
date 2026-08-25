@@ -70,7 +70,9 @@ async def admin_user(db):
     user = User(
         email="admin@example.com",
         display_name="Admin",
-        role=UserRole.ADMIN,
+        # `.value`, because the column is a string and a fixture holding an enum would let
+        # `UserRole(self.role)` pass here and fail against a real row.
+        role=UserRole.ADMIN.value,
         locale="es",
     )
     db.add(user)
@@ -85,7 +87,7 @@ async def viewer_user(db):
     user = User(
         email="viewer@example.com",
         display_name="Viewer",
-        role=UserRole.VIEWER,
+        role=UserRole.VIEWER.value,
         locale="es",
     )
     db.add(user)
@@ -137,3 +139,19 @@ async def sample_series(db):
     await db.commit()
 
     return series, episodes
+
+
+@pytest.fixture
+async def viewer_r_user(db):
+    """A member who may reach restricted series. "Espectador-R"."""
+    from app.models import User, UserRole
+
+    user = User(
+        email="viewer-r@example.com",
+        display_name="Viewer R",
+        role=UserRole.VIEWER_R.value,
+        locale="es",
+    )
+    db.add(user)
+    await db.commit()
+    return user

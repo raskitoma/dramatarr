@@ -185,6 +185,11 @@ class SeriesSummary(APIModel):
     declared_episode_count: int | None = None
     watched_episode_count: int = 0
     progress_percent: float = 0.0
+    #: Adults only. On the summary as well as the detail because the admin table is where a
+    #: row gets classified — an admin scanning the library has to be able to see which rows
+    #: nobody has decided about yet. For a plain member it is false by construction: they
+    #: never receive a row for which it would be true.
+    restricted: bool = False
     #: NOT NULL in the database, so it is never null on the wire either.
     added_at: datetime
     #: This user's last activity on the series; null until they have played something.
@@ -822,6 +827,10 @@ class SeriesPatch(APIModel):
     network: str | None = Field(default=None, max_length=200)
     declared_episode_count: int | None = Field(default=None, ge=0)
     imdb_id: str | None = Field(default=None, max_length=32)
+    #: Adults only — who may see this series at all. Deliberately **not** in
+    #: `SERIES_METADATA_FIELDS`: classifying a row is a household decision, not curation of its
+    #: metadata, and it must not freeze the row against the nightly refresh as a side effect.
+    restricted: bool | None = None
     #: Sent on its own to hand a series back to the metadata jobs.
     metadata_locked: bool | None = None
     #: Sent on its own to let refreshes change the artwork again.

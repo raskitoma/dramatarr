@@ -68,6 +68,7 @@ function detail(overrides: Partial<SeriesDetail> = {}): SeriesDetail {
     availableEpisodeCount: 90,
     declaredEpisodeCount: null,
     watchedEpisodeCount: 0,
+    restricted: false,
     progressPercent: 0,
     overview: 'Corta.',
     originalTitle: null,

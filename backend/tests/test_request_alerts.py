@@ -112,7 +112,8 @@ async def test_the_wire_carries_the_flag(db: AsyncSession) -> None:
     user = await a_member(db, "wire@example.com")
     row = await a_request(db, user, RequestStatus.FULFILLED)
 
-    assert requests_service.request_out(row).model_dump(by_alias=True)["unseen"] is True
+    wire = requests_service.request_out(row, sees_restricted=False).model_dump(by_alias=True)
+    assert wire["unseen"] is True
 
 
 async def test_a_request_answered_before_this_existed_is_still_news(db: AsyncSession) -> None:

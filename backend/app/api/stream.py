@@ -12,13 +12,14 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import SessionDep, get_current_user
+from app.api.deps import CurrentUser, SessionDep, get_current_user
 from app.config import get_settings
 from app.errors import NotFound
-from app.models import Episode, MediaFile, SubtitleTrack
-from app.services.images import avatar_file
+from app.models import Episode, MediaFile, Series, SubtitleTrack
+from app.services.images import _IMAGES_ROUTE, REQUEST_POSTER_KIND, avatar_file
 from app.services.scanner import safe_media_path
 from app.services.streaming import build_range_response, safe_child_path
 from app.services.subtitles import ensure_webvtt
@@ -46,6 +47,30 @@ THUMBNAILS_NAME = "thumbnails.vtt"
 SPRITE_NAME = "sprite.jpg"
 
 
+async def assert_episode_visible(episode_id: str, session: SessionDep, user: CurrentUser) -> None:
+    """Refuse an episode of a restricted series to a member who may not see it.
+
+    Attached by `playable` below rather than called from the handlers, so **every** route that
+    addresses an episode is gated by construction — including `HEAD`, and including any route
+    added later by somebody who never read this file. Three of the four episode routes never
+    touch `_primary_file`, and two of them issue no database query at all, so a check placed
+    there would have covered a quarter of the surface while looking total.
+
+    **404, never 403.** A 403 confirms the row exists, which is the one thing this is meant not
+    to disclose. An unknown episode falls through to the handler's own 404, so the two are
+    indistinguishable from outside.
+    """
+    if user.sees_restricted:
+        return
+    restricted = await session.scalar(
+        select(Series.restricted)
+        .join(Episode, Episode.series_id == Series.id)
+        .where(Episode.id == episode_id)
+    )
+    if restricted:
+        raise NotFound("Episode", "EPISODE_NOT_FOUND")
+
+
 def playable(path: str) -> Callable[[Any], Any]:
     """Register one handler for both `GET` and `HEAD`.
 
@@ -58,14 +83,25 @@ def playable(path: str) -> Callable[[Any], Any]:
     OpenAPI document. `HEAD` stays out of the schema; it is the same operation with no body.
     """
 
+    # Anything addressing an episode is gated, on both methods, without the handler knowing.
+    # A future episode route registered through this decorator inherits the check; one that
+    # forgets is one somebody has to write *around* the decorator, which is visible in review.
+    if "{episode_id}" in path:
+        guards = [Depends(assert_episode_visible)]
+    elif "{kind}" in path:
+        guards = [Depends(assert_image_visible)]
+    else:
+        guards = []
+
     def register(endpoint: Any) -> Any:
-        router.add_api_route(path, endpoint, methods=["GET"])
+        router.add_api_route(path, endpoint, methods=["GET"], dependencies=guards)
         router.add_api_route(
             path,
             endpoint,
             methods=["HEAD"],
             name=f"{endpoint.__name__}_head",
             include_in_schema=False,
+            dependencies=guards,
         )
         return endpoint
 
@@ -80,6 +116,43 @@ async def _primary_file(session: AsyncSession, episode_id: str) -> MediaFile:
     if media is None:
         raise NotFound("Episode", "EPISODE_NOT_AVAILABLE")
     return media
+
+
+async def assert_image_visible(
+    kind: str, name: str, session: SessionDep, user: CurrentUser
+) -> None:
+    """Refuse the artwork of a restricted series.
+
+    A poster is content, and this URL is not a secret: `kind` **is the series id**, and `name`
+    is a fixed stem. Anybody who has ever seen the id can construct it.
+
+    Two halves, both needed. For an ordinary series the id is right there in the path. For the
+    shared `requests/` directory the file is addressed by a content hash instead, so the only
+    way to know whose it is is to compare against the poster paths the restricted rows point at
+    — and measured on the live library, a series' art is served from *both* shapes, so checking
+    only the first misses the one the API actually advertises.
+    """
+    if user.sees_restricted:
+        return
+
+    if kind != REQUEST_POSTER_KIND:
+        restricted = await session.scalar(select(Series.restricted).where(Series.id == kind))
+        if restricted:
+            raise NotFound("Image", "IMAGE_NOT_FOUND")
+        return
+
+    served = f"{_IMAGES_ROUTE}/{kind}/{name}"
+    hidden = await session.scalar(
+        select(Series.id).where(
+            Series.restricted.is_(True),
+            or_(
+                Series.poster_path.in_((served, name)),
+                Series.backdrop_path.in_((served, name)),
+            ),
+        )
+    )
+    if hidden:
+        raise NotFound("Image", "IMAGE_NOT_FOUND")
 
 
 # Declared first so a `kind` of "subtitles" cannot be swallowed by the episode routes below.

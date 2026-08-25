@@ -104,6 +104,13 @@ class Series(Base):
     # `LIBRARY_SCAN` and nothing else, and has since TMDB was removed.
     metadata_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Adults only. A decision an admin makes and the app enforces, deliberately separate from
+    # `content_rating` — that field is free text, DramaDex writes ReelShort's vocabulary rather
+    # than the film standard, and four series carry nothing at all. Deriving a permission from
+    # it would leave those decided by an absence and would drift the next time an indexer used a
+    # new word. Seeded once from the clearly-adult ratings; owned by the admin thereafter.
+    restricted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # Set when an admin picks artwork. A refresh replaces the indexer's own picture and leaves
     # this one alone — which is the whole point of splitting the two flags: wanting *this*
     # poster and wanting the synopsis kept current are not the same wish.

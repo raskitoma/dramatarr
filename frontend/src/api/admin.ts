@@ -77,6 +77,11 @@ export interface SeriesPatch {
   genres?: string[]
   network?: string | null
   contentRating?: string | null
+  /**
+   * Adults only. Sent on its own from the toggle; deliberately not one of the metadata fields,
+   * so classifying a series does not also freeze it against the nightly refresh.
+   */
+  restricted?: boolean
   /** Sent on its own to hand a series back to the metadata jobs. */
   metadataLocked?: boolean
   /** Sent on its own to let refreshes change the artwork again. */

@@ -42,7 +42,7 @@ async def make(db: AsyncSession, titles: list[tuple[str, str]]) -> list[Series]:
 
 
 async def neighbours(db: AsyncSession, series: Series) -> tuple[str | None, str | None]:
-    previous, following = await library_service.series_neighbours(db, series)
+    previous, following = await library_service.series_neighbours(db, series, sees_restricted=True)
     return (previous[1] if previous else None, following[1] if following else None)
 
 
@@ -117,9 +117,8 @@ async def test_the_walk_visits_exactly_what_the_list_shows_in_the_same_order(
     )
     await db.commit()
 
-    page = await library_service.list_series(
-        db, user_id=admin_user.id, page=1, page_size=100
-    )
+    page = await library_service.list_series(db, user_id=admin_user.id, page=1, page_size=100
+    , sees_restricted=True)
     listed = [item.title for item in page.items]
 
     walked: list[str] = []
@@ -135,7 +134,7 @@ async def test_the_walk_visits_exactly_what_the_list_shows_in_the_same_order(
     # does not return a wrong answer, it oscillates between two rows — and an unbounded loop
     # turns that into a hung suite, which is a far worse way to learn about it than a failure.
     for _ in range(len(listed) + 1):
-        _, following = await library_service.series_neighbours(db, cursor)
+        _, following = await library_service.series_neighbours(db, cursor, sees_restricted=True)
         if following is None:
             break
         cursor = (

@@ -480,12 +480,12 @@ async def test_deleted_series_disappears_from_search(
 ) -> None:
     from app.services.search.service import search_library
 
-    before = await search_library(db, "Ruta de Cristal")
+    before = await search_library(db, "Ruta de Cristal", sees_restricted=True)
     assert library.series.id in {hit.series.id for hit in before.series}
 
     await client.delete(f"/api/library/series/{library.series.id}")
 
-    after = await search_library(db, "Ruta de Cristal")
+    after = await search_library(db, "Ruta de Cristal", sees_restricted=True)
     assert library.series.id not in {hit.series.id for hit in after.series}
     assert not after.series
     # The episode titles went with it; a hit here would 404 the moment it was clicked.
@@ -598,12 +598,12 @@ async def test_cleanup_repairs_the_search_index_of_a_surviving_series(
             found |= {hit.episode.id for hit in series_hit.episodes}
         return found
 
-    before = episode_ids(await search_library(db, "Episodio"))
+    before = episode_ids(await search_library(db, "Episodio", sees_restricted=True))
     assert {library.present_episode.id, library.missing_episode.id} <= before
 
     await client.post("/api/library/cleanup", json={})
 
-    after = episode_ids(await search_library(db, "Episodio"))
+    after = episode_ids(await search_library(db, "Episodio", sees_restricted=True))
     assert library.missing_episode.id not in after
     assert library.present_episode.id in after
 

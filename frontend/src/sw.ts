@@ -106,6 +106,10 @@ async function mediaFirst(request: Request): Promise<Response> {
   }
 }
 
+/** Statuses that mean "not yours any more", as opposed to "not right now". A 5xx or a dropped
+ *  connection must never evict anything: that is the trip the whole cache exists for. */
+const REVOKED = new Set([401, 403, 404])
+
 /** Network first so the app is never stale while there is a server, cache second so it works
  *  when there is not. */
 async function apiThenCache(request: Request): Promise<Response> {
@@ -114,6 +118,13 @@ async function apiThenCache(request: Request): Promise<Response> {
     if (fresh.ok) {
       const cache = await caches.open(API_CACHE)
       await cache.put(request, fresh.clone())
+    } else if (REVOKED.has(fresh.status)) {
+      /* The server has stopped answering this — the session ended, or a series was marked
+         adults-only and this member may no longer have it. A cache-second policy would keep
+         handing back the last good copy every time the network was gone, which turns a
+         withdrawn permission into one that lapses only while online. Drop it here, at the one
+         moment we have a definite answer. */
+      await (await caches.open(API_CACHE)).delete(request, { ignoreVary: true })
     }
     return fresh
   } catch {

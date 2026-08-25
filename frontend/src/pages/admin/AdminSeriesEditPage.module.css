@@ -467,3 +467,19 @@
     display: none;
   }
 }
+
+/* Adults only ------------------------------------------------------------------------------ */
+
+/* Its own banner rather than a field in the metadata form, because it is not metadata and it
+   does not wait for "Guardar": the switch writes immediately. The border changes colour when it
+   is on so the state is legible from across the page, not only from the switch itself. */
+.restrictBanner {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.restrictBannerOn {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}

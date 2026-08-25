@@ -568,7 +568,10 @@ async def create_invite(
     # from the operator, and an address with a CR/LF in it is a mail-header injection.
     if not _EMAIL_RE.match(normalized) or len(normalized) > 320:
         raise AppError("INVALID_EMAIL", f"Not a usable email address: {email!r}")
-    if role not in {UserRole.ADMIN, UserRole.VIEWER}:
+    # Every role, derived from the enum. Spelled out as a pair, this rejected `viewer_r`
+    # while `POST /api/admin/invites` accepted it — the two paths disagreeing about what a
+    # valid role is, which whoever hit it first would have had to debug from a 400.
+    if role not in set(UserRole):
         raise AppError("INVALID_ROLE", f"Unknown role '{role}'")
 
     clash = (

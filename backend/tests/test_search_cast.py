@@ -83,7 +83,7 @@ async def cast_library(db):
 async def test_a_credited_name_finds_every_series_it_is_in(db, cast_library) -> None:
     from app.services.search.service import search_library
 
-    results = await search_library(db, "Addison Bowman")
+    results = await search_library(db, "Addison Bowman", sees_restricted=True)
     found = {hit.series.slug for hit in results.series}
     assert found == {"first-frost", "last-thaw"}
 
@@ -92,7 +92,7 @@ async def test_a_partial_name_finds_the_actor(db, cast_library) -> None:
     """Nobody types a full name into a search box."""
     from app.services.search.service import search_library
 
-    results = await search_library(db, "addison")
+    results = await search_library(db, "addison", sees_restricted=True)
     assert "first-frost" in {hit.series.slug for hit in results.series}
 
 
@@ -101,7 +101,7 @@ async def test_the_hit_says_the_name_it_matched(db, cast_library) -> None:
     from app.schemas.search import MatchField
     from app.services.search.service import search_library
 
-    results = await search_library(db, "Addison Bowman")
+    results = await search_library(db, "Addison Bowman", sees_restricted=True)
     hit = next(h for h in results.series if h.series.slug == "first-frost")
     assert hit.matched_field == MatchField.CAST
     assert hit.matched_title == "Addison Bowman"
@@ -112,7 +112,7 @@ async def test_a_title_still_beats_a_name(db, cast_library) -> None:
     from app.schemas.search import MatchField
     from app.services.search.service import search_library
 
-    results = await search_library(db, "First Frost")
+    results = await search_library(db, "First Frost", sees_restricted=True)
     hit = next(h for h in results.series if h.series.slug == "first-frost")
     assert hit.matched_field == MatchField.TITLE
 
@@ -121,7 +121,7 @@ async def test_browse_filters_by_cast_too(db, cast_library, viewer_user) -> None
     """Explorar's own box searches the same library and must not disagree with Buscar."""
     from app.services import library as library_service
 
-    page = await library_service.list_series(db, user_id=viewer_user.id, q="Cameron Porras")
+    page = await library_service.list_series(db, user_id=viewer_user.id, q="Cameron Porras", sees_restricted=True)
     assert [row.slug for row in page.items] == ["first-frost"]
 
 
@@ -131,7 +131,7 @@ async def test_browse_filters_by_cast_too(db, cast_library, viewer_user) -> None
 async def test_year_narrows_a_cast_search(db, cast_library) -> None:
     from app.services.search.service import search_library
 
-    results = await search_library(db, "Addison Bowman", year=2026)
+    results = await search_library(db, "Addison Bowman", year=2026, sees_restricted=True)
     assert [hit.series.slug for hit in results.series] == ["last-thaw"]
     assert results.total == 1
 
@@ -139,14 +139,14 @@ async def test_year_narrows_a_cast_search(db, cast_library) -> None:
 async def test_genre_narrows_a_cast_search(db, cast_library) -> None:
     from app.services.search.service import search_library
 
-    results = await search_library(db, "Addison Bowman", genre="Romance")
+    results = await search_library(db, "Addison Bowman", genre="Romance", sees_restricted=True)
     assert [hit.series.slug for hit in results.series] == ["first-frost"]
 
 
 async def test_a_facet_that_matches_nothing_returns_nothing(db, cast_library) -> None:
     from app.services.search.service import search_library
 
-    results = await search_library(db, "Addison Bowman", year=1999)
+    results = await search_library(db, "Addison Bowman", year=1999, sees_restricted=True)
     assert results.series == []
     assert results.total == 0
 
@@ -156,7 +156,7 @@ async def test_available_only_keeps_the_series_with_a_file(db, cast_library, vie
 
     results = await search_library(
         db, "Addison Bowman", user_id=viewer_user.id, available_only=True
-    )
+    , sees_restricted=True)
     assert [hit.series.slug for hit in results.series] == ["first-frost"]
 
 
@@ -165,8 +165,8 @@ async def test_the_facets_are_the_ones_explorar_uses(db, cast_library, viewer_us
     from app.services import library as library_service
     from app.services.search.service import search_library
 
-    browsed = await library_service.list_series(db, user_id=viewer_user.id, year=2024)
-    searched = await search_library(db, "e", year=2024)
+    browsed = await library_service.list_series(db, user_id=viewer_user.id, year=2024, sees_restricted=True)
+    searched = await search_library(db, "e", year=2024, sees_restricted=True)
     assert {row.slug for row in browsed.items} >= {hit.series.slug for hit in searched.series}
 
 
@@ -194,7 +194,7 @@ async def test_the_search_route_takes_camel_case_filters(db, cast_library, viewe
 async def test_the_years_facet_lists_what_the_library_holds(db, cast_library) -> None:
     from app.services import library as library_service
 
-    facets = await library_service.year_facets(db)
+    facets = await library_service.year_facets(db, sees_restricted=True)
     assert [(f.year, f.count) for f in facets] == [(2026, 1), (2024, 2)]
 
 
@@ -250,7 +250,7 @@ async def test_the_actor_outranks_a_stray_acronym(db, cast_library) -> None:
 
     # A one-word query, which is what a member types. The uncapped scores were 90 for the
     # stray letter against 89.3 for the actor.
-    results = await search_library(db, "addison")
+    results = await search_library(db, "addison", sees_restricted=True)
     hit = next(h for h in results.series if h.series.slug == "first-frost")
     assert hit.matched_field == MatchField.CAST
     assert hit.matched_title == "Addison Bowman"

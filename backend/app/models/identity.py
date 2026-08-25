@@ -50,6 +50,22 @@ class User(Base):
     is_protected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     locale: Mapped[str] = mapped_column(String(16), default="es", nullable=False)
+
+    @property
+    def sees_restricted(self) -> bool:
+        """Whether this member reaches series an admin marked restricted.
+
+        The coercion is the point. `role` is a **string column**, so a row read back from the
+        database carries `"viewer_r"`, not `UserRole.VIEWER_R` — and `user.role.sees_restricted`
+        would raise `AttributeError` in production while passing in every test, because the
+        fixtures construct the enum in memory and the session does not expire it on commit.
+        Asking the user, never the raw column, is what makes that impossible to get wrong.
+        """
+        try:
+            return UserRole(self.role).sees_restricted
+        except ValueError:
+            # An unrecognised value in the column is not a licence. Fail closed.
+            return False
     theme: Mapped[str] = mapped_column(String(8), default=Theme.AUTO, nullable=False)
     preferred_audio_lang: Mapped[str | None] = mapped_column(String(16), nullable=True)
     preferred_subtitle_lang: Mapped[str | None] = mapped_column(String(16), nullable=True)

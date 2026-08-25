@@ -66,6 +66,8 @@ import { isPasskeyCancellation, isPasskeySupported, startPasskeyRegistration } f
 import { formatBytes, formatDate, formatRelativeTime, languageName } from '@/lib/format'
 import { IMAGE_ACCEPT, IMAGE_MAX_BYTES, isAcceptedImageType } from '@/lib/images'
 
+import { ROLE_LABELS } from '@/pages/admin/AdminUsersPage'
+
 import styles from './AccountPage.module.css'
 
 /**
@@ -202,7 +204,7 @@ function ProfileSection({ user }: { user: User }) {
           <p className={styles.identityEmail}>{user.email}</p>
         </div>
         <Badge tone={user.role === 'admin' ? 'accent' : 'neutral'}>
-          {t(user.role === 'admin' ? 'account.roleAdmin' : 'account.roleViewer')}
+          {t(ROLE_LABELS[user.role] ?? 'account.roleViewer')}
         </Badge>
       </div>
 

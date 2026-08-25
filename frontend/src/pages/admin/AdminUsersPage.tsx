@@ -54,11 +54,20 @@ import { formatDate, formatRelativeTime } from '@/lib/format'
 
 import styles from './AdminUsersPage.module.css'
 
-const ROLES: Role[] = ['viewer', 'admin']
+/** `Record<Role, …>` on purpose: it is the one shape that turns widening `Role` into a compile
+ *  error here rather than a mislabelled row. `ROLES` is derived from it so a new role appears
+ *  in every picker without anyone remembering to add it. */
+export const ROLE_LABELS: Record<Role, string> = {
+  viewer: 'account.roleViewer',
+  viewer_r: 'account.roleViewerR',
+  admin: 'account.roleAdmin',
+}
+
+const ROLES = Object.keys(ROLE_LABELS) as Role[]
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function roleLabelKey(role: Role): string {
-  return role === 'admin' ? 'account.roleAdmin' : 'account.roleViewer'
+  return ROLE_LABELS[role] ?? 'account.roleViewer'
 }
 
 /**

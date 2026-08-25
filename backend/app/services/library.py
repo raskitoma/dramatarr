@@ -50,6 +50,7 @@ from app.models import (
     SubtitleTrack,
     TitleKind,
     TitleSource,
+    User,
     WatchProgress,
 )
 from app.models.library import OverviewSource
@@ -356,6 +357,7 @@ def series_summary(series: Series, counts: SeriesCounts | None = None) -> Series
         declared_episode_count=series.declared_episode_count,
         watched_episode_count=counts.watched_count,
         progress_percent=counts.percent,
+        restricted=series.restricted,
         added_at=_aware(series.added_at),
         last_played_at=as_aware(counts.last_played_at),
         dramadex_id=series.dramadex_id,
@@ -384,15 +386,32 @@ def unmatched_file_out(media: MediaFile) -> UnmatchedFileOut:
 # --- Lookups --------------------------------------------------------------------------------
 
 
-async def get_series_or_404(session: AsyncSession, id_or_slug: str) -> Series:
+async def get_series_or_404(
+    session: AsyncSession, id_or_slug: str, *, viewer: User | None
+) -> Series:
+    """Fetch a series, refusing one this member may not see.
+
+    `viewer=None` means "no request user behind this call" and is legal at exactly two internal
+    sites — the import applier and the DramaDex refresh worker — where there is no member to
+    check against. It is keyword-only and has no default so that every *route* has to state
+    which it is.
+
+    A refused series raises the **same** `SERIES_NOT_FOUND` a genuinely missing one does. A 403,
+    or a different code, would confirm the row exists, which is the one fact this is meant to
+    withhold.
+    """
     stmt = select(Series).where(or_(Series.id == id_or_slug, Series.slug == id_or_slug))
     series = (await session.execute(stmt)).scalars().first()
     if series is None:
         raise NotFound("Series", "SERIES_NOT_FOUND")
+    if series.restricted and viewer is not None and not viewer.sees_restricted:
+        raise NotFound("Series", "SERIES_NOT_FOUND")
     return series
 
 
-async def get_episode_or_404(session: AsyncSession, episode_id: str) -> Episode:
+async def get_episode_or_404(
+    session: AsyncSession, episode_id: str, *, viewer: User | None
+) -> Episode:
     # `episode_summary` / `episode_detail` read `media_files` (and, through it, the track
     # collections) from sync property code. A bare `session.get` returns an identity-map
     # instance untouched when the caller already loaded or created that episode in this
@@ -401,10 +420,18 @@ async def get_episode_or_404(session: AsyncSession, episode_id: str) -> Episode:
     episode = await session.get(
         Episode,
         episode_id,
-        options=[selectinload(Episode.media_files)],
+        options=[selectinload(Episode.media_files), selectinload(Episode.series)],
         populate_existing=True,
     )
     if episode is None:
+        raise NotFound("Episode", "EPISODE_NOT_FOUND")
+    # The parent decides. Same code as a missing episode, for the same reason as above.
+    if (
+        episode.series is not None
+        and episode.series.restricted
+        and viewer is not None
+        and not viewer.sees_restricted
+    ):
         raise NotFound("Episode", "EPISODE_NOT_FOUND")
     return episode
 
@@ -503,6 +530,18 @@ async def series_progress(session: AsyncSession, series: Series, user_id: str) -
 # --- Listing --------------------------------------------------------------------------------
 
 
+def restriction_conditions(*, sees_restricted: bool) -> list[ColumnElement[bool]]:
+    """The one predicate that hides restricted series from a member who may not see them.
+
+    Keyword-only and **without a default**, everywhere it is threaded. `disallow_untyped_defs`
+    is on, so a call site that forgets is a type error rather than a silent leak — which is the
+    only structural defence available here, because there is no single query every read passes
+    through. A default value is precisely how one of these becomes viewer-scoped by accident
+    two months from now.
+    """
+    return [] if sees_restricted else [Series.restricted.is_(False)]
+
+
 def series_facet_conditions(
     *,
     genre: str | None = None,
@@ -546,6 +585,7 @@ async def list_series(
     available_only: bool = False,
     page: int = 1,
     page_size: int = 40,
+    sees_restricted: bool,
 ) -> Page[SeriesSummary]:
     agg = _aggregate_select(user_id).subquery()
     episode_count = func.coalesce(agg.c.episode_count, 0)
@@ -591,6 +631,9 @@ async def list_series(
     conditions.extend(
         series_facet_conditions(genre=genre, status=status, language=language, year=year)
     )
+    # One line covering the browse grid, the home rail *and* their counts: the page query and
+    # the total below read this same list, so rows and `total` cannot disagree.
+    conditions.extend(restriction_conditions(sees_restricted=sees_restricted))
     if available_only:
         conditions.append(available_count > 0)
 
@@ -649,18 +692,35 @@ async def list_series(
 
 
 async def recently_added(
-    session: AsyncSession, *, user_id: str, limit: int = 20
+    session: AsyncSession, *, user_id: str, limit: int = 20, sees_restricted: bool
 ) -> list[SeriesSummary]:
     result = await list_series(
-        session, user_id=user_id, sort="added", page=1, page_size=max(1, limit)
+        session,
+        user_id=user_id,
+        sort="added",
+        page=1,
+        page_size=max(1, limit),
+        sees_restricted=sees_restricted,
     )
     return result.items
 
 
-async def genre_facets(session: AsyncSession) -> list[GenreFacet]:
+async def genre_facets(session: AsyncSession, *, sees_restricted: bool) -> list[GenreFacet]:
     """One query; the genre lists are tiny JSON arrays, so the tally is cheaper in Python
     than a json_each join."""
-    rows = (await session.execute(select(Series.genres))).scalars().all()
+    # Filtered, or a genre only the hidden series carries renders as a chip reading
+    # "Suspense (1)" that returns nothing — which announces the row more loudly than showing it.
+    rows = (
+        (
+            await session.execute(
+                select(Series.genres).where(
+                    *restriction_conditions(sees_restricted=sees_restricted)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     tally: dict[str, int] = {}
     for genres in rows:
         for name in genres or []:
@@ -673,7 +733,7 @@ async def genre_facets(session: AsyncSession) -> list[GenreFacet]:
     ]
 
 
-async def year_facets(session: AsyncSession) -> list[YearFacet]:
+async def year_facets(session: AsyncSession, *, sees_restricted: bool) -> list[YearFacet]:
     """Release years that actually occur, newest first.
 
     A range picker would be wrong here: this catalogue spans three years, and a member wants
@@ -683,7 +743,10 @@ async def year_facets(session: AsyncSession) -> list[YearFacet]:
     rows = (
         await session.execute(
             select(Series.year, func.count())
-            .where(Series.year.is_not(None))
+            .where(
+                Series.year.is_not(None),
+                *restriction_conditions(sees_restricted=sees_restricted),
+            )
             .group_by(Series.year)
             .order_by(Series.year.desc())
         )
@@ -715,7 +778,7 @@ def _catalogue_order() -> tuple[ColumnElement[Any], ...]:
 
 
 async def series_neighbours(
-    session: AsyncSession, series: Series
+    session: AsyncSession, series: Series, *, sees_restricted: bool
 ) -> tuple[tuple[str, str] | None, tuple[str, str] | None]:
     """The titles either side of this one in the catalogue's order.
 
@@ -762,14 +825,20 @@ async def series_neighbours(
     previous_row = (
         await session.execute(
             select(Series.slug, Series.title)
-            .where(before())
+            # Inside the WHERE, never as a post-filter. `LIMIT 1` then steps *over* a hidden row
+            # onto the next permitted one; filtering afterwards would return nothing and
+            # dead-end the arrows at a title the walk should have kept going past.
+            .where(before(), *restriction_conditions(sees_restricted=sees_restricted))
             .order_by(first.desc(), second.desc(), third.desc())
             .limit(1)
         )
     ).first()
     next_row = (
         await session.execute(
-            select(Series.slug, Series.title).where(after()).order_by(first, second, third).limit(1)
+            select(Series.slug, Series.title)
+            .where(after(), *restriction_conditions(sees_restricted=sees_restricted))
+            .order_by(first, second, third)
+            .limit(1)
         )
     ).first()
 
@@ -779,10 +848,14 @@ async def series_neighbours(
     )
 
 
-async def series_detail(session: AsyncSession, series: Series, user_id: str) -> SeriesDetail:
+async def series_detail(
+    session: AsyncSession, series: Series, user_id: str, *, sees_restricted: bool
+) -> SeriesDetail:
     pairs = await episodes_with_progress(session, series.id, user_id)
     progress = _progress_from_pairs(series, pairs)
-    previous_series, next_series = await series_neighbours(session, series)
+    previous_series, next_series = await series_neighbours(
+        session, series, sees_restricted=sees_restricted
+    )
 
     seasons: list[SeasonGroup] = []
     by_id: dict[str, EpisodeSummary] = {}
@@ -838,6 +911,8 @@ async def series_detail(session: AsyncSession, series: Series, user_id: str) -> 
         ],
         library_path=series.library_path,
         metadata_locked=series.metadata_locked,
+        # `restricted` is deliberately absent: it rides along on `base.model_dump()` now that
+        # `SeriesSummary` carries it, and passing it again is a duplicate keyword argument.
         artwork_locked=series.artwork_locked,
         updated_at=as_aware(series.updated_at),
         titles=[
@@ -997,12 +1072,25 @@ async def _recent_series_activity(
 
 
 async def continue_watching(
-    session: AsyncSession, user_id: str, *, limit: int = 30
+    session: AsyncSession, user_id: str, *, limit: int = 30, sees_restricted: bool
 ) -> list[ContinueWatchingItem]:
     activity = await _recent_series_activity(session, user_id)
     if not activity:
         return []
     series_ids = [series_id for series_id, _ in activity]
+    # Narrowed here, before the in-flight and next-episode subqueries: everything downstream
+    # keys off this list, so one filter covers the whole shelf.
+    if not sees_restricted:
+        permitted = set(
+            (
+                await session.execute(
+                    select(Series.id).where(Series.id.in_(series_ids), Series.restricted.is_(False))
+                )
+            ).scalars()
+        )
+        series_ids = [series_id for series_id in series_ids if series_id in permitted]
+        if not series_ids:
+            return []
 
     # The episode still in flight, most recent first within each series.
     ranked = func.row_number().over(
@@ -1120,11 +1208,26 @@ async def continue_watching(
 
 
 async def watch_history(
-    session: AsyncSession, user_id: str, *, page: int = 1, page_size: int = 30
+    session: AsyncSession,
+    user_id: str,
+    *,
+    page: int = 1,
+    page_size: int = 30,
+    sees_restricted: bool,
 ) -> Page[HistoryItem]:
+    # The count joins Series only so it can be filtered the same way the rows below are.
+    # Filtering one and not the other is the failure where every number is individually true
+    # and the pager still says something false.
     total = (
         await session.execute(
-            select(func.count()).select_from(WatchProgress).where(WatchProgress.user_id == user_id)
+            select(func.count())
+            .select_from(WatchProgress)
+            .join(Episode, Episode.id == WatchProgress.episode_id)
+            .join(Series, Series.id == Episode.series_id)
+            .where(
+                WatchProgress.user_id == user_id,
+                *restriction_conditions(sees_restricted=sees_restricted),
+            )
         )
     ).scalar_one()
 
@@ -1133,7 +1236,10 @@ async def watch_history(
             select(WatchProgress, Episode, Series)
             .join(Episode, Episode.id == WatchProgress.episode_id)
             .join(Series, Series.id == Episode.series_id)
-            .where(WatchProgress.user_id == user_id)
+            .where(
+                WatchProgress.user_id == user_id,
+                *restriction_conditions(sees_restricted=sees_restricted),
+            )
             .order_by(WatchProgress.last_played_at.desc())
             .limit(page_size)
             .offset(max(0, (page - 1) * page_size))
@@ -2173,7 +2279,7 @@ async def _resolve_import_series(
     session: AsyncSession, *, folder: str, body: ImportApplyIn
 ) -> tuple[Series, bool]:
     if body.series_id:
-        return await get_series_or_404(session, body.series_id), False
+        return await get_series_or_404(session, body.series_id, viewer=None), False
 
     # Looking the folder up before creating anything is what makes a second apply of the same
     # plan idempotent rather than a unique-constraint violation on `series.library_path`.

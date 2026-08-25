@@ -95,7 +95,39 @@ export async function reconcile(): Promise<void> {
   rows = await all<DownloadRow>(DOWNLOADS)
   announce()
 
-  if (navigator.onLine) for (const seriesId of interrupted) resume(seriesId)
+  if (navigator.onLine) {
+    await dropWhatIsNoLongerOurs()
+    for (const seriesId of interrupted) resume(seriesId)
+  }
+}
+
+/**
+ * Give back a series this device is no longer allowed to have.
+ *
+ * Bytes already on a phone are past every gate the server has: a series marked adults-only
+ * after somebody downloaded it keeps playing from Cache Storage, because the player never asks
+ * the network again. The only moment left to act on is the next time this app opens with a
+ * server in reach — so it asks, once per downloaded series, and erases the ones it is refused.
+ *
+ * **Only an explicit refusal counts.** A 5xx, a timeout or a dead connection leaves everything
+ * exactly where it is: the whole point of the download is the trip where the NAS is switched
+ * off, and a filter that wiped the library the moment the server went quiet would be worse
+ * than no filter at all.
+ */
+async function dropWhatIsNoLongerOurs(): Promise<void> {
+  for (const row of rows) {
+    let refused = false
+    try {
+      const response = await fetch(`/api/library/series/${encodeURIComponent(row.slug)}`, {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      })
+      refused = response.status === 403 || response.status === 404
+    } catch {
+      continue
+    }
+    if (refused) await erase(row.seriesId)
+  }
 }
 
 /**
@@ -361,6 +393,19 @@ export async function erase(seriesId: string): Promise<void> {
   if (row) {
     const media = await caches.open(MEDIA_CACHE)
     await Promise.all(row.episodes.map((episode) => media.delete(mediaUrl(episode.id))))
+    /* The video is the large half, but it is not the whole of what a download left behind: the
+       series' own record and one record per episode sit in `API_CACHE`, and each of those
+       carries the title, the synopsis and the episode names. Deleting the bytes and leaving
+       those is a series that still renders offline, complete except that nothing plays. */
+    const cache = await caches.open(API_CACHE)
+    await Promise.all([
+      cache.delete(`/api/library/series/${encodeURIComponent(row.slug)}`, { ignoreVary: true }),
+      ...row.episodes.map((episode) =>
+        cache.delete(`/api/library/episodes/${encodeURIComponent(episode.id)}`, {
+          ignoreVary: true,
+        }),
+      ),
+    ])
   }
   await remove(DOWNLOADS, seriesId)
   rows = rows.filter((existing) => existing.seriesId !== seriesId)

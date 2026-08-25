@@ -249,6 +249,7 @@ async def search_library(
     status: str | None = None,
     language: str | None = None,
     available_only: bool = False,
+    sees_restricted: bool,
 ) -> SearchResults:
     """Multilingual search over titles, romanizations, overviews, episode titles and cast.
 
@@ -326,7 +327,15 @@ async def search_library(
         (
             await session.execute(
                 select(Series)
-                .where(Series.id.in_(series_ids), *facets)
+                # One site closes the whole search surface: episode hits are re-restricted to
+                # the survivors below, and `total` counts what came out of here. That covers
+                # a match on a series title, an episode title, a cast name and the short-query
+                # LIKE fallback alike, because all four converge on this select.
+                .where(
+                    Series.id.in_(series_ids),
+                    *facets,
+                    *library_service.restriction_conditions(sees_restricted=sees_restricted),
+                )
                 .options(selectinload(Series.titles))
             )
         ).scalars()
