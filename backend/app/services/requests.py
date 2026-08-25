@@ -253,15 +253,27 @@ async def _mark_requested(
     """Flag the cards this member has already asked for, with the answer they got."""
     if not candidates:
         return
-    keys = [card.key for card in candidates]
+    # Computed here rather than read off `card.key`, and that is the whole fix.
+    #
+    # `key` is the card's identity *in this result set* — `dramadex:1065`, which is also what
+    # React keys the list by. `dedupe_key` is its identity *as a stored row* — `title:bound by
+    # love:2026`. The two namespaces never intersect, so matching one against the other could
+    # never produce a hit, and this flag was dead for every result the search has ever
+    # returned. Since the DramaDex client became the only search path, that is all of them.
+    #
+    # So ask the same question `create` will ask, with the same function, on the same fields.
+    # A list of pairs rather than a dict keyed by the card: `RequestCandidate` is a pydantic
+    # model and therefore unhashable, which a dict comprehension only reports at runtime.
+    wanted = [(card, dedupe_key(card.ids, card.title, card.year)) for card in candidates]
     rows = await session.execute(
         select(SeriesRequest.dedupe_key, SeriesRequest.status).where(
-            SeriesRequest.user_id == user_id, SeriesRequest.dedupe_key.in_(keys)
+            SeriesRequest.user_id == user_id,
+            SeriesRequest.dedupe_key.in_(sorted({key for _, key in wanted})),
         )
     )
     known = {str(key): str(status) for key, status in rows}
-    for card in candidates:
-        status = known.get(card.key)
+    for card, key in wanted:
+        status = known.get(key)
         if status is not None:
             card.requested = True
             card.request_status = status  # type: ignore[assignment]

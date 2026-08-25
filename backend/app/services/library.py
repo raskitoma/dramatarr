@@ -2733,7 +2733,10 @@ async def plan_dramadex_title(
 
     scalar("year", found.year, "number")
     scalar("genres", normalize_genres(found.genres()), "list")
-    scalar("network", found.studio_name, "text")
+    # Canonicalised for the same reason as in `apply_dramadex_title`, and identically — the
+    # dialog previews what that function will write, so a difference here would show the admin
+    # one string and store another.
+    scalar("network", canonical_network(found.studio_name), "text")
     scalar("content_rating", canonical_content_rating(found.audience_rating), "text")
 
     # --- The declared count, refused when it is below what is on the NAS --------------------
@@ -2927,7 +2930,14 @@ async def apply_dramadex_title(
 
     put("year", found.year)
     put("genres", normalize_genres(found.genres()))
-    put("network", found.studio_name)
+    # Through the canonicaliser, like its two neighbours. It was the one vocabulary field on
+    # this path that went in raw, which made the indexer the only writer of this column able to
+    # spell a platform however it liked — and an admin correcting it got the raw spelling
+    # written straight back by the next "Actualizar metadata", since refresh passes
+    # `overwrite=True`. NetShort happens to send exactly "NetShort", so nothing is broken
+    # today; a fourth platform arriving is simply the moment it became obvious that the
+    # protection was missing rather than unnecessary.
+    put("network", canonical_network(found.studio_name))
     put("content_rating", canonical_content_rating(found.audience_rating))
 
     files_on_disk = int(

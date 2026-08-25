@@ -33,11 +33,11 @@ SECRET_KEYS: frozenset[str] = frozenset(
 )
 
 DEFAULTS: dict[str, Any] = {
-    #: DramaDex — the household's own indexer of DramaBox and ReelShort, and the only source
-    #: that catalogues this library's genre. TMDB, OMDb and the SearXNG discovery search all
-    #: predated it, all existed because it did not, and all are gone. Empty means "not
-    #: connected yet": every caller treats that as a feature nobody has switched on, never as
-    #: an error.
+    #: DramaDex — the household's own indexer of DramaBox, ReelShort, GoodShort and NetShort,
+    #: and the only source that catalogues this library's genre. TMDB, OMDb and the SearXNG
+    #: discovery search all predated it, all existed because it did not, and all are gone.
+    #: Empty means "not connected yet": every caller treats that as a feature nobody has
+    #: switched on, never as an error.
     "dramadex.base_url": "",
     "dramadex.api_key": "",
     "smtp.host": "",

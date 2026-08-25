@@ -18,10 +18,13 @@ Two roles:
 parses series and episode numbers from the paths, and builds a catalogue. It never writes to
 your library.
 
-**Fetches metadata, but yields to you.** Series are matched against TMDB for overviews,
-posters, and titles in every language TMDB has. The moment an admin edits a field by hand, that
-series is marked *metadata-locked* and automatic refreshes leave it alone — with a visible
-banner saying so, and a control to unlock it again.
+**Fetches metadata, but yields to you.** Series are matched against DramaDex — a self-hosted
+indexer of DramaBox, ReelShort, GoodShort and NetShort — for overviews, posters, cast,
+alternate titles and links back to the platform each show lives on. It is the only index that
+catalogues this genre at all; TMDB, OMDb and a web-search fallback all preceded it, all existed
+because it did not, and all are gone. The moment an admin edits a field by hand, that series is
+marked *metadata-locked* and automatic refreshes leave it alone — with a visible banner saying
+so, and a control to unlock it again.
 
 **Searches across languages.** Titles are indexed in their native script *and* in every
 romanization dramatarr can generate. A Chinese drama stored as 迷情 is found by `迷情`,
@@ -45,8 +48,9 @@ join only by emailed invitation.
 
 - Docker and Docker Compose
 - A media library reachable as a filesystem path on the Docker host
-- A [TMDB API key](https://www.themoviedb.org/settings/api) — free, optional, configured in the
-  UI rather than in a file
+- A DramaDex instance and its API key — optional, configured in the UI rather than in a file.
+  Without one, dramatarr still indexes and streams the library; what it loses is metadata,
+  cast, and the ability to search for something it does not already hold
 - An SMTP account if you want invitations delivered by email (you can also copy invite links by
   hand)
 
@@ -79,7 +83,8 @@ docker compose logs api | grep -i enrollment
 ```
 
 Open that link, create your passkey, and you are in. From there: **Admin → Settings** to add
-your TMDB key and SMTP details, then **Admin → Queue → Scan library** to index the NAS.
+your DramaDex URL and key and your SMTP details, then **Admin → Queue → Scan library** to
+index the NAS.
 
 ### Passkeys and your domain
 
