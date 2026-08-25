@@ -250,3 +250,59 @@ async def test_a_link_for_a_platform_with_no_such_edition_is_left_alone(
     }
     assert by_key["reelshort"] == ES_URL
     assert by_key["netshort"] == "https://netshort.com/full-episodes/180838"
+
+
+async def test_an_edition_teaches_a_row_that_already_existed(db: AsyncSession) -> None:
+    """The case the unit tests missed and production showed.
+
+    A library that has been indexed already holds its titles. "Atada por amor" was this
+    series' own title, written by the scanner with `language=""` because nothing knew better
+    then. Treated purely as "already known" it stays unlabelled for good — so a refresh
+    labelled the English title it had never seen and left the Spanish one, the very row the
+    feature exists for, exactly as it was.
+    """
+    from app.services.library import apply_dramadex_title
+    from app.services.search.normalize import normalize
+
+    series = await a_series(db, "bbl-existing")
+    db.add(
+        SeriesTitle(
+            series_id=series.id,
+            language="",
+            title="Atada por amor",
+            kind=TitleKind.ALTERNATE,
+            normalized=normalize("Atada por amor"),
+        )
+    )
+    await db.commit()
+
+    await apply_dramadex_title(db, series, a_title(), overwrite=True)
+
+    rows = [t for t in await titles_of(db, series) if t.title == "Atada por amor"]
+    assert len(rows) == 1, "taught, not duplicated"
+    assert rows[0].language == "es"
+    assert rows[0].kind == TitleKind.OFFICIAL
+
+
+async def test_a_language_somebody_recorded_is_not_overwritten(db: AsyncSession) -> None:
+    """Only ever fills a blank. A language already on the row outranks the indexer's."""
+    from app.services.library import apply_dramadex_title
+    from app.services.search.normalize import normalize
+
+    series = await a_series(db, "bbl-recorded")
+    db.add(
+        SeriesTitle(
+            series_id=series.id,
+            language="es-MX",
+            title="Atada por amor",
+            kind=TitleKind.NATIVE,
+            normalized=normalize("Atada por amor"),
+        )
+    )
+    await db.commit()
+
+    await apply_dramadex_title(db, series, a_title(), overwrite=True)
+
+    rows = [t for t in await titles_of(db, series) if t.title == "Atada por amor"]
+    assert rows[0].language == "es-MX"
+    assert rows[0].kind == TitleKind.NATIVE

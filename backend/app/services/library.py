@@ -3037,14 +3037,22 @@ async def apply_dramadex_title(
     # own spelling find the series the household actually filed under another name.
     if wanted("titles"):
         added_alias = False
-        known = {
-            row
+        # The rows themselves, not just their slugs. A title this household already holds —
+        # its own, or one written before editions existed — carries `language=""` because
+        # nothing knew better at the time. Skipping it as "already known" leaves it that way
+        # for good, which on an indexed library is nearly every row: verified in production,
+        # where "Atada por amor" was the series' own title and stayed unlabelled through a
+        # refresh that correctly labelled the English one. So an edition now *teaches* an
+        # existing row what it is.
+        existing = {
+            row.normalized: row
             for row in (
                 await session.execute(
-                    select(SeriesTitle.normalized).where(SeriesTitle.series_id == series.id)
+                    select(SeriesTitle).where(SeriesTitle.series_id == series.id)
                 )
             ).scalars()
         }
+        known = set(existing)
         # Editions first, so the labelled row wins the `known` check against the identical
         # string arriving again through `aliases`, which still carries every edition title.
         # `language` and `kind` have been on this table since it was written and have held ""
@@ -3057,7 +3065,16 @@ async def apply_dramadex_title(
 
         for text, language, kind in labelled:
             slug = normalize(text)
-            if not slug or slug in known:
+            if not slug:
+                continue
+            if slug in known:
+                # Only ever fills a blank. A language somebody recorded — by hand, or from a
+                # source that knew — is not the indexer's to overwrite with its own guess.
+                row = existing.get(slug)
+                if row is not None and language and not row.language:
+                    row.language = language[:16]
+                    row.kind = kind
+                    added_alias = True
                 continue
             known.add(slug)
             added_alias = True
