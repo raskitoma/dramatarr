@@ -25,6 +25,13 @@ services:
       DRAMATARR_BOOTSTRAP_ADMIN_EMAIL: ${DRAMATARR_BOOTSTRAP_ADMIN_EMAIL:-}
       DRAMATARR_SESSION_TTL_DAYS: ${DRAMATARR_SESSION_TTL_DAYS:-30}
       DRAMATARR_LOG_LEVEL: ${DRAMATARR_LOG_LEVEL:-INFO}
+      # The container's clock, which is what timestamps a log line. **Not** the application's:
+      # `app/utils/time.py` works in UTC throughout and stores UTC, so nothing in the database
+      # or on the wire moves with this. It is here so a log read at 3am local says 3am.
+      #
+      # Kept in version control because it was added on the NAS by hand first, and an rsync
+      # from this repo would have taken it back out.
+      TZ: America/Santo_Domingo
     user: "${DRAMATARR_UID:-1000}:${DRAMATARR_GID:-1000}"
     volumes:
       # The NAS library.
@@ -56,6 +63,9 @@ services:
     build:
       context: ./frontend
     restart: unless-stopped
+    environment:
+      # Same reason as on `api`: nginx's access and error logs, nothing else.
+      TZ: America/Santo_Domingo
     depends_on:
       api:
         condition: service_healthy
