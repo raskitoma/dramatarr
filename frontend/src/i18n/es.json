@@ -1055,7 +1055,7 @@
     "confirmMeasuring": "{{count}} episodios · calculando el tamaño…",
     "confirmNote": "Se guarda en el almacenamiento del navegador, no en tu carrete ni en Descargas. Cada dispositivo guarda lo suyo por separado.",
     "unsupported": "No disponible aquí",
-    "unsupportedHint": "Las descargas necesitan HTTPS. Entra por dramatarr.raskitoma.com en vez de por la IP de la red.",
+    "unsupportedHint": "Las descargas necesitan HTTPS. Accede mediante un dominio HTTPS en vez de la IP local.",
     "blocked": "No sirve en este navegador",
     "blockedHint": "En iPhone y iPad sólo Safari puede guardar contenido sin conexión. Abre dramatarr en Safari y añádelo a la pantalla de inicio.",
     "empty": "Todavía no descargaste nada en este dispositivo.",

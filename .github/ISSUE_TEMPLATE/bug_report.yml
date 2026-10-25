@@ -1,0 +1,61 @@
+name: Bug Report
+description: Create a report to help us fix an issue
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the information below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Info
+      description: |
+        Please provide your deployment environment details:
+        - OS / Docker version
+        - Browser / Client (Safari, Chrome, Firefox, etc.)
+        - Dramatarr version or git commit hash
+      placeholder: |
+        - Host OS: Debian 12 / Docker 27.0
+        - Client Browser: Chrome 128 (macOS)
+        - Commit: 87d077d
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Paste relevant logs from `docker compose logs api` or the browser console.
+      render: shell

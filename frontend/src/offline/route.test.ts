@@ -11,7 +11,7 @@ import { classify, type RequestFacts } from './route'
 
 function facts(overrides: Partial<RequestFacts> = {}): RequestFacts {
   return {
-    url: 'https://dramatarr.raskitoma.com/api/library/series/x-ray',
+    url: 'https://dramatarr.example.com/api/library/series/x-ray',
     method: 'GET',
     mode: 'cors',
     sameOrigin: true,

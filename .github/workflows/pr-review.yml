@@ -1,0 +1,80 @@
+name: PR Automated Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  review:
+    name: Automated PR Review Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Inspect PR Changes
+        id: review_pr
+        run: |
+          set -e
+          BASE_REF="origin/${{ github.base_ref }}"
+          CHANGED_FILES=$(git diff --name-only "$BASE_REF" HEAD)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          WARNINGS=()
+
+          # 1. Check if DB models were edited without a new alembic migration
+          MODELS_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^backend/app/models/' || true)
+          MIGRATIONS_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^backend/alembic/versions/' || true)
+          if [ -n "$MODELS_CHANGED" ] && [ -z "$MIGRATIONS_CHANGED" ]; then
+            WARNINGS+=("⚠️ Database models in `backend/app/models/` were modified, but no new Alembic migration was found in `backend/alembic/versions/`.")
+          fi
+
+          # 2. Check i18n parity if translations were changed
+          ES_CHANGED=$(echo "$CHANGED_FILES" | grep -E 'frontend/src/i18n/es\.json' || true)
+          EN_CHANGED=$(echo "$CHANGED_FILES" | grep -E 'frontend/src/i18n/en\.json' || true)
+          if [ -n "$ES_CHANGED" ] && [ -z "$EN_CHANGED" ]; then
+            WARNINGS+=("⚠️ `frontend/src/i18n/es.json` was modified without corresponding changes in `frontend/src/i18n/en.json`.")
+          elif [ -z "$ES_CHANGED" ] && [ -n "$EN_CHANGED" ]; then
+            WARNINGS+=("⚠️ `frontend/src/i18n/en.json` was modified without corresponding changes in `frontend/src/i18n/es.json`.")
+          fi
+
+          # 3. Check for committed sensitive files
+          SECRET_FILES=$(echo "$CHANGED_FILES" | grep -E '\.(env|key|pem|pfx|pkcs12)$' || true)
+          if [ -n "$SECRET_FILES" ]; then
+            WARNINGS+=("🚨 Potential sensitive file detected in PR: $SECRET_FILES")
+          fi
+
+          # 4. Run existing repository checks
+          python3 scripts/check_error_codes.py
+          python3 scripts/check_i18n_keys.py
+          python3 scripts/check_neutral_spanish.py
+
+          # Output summary to GitHub Actions Step Summary
+          echo "## 🤖 Dramatarr Automated PR Review" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ ${#WARNINGS[@]} -eq 0 ]; then
+            echo "✅ **All automated repository checks passed!**" >> $GITHUB_STEP_SUMMARY
+            echo "- Code formatting & error codes match." >> $GITHUB_STEP_SUMMARY
+            echo "- i18n translation key parity preserved." >> $GITHUB_STEP_SUMMARY
+            echo "- No un-migrated models or sensitive files detected." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Items Requiring Attention" >> $GITHUB_STEP_SUMMARY
+            for w in "${WARNINGS[@]}"; do
+              echo "- $w" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please address the items above before requesting human review." >> $GITHUB_STEP_SUMMARY
+          fi
