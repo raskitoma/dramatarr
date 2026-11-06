@@ -236,9 +236,10 @@ def poster_is_loadable(value: str | None) -> bool:
         name = unquote(value.rsplit("/", 1)[-1])
         try:
             candidate = safe_child_path(get_settings().images_dir, REQUEST_POSTER_KIND, name)
-        # A refused name is "no usable poster", not an error. (This carried a
-        # `# noqa: BLE001`; the rule is not enabled, so the directive went and took the
-        # reason with it.)
+        # A refused name is "no usable poster", not an error. (This reason used to ride on a
+        # BLE001 suppression comment; BLE001 is not an enabled rule, so Ruff removed the
+        # directive and took the explanation with it. Spelled out here instead, and without
+        # the literal directive token, which a newer Ruff reads even inside prose.)
         except Exception:
             return False
         try:

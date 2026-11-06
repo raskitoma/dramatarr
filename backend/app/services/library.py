@@ -752,7 +752,12 @@ async def year_facets(session: AsyncSession, *, sees_restricted: bool) -> list[Y
             .order_by(Series.year.desc())
         )
     ).all()
-    return [YearFacet(year=int(year), count=int(count)) for year, count in rows]
+    # `if year is not None` cannot drop a row: the WHERE above already excludes nulls. It is
+    # here because `Series.year` is `Mapped[int | None]`, so the SQL guarantee is invisible to
+    # the typechecker, and `int(None)` would be a TypeError rather than a wrong number.
+    return [
+        YearFacet(year=int(year), count=int(count)) for year, count in rows if year is not None
+    ]
 
 
 # --- Detail ---------------------------------------------------------------------------------
