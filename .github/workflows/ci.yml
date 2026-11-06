@@ -36,14 +36,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e "./backend[dev]"
 
-      - name: Ruff Lint
-        run: |
-          ruff check backend
-
-      - name: Mypy Typecheck
-        run: |
-          mypy backend/app
-
+      # The tests run before the linters, deliberately. With Ruff and Mypy ahead of them the
+      # suite never ran in CI at all: both have been failing since the day this workflow landed,
+      # so every push reported red without once saying whether the code works. A line-length
+      # warning must not be able to hide a broken test.
       - name: Run Pytest
         run: |
           pytest backend/tests
@@ -53,6 +49,14 @@ jobs:
           python3 scripts/check_error_codes.py
           python3 scripts/check_i18n_keys.py
           python3 scripts/check_neutral_spanish.py
+
+      - name: Ruff Lint
+        run: |
+          ruff check backend
+
+      - name: Mypy Typecheck
+        run: |
+          mypy backend/app
 
   frontend:
     name: Frontend Tests & Build
