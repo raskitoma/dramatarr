@@ -27,6 +27,7 @@ is the only accessor, and it filters.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import unicodedata
@@ -50,6 +51,11 @@ API_KEY_SETTING = "dramadex.api_key"
 TIMEOUT_SECONDS = 20.0
 #: DramaDex caps `limit` at 200 and rejects more.
 MAX_LIMIT = 200
+#: How many detail calls one search may have in flight. `GET /titles` cannot return genres,
+#: a cast or a synopsis (see `DramadexClient.detailed`), so a page of results costs a call
+#: per row. Six keeps a 20-row admin search to four round trips against a service on the LAN,
+#: without letting one member's typing open thirty sockets at once.
+DETAIL_FANOUT = 6
 
 
 # --- Matching ---------------------------------------------------------------------------
@@ -90,11 +96,20 @@ class StudioLink:
     name: str
     external_id: str
     watch_url: str
+    #: When the platform took the title down, if it has. Carried by every `studios[]` entry on
+    #: every route — unlike the title-level field of the same name, which only the detail
+    #: endpoint sends. That difference is worth stating because it is what made this signal
+    #: look unavailable to the search path, where it is in fact present.
+    delisted_at: str | None = None
 
     @property
     def is_watchable(self) -> bool:
-        # IMDb is a source in DramaDex but not a place to watch anything.
-        return self.key != "imdb" and bool(self.watch_url)
+        # IMDb is a source in DramaDex but not a place to watch anything — and neither is a
+        # delisted link: the page is gone. Refusing it here keeps it out of the stored links
+        # *and* out of `studio_name`, which decides `Series.network`. `studio_name` takes the
+        # first watchable entry and the indexer orders them by `first_seen`, so without this
+        # the platform most likely to have dropped the show is the one named on the card.
+        return self.key != "imdb" and bool(self.watch_url) and not self.delisted_at
 
 
 @dataclass(frozen=True)
@@ -240,6 +255,7 @@ def _studio(raw: Any) -> StudioLink | None:
         name=str(raw.get("name") or key).strip(),
         external_id=str(raw.get("external_id") or "").strip(),
         watch_url=watch,
+        delisted_at=str(raw.get("delisted_at") or "").strip() or None,
     )
 
 
@@ -392,6 +408,41 @@ class DramadexClient:
         return SearchPage(
             items=items, next_cursor=cursor_out if isinstance(cursor_out, str) else None
         )
+
+    async def detailed(self, page: SearchPage) -> SearchPage:
+        """`page` with every row refetched from `titles/{id}`.
+
+        `GET /titles` answers with the indexer's brief shape. Measured against the live
+        instance on 2026-11-06 it carries nine keys, and none of them is `tags`, `cast`,
+        `synopsis`, `editions`, `aliases` or `ratings`; those exist only on the detail
+        endpoint, which answers with eighteen. Because both shapes are parsed by the same
+        `_title()`, and `_title()` fills what is absent with empty defaults, a search row
+        does not report that it does not know — it reports no genres and an empty cast.
+
+        That silence is most of what a picker exists to show, and it is what made the
+        wishlist store an empty synopsis under a comment promising a real one. So the rows
+        are refetched, `DETAIL_FANOUT` at a time.
+
+        A row whose own detail call fails keeps its brief self: thinner, but still a result.
+        Dropping a search hit because one of N follow-up calls timed out would be the worse
+        trade, and it would look to the member like the show does not exist.
+        """
+        if not page.items:
+            return page
+
+        gate = asyncio.Semaphore(DETAIL_FANOUT)
+
+        async def one(brief: DramadexTitle) -> DramadexTitle:
+            async with gate:
+                try:
+                    full = await self.title(brief.id)
+                except AppError as exc:
+                    log.info("dramadex detail for %s failed (%s)", brief.id, exc.code)
+                    return brief
+            return full or brief
+
+        rows = await asyncio.gather(*(one(t) for t in page.items))
+        return SearchPage(items=list(rows), next_cursor=page.next_cursor)
 
     async def title(self, title_id: int) -> DramadexTitle | None:
         return _title(await self._get(f"titles/{int(title_id)}"))

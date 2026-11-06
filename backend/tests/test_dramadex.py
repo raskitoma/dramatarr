@@ -1005,3 +1005,147 @@ async def test_aliases_are_reported_when_they_are_written(db: AsyncSession) -> N
     filled = await library_service.apply_dramadex_title(db, series, parsed())
 
     assert "titles" in filled
+
+
+# --- The brief shape against the detail shape -------------------------------------------
+#
+# `GET /titles` answers with the indexer's brief rows and `GET /titles/{id}` with its detail.
+# Measured against the live instance on 2026-11-06: nine keys against eighteen, and the nine
+# that only the detail carries are `aliases`, `cast`, `completed`, `delisted_at`, `editions`,
+# `first_paid_episode`, `ratings`, `synopsis` and `tags` — which is to say the genres, the cast
+# and the synopsis that a picker exists to show.
+#
+# Both shapes are parsed by the same `_title()`, and `_title()` fills what is absent with empty
+# defaults. So a search row does not report that it does not know: it reports nothing there.
+
+
+def brief_payload(**overrides: Any) -> dict[str, Any]:
+    """A `/titles` row as the indexer really sends one: nine keys, no detail fields."""
+    return {
+        "id": 4242,
+        "primary_title": "You Fired A Genius Surgeon",
+        "year": 2025,
+        "episode_count": 51,
+        "audience_rating": "All Ages",
+        "poster_url": "/titles/4242/poster",
+        "merged_into": None,
+        "updated_at": "2026-08-25T00:00:00",
+        "studios": [
+            {
+                "key": "reelshort",
+                "name": "ReelShort",
+                "external_id": "687",
+                "watch_url": "https://www.reelshort.com/movie/687",
+                "delisted_at": None,
+            }
+        ],
+        **overrides,
+    }
+
+
+async def test_a_search_row_on_its_own_has_no_genres_cast_or_synopsis(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    """Stated as a fact about the payload, so the next person does not look for our bug."""
+    serve(lambda r: httpx.Response(200, json={"items": [brief_payload()], "next_cursor": None}))
+    page = await client().search("surgeon")
+    (row,) = page.items
+    assert row.genres() == ()
+    assert not row.cast
+    assert not row.synopsis
+
+
+async def test_search_results_are_refetched_in_detail(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/titles"):
+            return httpx.Response(200, json={"items": [brief_payload()], "next_cursor": None})
+        return httpx.Response(200, json=title_payload())
+
+    seen = serve(handler)
+    api = client()
+    page = await api.detailed(await api.search("surgeon"))
+    (row,) = page.items
+    assert row.synopsis, "the synopsis only exists on the detail endpoint"
+    assert row.cast, "neither does the cast"
+    assert row.genres(), "and genres come from `tags`, which the brief row omits"
+    assert [r.url.path for r in seen].count("/titles/4242") == 1, "one detail call per row"
+
+
+async def test_a_row_whose_detail_call_fails_keeps_its_brief_self(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    """Thinner is still a result. Losing the hit because a follow-up timed out is not."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/titles"):
+            return httpx.Response(200, json={"items": [brief_payload()], "next_cursor": None})
+        return httpx.Response(503)
+
+    serve(handler)
+    api = client()
+    page = await api.detailed(await api.search("surgeon"))
+    (row,) = page.items
+    assert row.id == 4242
+    assert row.primary_title == "You Fired A Genius Surgeon"
+
+
+async def test_the_next_cursor_survives_being_refetched(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/titles"):
+            return httpx.Response(200, json={"items": [brief_payload()], "next_cursor": "abc"})
+        return httpx.Response(200, json=title_payload())
+
+    serve(handler)
+    api = client()
+    page = await api.detailed(await api.search("surgeon"))
+    assert page.next_cursor == "abc"
+
+
+# --- Delisted links ---------------------------------------------------------------------
+#
+# Every `studios[]` entry carries its own `delisted_at`, and `studios` is one of the nine keys
+# the brief row does have — so this signal is available on every route, search included. The
+# title-level `delisted_at` is detail-only, which is what made it look unavailable.
+
+
+def test_a_delisted_link_is_not_somewhere_to_watch() -> None:
+    live = dramadex._studio(
+        {"key": "reelshort", "watch_url": "https://x/1", "delisted_at": None}
+    )
+    gone = dramadex._studio(
+        {"key": "reelshort", "watch_url": "https://x/1", "delisted_at": "2026-01-01T00:00:00"}
+    )
+    assert live is not None and gone is not None
+    assert live.is_watchable
+    assert not gone.is_watchable, "the page is gone; offering it is worse than offering nothing"
+
+
+def test_a_delisted_platform_does_not_become_the_network() -> None:
+    """`studio_name` takes the first watchable link, and `first_seen` order puts the oldest
+    first — which is also the one most likely to have been taken down."""
+    parsed = dramadex._title(
+        title_payload(
+            studios=[
+                {
+                    "key": "reelshort",
+                    "name": "ReelShort",
+                    "external_id": "1",
+                    "watch_url": "https://x/1",
+                    "delisted_at": "2026-01-01T00:00:00",
+                },
+                {
+                    "key": "dramabox",
+                    "name": "DramaBox",
+                    "external_id": "2",
+                    "watch_url": "https://y/2",
+                    "delisted_at": None,
+                },
+            ]
+        )
+    )
+    assert parsed is not None
+    assert parsed.studio_name == "DramaBox"
