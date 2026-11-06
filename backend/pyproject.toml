@@ -44,6 +44,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
 ignore = ["B008"]
+# The fullwidth colon is data here, not a typo. It is the character that separates a CJK
+# title from its subtitle, so it appears in the docstring that documents how `normalize_title`
+# folds it away and in the fixture that proves it — `'Tempest：The Last Mecha'`. "Correcting"
+# it to an ASCII colon would rewrite the example and gut the test. Allowing this one character
+# keeps RUF001/002/003 live for every other lookalike that really is a mistake.
+allowed-confusables = ["："]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -55,3 +61,20 @@ python_version = "3.12"
 warn_unused_ignores = true
 disallow_untyped_defs = true
 plugins = []
+# `app` is a namespace package: there is no `__init__.py` at its root, only under `app/models/`
+# and `app/workers/`. Without these two settings mypy derives each module's name from the
+# nearest `__init__.py`, so `app/api/admin.py` and `app/schemas/admin.py` both read as a
+# top-level module called `admin` and the run aborts with "Duplicate module named" before it
+# analyses a single line. That is why this typecheck had never typed anything. The other half
+# of the fix is in the workflow: mypy must run *from this directory*, or it never finds this
+# file and none of the strictness above applies either.
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+# korean-romanizer ships no `py.typed` marker. It is one of four transliteration wheels that
+# `app/services/search/normalize.py` imports inside try/except and degrades without; the other
+# three carry type information, this one does not. Ignoring the missing stubs is honest here —
+# the call site already treats the module as `Any` on purpose.
+module = ["korean_romanizer.*"]
+ignore_missing_imports = true

@@ -20,7 +20,7 @@ Three things it gives that nothing before it could:
   `reelshort.setting` — which is genuine structure where dramatarr had a free-text field.
 
 **Ratings need care and this module enforces it.** DramaDex flags the platforms' own scores
-`is_editorial` because they are marketing copy: DramaBox floor-clamps to 7.1–10, ReelShort's
+`is_editorial` because they are marketing copy: DramaBox floor-clamps to 7.1-10, ReelShort's
 entire catalogue sits inside 0.4 points. Only IMDb's carry real vote counts. `genuine_ratings`
 is the only accessor, and it filters.
 """

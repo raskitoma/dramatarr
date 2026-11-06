@@ -145,7 +145,9 @@ async def test_resume_suppressed_when_completed(db, viewer_user, sample_series) 
     assert await resume_for(db, viewer_user.id, episodes[0].id) is None
 
 
-async def test_progress_is_isolated_between_users(db, viewer_user, admin_user, sample_series) -> None:
+async def test_progress_is_isolated_between_users(
+    db, viewer_user, admin_user, sample_series
+) -> None:
     """The whole point of the household model: two people never share a position."""
     _, episodes = sample_series
     await record_progress(db, viewer_user.id, episodes[0].id, 600.0, 1800.0)

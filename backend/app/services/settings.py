@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Setting
 
 # The seed for `library.providers`. `vocab` imports nothing from here, so there is no cycle.
-from app.services.vocab import DEFAULT_PROVIDERS as _SEED_PROVIDERS
 from app.utils.time import utcnow
 
 REDACTED = "__SET__"

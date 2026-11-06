@@ -43,7 +43,8 @@ def test_using_it_pushes_the_expiry_forward() -> None:
 
     _refresh_expiry(auth, utcnow())
 
-    assert days_from_now(auth.expires_at) == pytest.approx(get_settings().session_ttl_days, abs=0.01)
+    expected = pytest.approx(get_settings().session_ttl_days, abs=0.01)
+    assert days_from_now(auth.expires_at) == expected
 
 
 def test_it_never_rolls_past_the_ceiling() -> None:

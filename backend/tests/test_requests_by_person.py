@@ -206,7 +206,8 @@ async def test_cast_matches_are_not_pushed_off_a_full_page(
         if is_people(request):
             return people("Adam Daniel")
         if "person" in params_of(request):
-            return httpx.Response(200, json={"items": [row(900 + n, f"Cast {n}") for n in range(6)]})
+            items = [row(900 + n, f"Cast {n}") for n in range(6)]
+            return httpx.Response(200, json={"items": items})
         return httpx.Response(200, json={"items": [row(n, f"Title {n}") for n in range(12)]})
 
     serve(handler)

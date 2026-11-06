@@ -24,7 +24,6 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +34,7 @@ from app.db import dispose_engine, get_sessionmaker
 from app.models import AuthSession, Credential, Invite, MagicLink, User, UserRole
 from app.services.auth import create_invite, normalize_email
 from app.utils.ids import new_token
-from app.utils.time import in_days, in_minutes, utcnow
+from app.utils.time import in_minutes, utcnow
 
 DEFAULT_LINK_TTL_MINUTES = 60
 
@@ -236,7 +235,10 @@ async def cmd_set_email(session: AsyncSession, args: argparse.Namespace) -> int:
 async def cmd_login_link(session: AsyncSession, args: argparse.Namespace) -> int:
     user = await _find_user(session, args.email)
     if user is None:
-        print(f"No account for {args.email}. Create one with: create-admin --email …", file=sys.stderr)
+        print(
+            f"No account for {args.email}. Create one with: create-admin --email …",
+            file=sys.stderr,
+        )
         return 1
     if not user.is_active:
         print(f"{user.email} is deactivated. Reactivate it first.", file=sys.stderr)
@@ -293,13 +295,10 @@ async def cmd_list_users(session: AsyncSession, _: argparse.Namespace) -> int:
         print("No users yet.")
         return 0
 
-    counts = dict(
-        (
-            await session.execute(
-                select(Credential.user_id, func.count(Credential.id)).group_by(Credential.user_id)
-            )
-        ).all()
+    result = await session.execute(
+        select(Credential.user_id, func.count(Credential.id)).group_by(Credential.user_id)
     )
+    counts: dict[str, int] = dict(result.tuples().all())
     # PROTECTED is listed because a shell is the only place the flag can be read *or* changed.
     print(f"{'EMAIL':38} {'ROLE':8} {'ACTIVE':7} {'PROTECTED':10} {'PASSKEYS':9} LAST LOGIN")
     for user in users:

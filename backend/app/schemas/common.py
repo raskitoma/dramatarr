@@ -6,8 +6,6 @@ while Python stays snake_case. Request models accept either spelling.
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel, ConfigDict
 
 
@@ -25,10 +23,7 @@ class APIModel(BaseModel):
     )
 
 
-T = TypeVar("T")
-
-
-class Page(APIModel, Generic[T]):
+class Page[T](APIModel):
     items: list[T]
     total: int
     page: int

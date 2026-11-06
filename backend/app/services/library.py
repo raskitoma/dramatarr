@@ -15,6 +15,7 @@ straight back and the delete was theatre.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import re
 import shlex
@@ -26,7 +27,7 @@ from pathlib import PurePosixPath
 from typing import Any, Literal
 from urllib.parse import quote, urlsplit
 
-from sqlalchemy import Select, String, and_, case, cast, func, or_, select
+from sqlalchemy import Select, SQLColumnExpression, String, and_, case, cast, func, or_, select
 from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -763,7 +764,7 @@ async def year_facets(session: AsyncSession, *, sees_restricted: bool) -> list[Y
 #: the sequence Explorar shows by default. Level 3 is the id, which that sort does not carry: a
 #: list may leave two identically-titled rows in either order and nobody notices, but a *walk*
 #: needs a total order or a pair of ties becomes a loop between two titles with no way past.
-def _catalogue_order() -> tuple[ColumnElement[Any], ...]:
+def _catalogue_order() -> tuple[SQLColumnExpression[Any], ...]:
     # `lower()` on the first level because the two things it coalesces are cased differently:
     # `sort_title` is written by `normalize()` and is lower case, while the fallback is the
     # display title. SQLite collates binary, so without folding every row that fell back sorted
@@ -2648,7 +2649,11 @@ class FieldChange:
     default_checked: bool
     #: An i18n key stem explaining a refusal or a caveat, or None.
     note: str | None = None
-    note_args: dict[str, str] = field(default_factory=dict)
+    # `dataclasses.field` spelled out on purpose. This class has an attribute *named* `field`
+    # (above), which shadows the imported `field` for the rest of the class body. The short
+    # spelling works at runtime only because a bare annotation binds no name: give `field: str`
+    # a default and the line below starts calling a string, and the backend stops importing.
+    note_args: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 def _as_list(value: Any) -> list[str]:

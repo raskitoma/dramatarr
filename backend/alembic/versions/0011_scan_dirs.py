@@ -25,6 +25,7 @@ scan stays complete and only the scheduled one goes incremental.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0011_scan_dirs"

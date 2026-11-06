@@ -44,7 +44,9 @@ class NotFound(AppError):
 
 
 class Unauthorized(AppError):
-    def __init__(self, code: str = "UNAUTHORIZED", message: str = "Authentication required") -> None:
+    def __init__(
+        self, code: str = "UNAUTHORIZED", message: str = "Authentication required"
+    ) -> None:
         super().__init__(code, message, status.HTTP_401_UNAUTHORIZED)
 
 
@@ -91,6 +93,10 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "error": {"code": "INTERNAL_ERROR", "message": "Internal server error", "details": {}}
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error",
+                    "details": {},
+                }
             },
         )

@@ -77,7 +77,13 @@ def title_payload(**overrides: Any) -> dict[str, Any]:
             {"id": 8, "name": "Cameron Somers", "role": "actor", "billing_order": 1},
         ],
         "ratings": [
-            {"source": "reelshort", "value": 4.8, "votes": None, "scale": 10.0, "is_editorial": True},
+            {
+                "source": "reelshort",
+                "value": 4.8,
+                "votes": None,
+                "scale": 10.0,
+                "is_editorial": True,
+            },
             {"source": "imdb", "value": 7.3, "votes": 113, "scale": 10.0, "is_editorial": False},
         ],
         **overrides,
@@ -352,7 +358,8 @@ async def test_applying_does_not_destroy_a_synopsis_somebody_wrote(db: AsyncSess
 
     assert series.overview == "Una sinopsis que escribí yo."
     # The cast still lands: it is a cache of the indexer, not something anyone edits here.
-    rows = (await db.execute(select(SeriesCast).where(SeriesCast.series_id == series.id))).scalars().all()
+    result = await db.execute(select(SeriesCast).where(SeriesCast.series_id == series.id))
+    rows = result.scalars().all()
     assert len(rows) == 2
 
 
@@ -846,7 +853,8 @@ async def test_a_synopsis_somebody_wrote_is_offered_but_not_ticked(db: AsyncSess
     series.overview_source = OverviewSource.MANUAL
     await db.flush()
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     assert rows["overview"].changed is True
     assert rows["overview"].default_checked is False
@@ -857,7 +865,8 @@ async def test_a_declared_count_below_the_files_on_disk_is_refused(db: AsyncSess
     """The file count is the number that is a fact. Sixty-six files, a record claiming one."""
     series = await make_series(db, files=80)
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     row = rows["declared_episode_count"]
     assert row.default_checked is False
@@ -952,7 +961,9 @@ async def test_every_planned_field_is_a_field_the_writer_understands(db: AsyncSe
     assert series.genres == fresh.genres
 
 
-async def test_the_poster_row_stops_changing_once_it_is_the_indexers(db: AsyncSession, tmp_env) -> None:
+async def test_the_poster_row_stops_changing_once_it_is_the_indexers(
+    db: AsyncSession, tmp_env
+) -> None:
     """`metadataNothing` was unreachable, and that is a screen lying quietly.
 
     The poster row hardcoded `changed=True`, so a series refreshed a minute ago reopened
@@ -965,7 +976,8 @@ async def test_the_poster_row_stops_changing_once_it_is_the_indexers(db: AsyncSe
     series.poster_path = request_poster_url(f"{dramadex_poster_name(4242)}-abc123def456.webp")
     await db.flush()
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     assert rows["poster"].changed is False
     assert rows["poster"].default_checked is False
@@ -980,7 +992,8 @@ async def test_a_poster_from_somewhere_else_still_counts_as_a_change(
     series.poster_path = request_poster_url("something-else.webp")
     await db.flush()
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     assert rows["poster"].changed is True
 

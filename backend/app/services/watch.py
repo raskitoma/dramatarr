@@ -29,12 +29,12 @@ from app.utils.time import as_aware, utcnow
 #:     a 295s episode was marked WATCHED at 176s  (60% in)
 #:
 #: 1005 files carry a duration here; the median is **72 seconds** and the longest is 295. Sixty
-#: five of them sit in the 120–200s band where that rule fired first, which is to say: playing
+#: five of them sit in the 120-200s band where that rule fired first, which is to say: playing
 #: two seconds of them marked them watched, took them out of Continue Watching, and moved the
 #: series' progress bar.
 #:
 #: The arithmetic also shows the rule never helped anywhere. A fixed 120s tail only fires
-#: *before* the 90% mark while `0.1 × duration < 120`, i.e. below twenty minutes — so on
+#: *before* the 90% mark while `0.1 * duration < 120`, i.e. below twenty minutes — so on
 #: long-form, the case it was written for, the percentage always won and the tail was dead
 #: code. It could only ever loosen completion for short content, which is the opposite of what
 #: a credits-detector is for.

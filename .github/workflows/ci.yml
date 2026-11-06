@@ -54,9 +54,13 @@ jobs:
         run: |
           ruff check backend
 
+      # From `backend/`, not the repo root: mypy looks for its configuration in the working
+      # directory, and there is no pyproject.toml at the root, so `mypy backend/app` silently
+      # ran with none of the settings in backend/pyproject.toml.
       - name: Mypy Typecheck
+        working-directory: backend
         run: |
-          mypy backend/app
+          mypy app
 
   frontend:
     name: Frontend Tests & Build
