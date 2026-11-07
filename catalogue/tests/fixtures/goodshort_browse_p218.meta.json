@@ -1,0 +1,23 @@
+{
+  "url": "https://www.goodshort.com/dramas/playlets?page=218",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "etag": "W/\"28b80-9pl4C6feEDJr3ozNXCsYCsfS2ZU\"",
+    "vary": "Accept-Encoding",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range",
+    "access-control-expose-headers": "Content-Length,Content-Range",
+    "x-akamai-transformed": "9 - 0 pmb=mRUM,1",
+    "content-encoding": "gzip",
+    "expires": "Mon, 17 Aug 2026 18:29:54 GMT",
+    "cache-control": "max-age=0, no-cache, no-store",
+    "pragma": "no-cache",
+    "date": "Mon, 17 Aug 2026 18:29:54 GMT",
+    "content-length": "36149",
+    "connection": "keep-alive",
+    "server-timing": "cdn-cache; desc=HIT, edge; dur=2, ak_p; desc=\"1786991394723_34853783_1035431522_236_8597_22_0_-\";dur=1",
+    "alt-svc": "h3=\":443\"; ma=93600"
+  }
+}

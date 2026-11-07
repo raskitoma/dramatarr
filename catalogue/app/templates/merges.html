@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Duplicate review</h1>
+{% if message %}<div class="msg">{{ message }}</div>{% endif %}
+<p class="muted" style="max-width:66ch">Titles that share an exact key but that the evidence would not
+<strong>confirm</strong>. The rule merges on its own only when the episode count and year agree, because
+<code>(year, episode&nbsp;count)</code> is nearly entropy-free here — 678 titles run exactly 60 episodes —
+so it can confirm a name match but never establish one.</p>
+<p class="muted" style="max-width:66ch"><strong>A wide episode gap is the interesting case.</strong> It is
+either one show cut differently by two platforms, or two different shows with a generic name. Compare the
+synopses before merging. <em>Keep separate</em> is permanent: the pair is never proposed again, and a merge
+you regret can still be undone, but a wrong merge shows viewers the wrong story in the meantime.</p>
+
+<p class="muted" style="max-width:66ch"><strong>Ordered by likelihood, not by id.</strong>
+Pairs flagged <span class="pill">likely</span> are the ones where the source that publishes no
+year lists <em>more</em> episodes — hand-adjudicated at 9 of 11 genuine duplicates against 27%
+among mere name collisions. It is a hint for reading order only: two confirmed duplicates run
+the other way, so an unflagged pair is not a rejection.
+{% if total %}Showing {{ shown }} of {{ total }} proposed.{% endif %}</p>
+
+{% for i in items %}
+<div class="card" style="margin-bottom:1rem">
+  <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:baseline">
+    <div>
+      <strong>{{ i.keep.primary_title }}</strong>
+      <span class="pill">{{ i.m.key_kind or 'title' }}</span>
+      {% if i.likely %}<span class="pill" title="the year-less source lists more episodes">likely</span>{% endif %}
+    </div>
+    <div>
+      <form class="inline" method="post" action="/admin/merges/{{ i.m.id }}/confirm">
+        <button class="primary" type="submit">Merge — same show</button>
+      </form>
+      <form class="inline" method="post" action="/admin/merges/{{ i.m.id }}/reject">
+        <button type="submit">Keep separate</button>
+      </form>
+    </div>
+  </div>
+
+  <p class="warn" style="margin:.5rem 0 0">{{ i.m.reason }}</p>
+
+  <div class="wrap" style="margin-top:.7rem"><table>
+    <tr><th></th><th>Title</th><th>Year</th><th>Eps</th><th>Synopsis</th></tr>
+    {% for row, role in [(i.keep, 'kept'), (i.drop, 'absorbed')] %}
+    <tr>
+      <td><span class="pill">{{ role }}</span></td>
+      <td class="wrapcell">
+        <a href="/admin/titles/{{ row.id }}">{{ row.primary_title }}</a>
+        <code class="muted">#{{ row.id }}</code>
+      </td>
+      <td>{{ row.year or '—' }}</td>
+      <td>{{ row.episode_count or '—' }}</td>
+      <td class="wrapcell muted">{{ (row.synopsis or '')[:220] }}{% if row.synopsis and row.synopsis|length > 220 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+
+  <p class="muted" style="margin:.5rem 0 0;font-size:.85rem">
+    Sources: {{ i.e.get('sources', []) | join(', ') or '—' }}.
+    Episode counts {{ i.e.get('episode_counts', []) | join(' vs ') or '—' }},
+    years {{ i.e.get('years', []) | join(' vs ') or '—' }}.
+    Merging keeps <code>#{{ i.m.survivor_id }}</code> and folds
+    <code>#{{ i.m.loser_id }}</code> into it; the old id keeps resolving.
+  </p>
+</div>
+{% else %}
+<p class="ok">Nothing awaiting review.</p>
+{% endfor %}
+{% endblock %}

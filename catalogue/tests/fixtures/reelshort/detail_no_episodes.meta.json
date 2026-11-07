@@ -1,0 +1,21 @@
+{
+  "url": "https://www.reelshort.com/movie/poolboy-6858f90310d21493f5048723",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "date": "Sun, 16 Aug 2026 21:07:25 GMT",
+    "content-encoding": "gzip",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-powered-by": "Next.js",
+    "etag": "\"dvsmcyxtok2kj5\"",
+    "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+    "vary": "Accept-Encoding, Origin",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 a35750b050dede7d040b12847d4543bc.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P2",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "giG-fRjz2XoYM83f4bRijeGoEp1I6Uj1RkOwp0jKgKglCcMdP1LrKw=="
+  }
+}

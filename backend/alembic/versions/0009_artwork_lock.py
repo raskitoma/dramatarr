@@ -25,6 +25,7 @@ somebody chooses one.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0009_artwork_lock"

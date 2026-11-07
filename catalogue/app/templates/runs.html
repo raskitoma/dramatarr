@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Runs</h1>
+{% if message %}<div class="msg">{{ message }}</div>{% endif %}
+<p class="muted" style="max-width:66ch">A failed run stays here forever — this table is history. One marked
+<span class="pill muted">superseded</span> has since been followed by a <strong>successful run of the same
+job on the same source</strong>, so whatever broke is demonstrably fixed. Only rows still marked
+<span class="pill err">failed</span> need attention.</p>
+
+<div class="wrap">
+<table>
+  <tr><th>#</th><th>Source</th><th>Job</th><th>Date</th><th>State</th><th>Progress</th><th>ETA</th><th>Result</th><th></th></tr>
+  {% for r in runs %}
+  {% set p = progress.get(r.id) %}
+  {% set st = stats.get(r.id, {}) %}
+  <tr>
+    <td>{{ r.id }}</td>
+    <td>{{ sources.get(r.source_id, '?') }}</td>
+    <td>{{ r.job_type }}{% if r.manual %} <span class="pill">manual</span>{% endif %}</td>
+    <td class="muted">{{ r.run_date }}</td>
+    {% set is_stale = r.id in stale %}
+    <td>
+      {%- if is_stale %}
+      <span class="pill muted" title="This job has succeeded since. The failure is history, not a current problem.">superseded</span>
+      {%- else %}
+      <span class="pill {{ 'ok' if r.state == 'succeeded' else ('err' if r.state == 'failed' else '') }}">{{ r.state }}</span>
+      {%- endif %}
+    </td>
+    <td>{{ p.items_done if p else 0 }}{% if p and p.items_total %} / {{ p.items_total }}{% endif %}</td>
+    <td>{{ (p.eta_seconds if p else None)|eta }}</td>
+    <td class="muted">
+      {%- if r.error %}<span class="{{ 'muted' if is_stale else 'err' }}">{{ r.error[:90] }}</span>
+      {%- elif st %}created {{ st.get('created', 0) }} · updated {{ st.get('updated', 0) }}
+        {%- if st.get('quarantined') %} · <span class="warn">quarantined {{ st.quarantined }}</span>{% endif %}
+        {%- if st.get('verdicts') %} · {{ st.verdicts }}{% endif %}
+      {%- else %}—{% endif %}
+    </td>
+    <td>
+      {% if r.state in ('pending', 'running') %}
+      <form class="inline" method="post" action="/admin/runs/{{ r.id }}/cancel">
+        <button type="submit">Cancel</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

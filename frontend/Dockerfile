@@ -24,3 +24,7 @@ EXPOSE 80
 # that depends on which family wins is a healthcheck that lies.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -q --spider http://127.0.0.1/ || exit 1
+
+ARG DRAMATARR_REVISION=unknown
+LABEL org.opencontainers.image.title="Dramatarr" \
+      org.opencontainers.image.revision=$DRAMATARR_REVISION

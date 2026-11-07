@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DramaDown — Video URI Batch Extractor & Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- ?v= is bumped whenever the assets change, so a cached copy can never be
+       paired with a newer index.html. -->
+  <link rel="stylesheet" href="style.css?v=8">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon">🎬</div>
+        <div class="logo-text">
+          <h1>DramaDown</h1>
+          <p class="subtitle">Automated Drama Video Source Extractor & Title-Folder Downloader</p>
+        </div>
+      </div>
+      <!-- rel=noopener stops the opened page from reaching back via window.opener. -->
+      <a class="btn-secondary btn-browse" href="https://dramafren.org" target="_blank" rel="noopener noreferrer">
+        <span class="action-icon">🔎</span> Browse dramafren.org
+      </a>
+    </header>
+
+    <!-- Main Card -->
+    <main class="main-card">
+      <!-- Input Section -->
+      <section class="input-section">
+        <label for="url-input" class="input-label">Drama Episode / Series URL</label>
+        <div class="input-wrapper">
+          <input
+            type="url"
+            id="url-input"
+            placeholder="Paste a drama watch URL, e.g. https://dramabox.dramafren.org/index.php?page=watch&id=...&ep=1"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button id="btn-extract" class="btn-primary">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text">Extract All URIs</span>
+          </button>
+        </div>
+        <div class="options-row">
+          <label class="option" for="concurrency-input">
+            <span>Parallel downloads</span>
+            <input type="number" id="concurrency-input" min="1" max="8" step="1" value="3">
+          </label>
+          <label class="option option-check" for="force-input" title="Off: finished episodes are skipped and interrupted ones continue where they stopped.">
+            <input type="checkbox" id="force-input">
+            <span>Re-download from the start (discard what's already downloaded)</span>
+          </label>
+        </div>
+        <div class="input-hint">
+          <span>Supported:</span> Drama series from dramafren.org (GoodShort, DramaBox, ShortMax, etc.) with automatic Turnstile bypass, episode traversal &amp; title-folder downloads.
+        </div>
+      </section>
+
+      <!-- Live Status & Progress Section -->
+      <section id="status-card" class="status-card hidden">
+        <div class="status-header">
+          <div class="status-title-row">
+            <div class="spinner" id="status-spinner"></div>
+            <span id="status-title" class="status-title">Processing Request...</span>
+          </div>
+          <span id="status-badge" class="badge badge-active">In Progress</span>
+        </div>
+        <div class="progress-bar-container">
+          <div id="progress-bar" class="progress-bar" style="width: 15%"></div>
+        </div>
+        <div class="logs-console" id="logs-console">
+          <div class="log-line log-info">[Init] Ready to connect to drama player...</div>
+        </div>
+      </section>
+
+      <!-- Results Section -->
+      <section id="results-card" class="results-card hidden">
+        <div class="results-header">
+          <div class="results-info">
+            <h2 id="drama-title" class="drama-title"></h2>
+            <p id="drama-summary" class="drama-summary"></p>
+            <label class="folder-editor" for="folder-input">
+              <span class="folder-prefix">📁 downloads /</span>
+              <input type="text" id="folder-input" spellcheck="false" autocomplete="off"
+                     title="Folder name for this series — edit it before downloading">
+            </label>
+            <p id="folder-summary" class="drama-folder-path"></p>
+          </div>
+          <div class="results-actions">
+            <button id="btn-download-videos" class="btn-primary btn-download">
+              <span class="action-icon">📥</span> Download All
+            </button>
+            <button id="btn-download-selected" class="btn-primary btn-download" disabled>
+              <span class="action-icon">✅</span> Download Selected
+            </button>
+            <button id="btn-stop" class="btn-secondary btn-stop hidden">
+              <span class="action-icon">⏹</span> Stop
+            </button>
+            <button id="btn-retry-failed" class="btn-secondary hidden">
+              <span class="action-icon">↻</span> Retry Failed
+            </button>
+            <button id="btn-copy-all" class="btn-secondary">
+              <span class="action-icon">📋</span> Copy All URIs
+            </button>
+            <button id="btn-download-txt" class="btn-secondary">
+              <span class="action-icon">💾</span> Download (.txt)
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab Controls -->
+        <div class="tab-controls">
+          <button class="tab-btn active" data-tab="table">Episodes</button>
+          <button class="tab-btn" data-tab="plain">Plain List (By Line)</button>
+          <label class="option option-check filter-toggle" for="only-missing" title="Hide episodes whose file is already in the download folder">
+            <input type="checkbox" id="only-missing">
+            <span>Only missing</span>
+          </label>
+          <span id="selection-summary" class="selection-summary"></span>
+        </div>
+
+        <!-- Table View -->
+        <div id="tab-table" class="tab-content active">
+          <div class="table-wrapper">
+            <table class="uris-table">
+              <thead>
+                <tr>
+                  <th style="width: 30px;">
+                    <input type="checkbox" id="select-all" title="Select all episodes">
+                  </th>
+                  <th style="width: 52px;">Ep</th>
+                  <th style="width: 104px;">Title</th>
+                  <th>Direct Video URI</th>
+                  <th style="width: 140px;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                <!-- Rows injected dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Plain List View -->
+        <div id="tab-plain" class="tab-content">
+          <div class="textarea-wrapper">
+            <textarea id="uris-textarea" readonly spellcheck="false" placeholder="Video URIs will appear here line by line..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Library -->
+      <section id="library-card" class="library-card">
+        <div class="library-header">
+          <h2 class="library-title">📚 Downloads</h2>
+          <div class="library-actions">
+            <span id="library-path" class="library-path"></span>
+            <button id="btn-refresh-library" class="btn-secondary">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="library-list" class="library-list">
+          <p class="library-empty">Loading…</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>DramaDown URI Extractor & Downloader</span> • <span>Fast headless extraction with Cloudflare bypass, episode traversal & title-based folder downloads</span>
+    </footer>
+  </div>
+
+  <script src="app.js?v=8"></script>
+</body>
+</html>

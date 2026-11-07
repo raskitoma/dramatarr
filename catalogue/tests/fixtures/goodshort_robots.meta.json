@@ -1,0 +1,24 @@
+{
+  "url": "https://www.goodshort.com/robots.txt",
+  "status": 200,
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8",
+    "accept-ranges": "bytes",
+    "last-modified": "Fri, 15 May 2026 13:26:20 GMT",
+    "etag": "W/\"10d-19e2bd1098f\"",
+    "vary": "Accept-Encoding",
+    "content-encoding": "gzip",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range",
+    "access-control-expose-headers": "Content-Length,Content-Range",
+    "content-length": "159",
+    "expires": "Mon, 17 Aug 2026 18:30:01 GMT",
+    "cache-control": "max-age=0, no-cache, no-store",
+    "pragma": "no-cache",
+    "date": "Mon, 17 Aug 2026 18:30:01 GMT",
+    "connection": "keep-alive",
+    "server-timing": "cdn-cache; desc=MISS, edge; dur=287, origin; dur=4, ak_p; desc=\"1786991401187_34853783_1035449344_29109_7691_28_0_-\";dur=1",
+    "alt-svc": "h3=\":443\"; ma=93600"
+  }
+}

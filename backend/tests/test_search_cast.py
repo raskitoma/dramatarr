@@ -121,7 +121,9 @@ async def test_browse_filters_by_cast_too(db, cast_library, viewer_user) -> None
     """Explorar's own box searches the same library and must not disagree with Buscar."""
     from app.services import library as library_service
 
-    page = await library_service.list_series(db, user_id=viewer_user.id, q="Cameron Porras", sees_restricted=True)
+    page = await library_service.list_series(
+        db, user_id=viewer_user.id, q="Cameron Porras", sees_restricted=True
+    )
     assert [row.slug for row in page.items] == ["first-frost"]
 
 
@@ -165,7 +167,9 @@ async def test_the_facets_are_the_ones_explorar_uses(db, cast_library, viewer_us
     from app.services import library as library_service
     from app.services.search.service import search_library
 
-    browsed = await library_service.list_series(db, user_id=viewer_user.id, year=2024, sees_restricted=True)
+    browsed = await library_service.list_series(
+        db, user_id=viewer_user.id, year=2024, sees_restricted=True
+    )
     searched = await search_library(db, "e", year=2024, sees_restricted=True)
     assert {row.slug for row in browsed.items} >= {hit.series.slug for hit in searched.series}
 

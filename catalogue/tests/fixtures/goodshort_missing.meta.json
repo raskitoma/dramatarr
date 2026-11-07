@@ -1,0 +1,19 @@
+{
+  "url": "https://www.goodshort.com/drama/definitely-not-a-real-slug-99999999999",
+  "status": 404,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "etag": "W/\"11e15-AqNEn98veXWiWyMtQhZVTX+TP+w\"",
+    "vary": "Accept-Encoding",
+    "content-encoding": "gzip",
+    "content-length": "14444",
+    "expires": "Mon, 17 Aug 2026 18:29:59 GMT",
+    "cache-control": "max-age=0, no-cache, no-store",
+    "pragma": "no-cache",
+    "date": "Mon, 17 Aug 2026 18:29:59 GMT",
+    "connection": "keep-alive",
+    "set-cookie": "currentLanguage=en;path=/",
+    "server-timing": "cdn-cache; desc=MISS, edge; dur=11, origin; dur=301, ak_p; desc=\"1786991398823_34853783_1035442779_31154_7551_22_0_-\";dur=1",
+    "alt-svc": "h3=\":443\"; ma=93600"
+  }
+}

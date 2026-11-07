@@ -1,0 +1,10 @@
+{
+  "url": "https://netshort.com/full-episodes/definitely-not-a-real-slug-12345",
+  "status": 404,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "server": "cloudflare",
+    "cf-cache-status": "DYNAMIC",
+    "x-powered-by": "Next.js"
+  }
+}

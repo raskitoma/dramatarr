@@ -1,21 +1,14 @@
 """What a member wishes were in the library.
 
-This table is a **wishlist**, and the distinction is the whole design. Nothing here queues a
-download, reaches a source, or is read by a worker: a row is a sentence one household member
-wrote down for another to act on, and the acting happens off-system — the admin finds the
-show by whatever means they normally would, puts the files on the NAS, and marks the row
-done. Every column exists to make that hand-off legible, not to automate it.
+A member creates a wishlist entry. Approval now queues Dramafren source discovery in the
+household's serialized queue; review is enabled by default, and the admin accepts a provider and
+language edition before downloading. The original source URL stays as provenance and a provider
+identity hint. The accepted Dramafren URL and acquisition progress live in the linked job payload,
+not in this metadata row. Successful import binds series_id and transitions to fulfilled once.
 
-Two consequences worth stating, because both look like omissions otherwise:
-
-* **`poster_url` and `source_url` are remote and are never fetched by this server.** They are
-  what the requester was looking at when they chose — a picture and a link the *admin's
-  browser* opens. The write path allowlists the poster host for that reason (see
-  `app.services.requests`); nothing downloads either one.
-* **The identifiers are recorded, not resolved.** A TMDB id turns the admin's later search
-  into one click, and a MyDramaList or DramaBoxDB id is often the only address a short-form
-  drama has anywhere. They travel as leads. `series_id` is set by hand, at the end, when the
-  admin says *this row became that series*.
+Remote poster URLs remain display-only and host-allowlisted. Source-published identifiers, not
+title similarity, authorize automatic acquisition. Declining an approved request cancels its
+pending acquisition; historical requests and download jobs are retained.
 """
 
 from __future__ import annotations

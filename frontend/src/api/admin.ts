@@ -941,6 +941,8 @@ export const ADMIN_EVENTS_URL = '/api/admin/events'
 // --- Job vocabulary -------------------------------------------------------------------------
 
 export const JOB_TYPES: readonly JobType[] = [
+  'find_source',
+  'download_series',
   'library_scan',
   'metadata_refresh',
   'image_cache',

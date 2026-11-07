@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Dashboard</h1>
+
+<div class="cards">
+  <div class="card"><div class="n">{{ counts.titles }}</div><div class="k">titles</div></div>
+  <div class="card"><div class="n">{{ counts.episodes }}</div><div class="k">episodes</div></div>
+  <div class="card"><div class="n">{{ counts.people }}</div><div class="k">people</div></div>
+  <div class="card"><div class="n">{{ counts.tags }}</div><div class="k">tags</div></div>
+  <div class="card"><div class="n {% if counts.quarantine %}warn{% endif %}">{{ counts.quarantine }}</div><div class="k">quarantined</div></div>
+</div>
+
+<h2>Sources</h2>
+<div class="wrap">
+<table>
+  <tr><th>Source</th><th>Titles</th><th>Breaker</th><th>Lock</th><th>Watermark</th><th>Last run</th><th>Trigger</th></tr>
+  {% for s in sources %}
+  <tr>
+    <td><strong>{{ s.key }}</strong>{% if not s.enabled %} <span class="pill muted">disabled</span>{% endif %}</td>
+    <td>{{ s.titles }}</td>
+    <td class="{{ 'err' if s.breaker != 'closed' else 'ok' }}">{{ s.breaker }}</td>
+    <td>{% if s.locked_by %}<span class="pill warn">pid {{ s.locked_by }}</span>{% else %}<span class="muted">free</span>{% endif %}</td>
+    <td class="muted"><code>{{ s.watermark or '—' }}</code></td>
+    <td>
+      {% if s.last %}
+        {# A failure the source has already recovered from is history, not an alarm. #}
+        {% set recovered = s.last.state == 'failed' and s.last_success and s.last_success.id > s.last.id %}
+        <span class="pill {{ 'ok' if s.last.state == 'succeeded' else ('err' if (s.last.state == 'failed' and not recovered) else '') }}">{{ s.last.state }}</span>
+        <span class="muted">{{ s.last.job_type }} · {{ s.last.run_date }}</span>
+        {% if s.last.state == 'failed' %}
+          {% if s.last_success %}
+            <br><span class="muted">last success: {{ s.last_success.job_type }} · {{ s.last_success.run_date }} (#{{ s.last_success.id }})</span>
+          {% else %}
+            <br><span class="warn">no successful run through the job engine yet</span>
+          {% endif %}
+        {% endif %}
+      {% else %}<span class="muted">never</span>{% endif %}
+    </td>
+    <td>
+      <form class="inline" method="post" action="/admin/sync">
+        <input type="hidden" name="source" value="{{ s.key }}">
+        <select name="job_type">
+          <option value="incremental">incremental</option>
+          <option value="full_catalog">full_catalog</option>
+          <option value="reparse">reparse</option>
+        </select>
+        <button class="primary" type="submit">Run</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+{% if active %}
+<h2>Running now</h2>
+<div class="wrap">
+<table>
+  <tr><th>Run</th><th>Job</th><th>Progress</th><th>Done</th><th>Rate</th><th>ETA</th></tr>
+  {% for r in active %}
+  {% set p = progress.get(r.id) %}
+  <tr>
+    <td>#{{ r.id }}</td>
+    <td>{{ r.job_type }}</td>
+    <td>
+      <div class="bar"><i style="width: {{ ((p.items_done / p.items_total * 100) if p and p.items_total else 0)|round(1) }}%"></i></div>
+    </td>
+    <td>{{ p.items_done if p else 0 }}{% if p and p.items_total %} / {{ p.items_total }}{% endif %}</td>
+    <td class="muted">{{ '%.1f/s'|format(p.rate_ewma) if p and p.rate_ewma else '—' }}</td>
+    <td>{{ (p.eta_seconds if p else None)|eta }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted">This page does not auto-refresh; reload to update.</p>
+{% endif %}
+{% endblock %}

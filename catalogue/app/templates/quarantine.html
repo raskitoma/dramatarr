@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Parse quarantine</h1>
+<p class="muted" style="max-width:62ch">Records that failed to parse. The run continues past these rather than
+dying, so a single bad payload never costs a whole crawl. Fix the parser, then
+run <code>reparse</code> — it re-runs over the archive with no network.</p>
+
+<div class="wrap"><table>
+  <tr><th>#</th><th>Source</th><th>External id</th><th>Error</th><th>When</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.id }}</td>
+    <td>{{ sources.get(r.source_id, '?') }}</td>
+    <td><code>{{ r.external_id or '—' }}</code></td>
+    <td class="wrapcell err">{{ r.error }}</td>
+    <td class="muted">{{ r.created_at }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="ok">Nothing quarantined.</td></tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

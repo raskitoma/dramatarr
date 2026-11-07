@@ -126,6 +126,8 @@ class MediaStatus(enum.StrEnum):
 
 
 class JobType(enum.StrEnum):
+    DOWNLOAD_SERIES = "download_series"
+    FIND_SOURCE = "find_source"
     LIBRARY_SCAN = "library_scan"
     METADATA_REFRESH = "metadata_refresh"
     IMAGE_CACHE = "image_cache"

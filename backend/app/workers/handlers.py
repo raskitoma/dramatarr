@@ -22,6 +22,8 @@ from urllib.parse import unquote, urlsplit
 from app.config import get_settings
 from app.errors import AppError, NotFound
 from app.models import Episode, JobType, LogLevel
+from app.services.acquisition import handle_download_series
+from app.services.request_acquisition import handle_find_source
 from app.services.settings import SettingsService
 from app.workers.queue import JobCanceled, JobContext
 
@@ -588,6 +590,8 @@ def _first(payload: dict[str, Any], *keys: str) -> Any:
 # --- Dispatch --------------------------------------------------------------------------------
 
 HANDLERS: dict[JobType, JobHandler] = {
+    JobType.DOWNLOAD_SERIES: handle_download_series,
+    JobType.FIND_SOURCE: handle_find_source,
     JobType.LIBRARY_SCAN: handle_library_scan,
     JobType.LIBRARY_RENAME: handle_library_rename,
     JobType.METADATA_REFRESH: handle_metadata_refresh,

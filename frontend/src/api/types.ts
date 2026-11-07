@@ -16,6 +16,8 @@ export type JobType =
   | 'metadata_refresh'
   | 'image_cache'
   | 'thumbnail_sprite'
+  | 'find_source'
+  | 'download_series'
   | 'remote_import'
 
 export interface ApiError {

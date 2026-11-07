@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dramadex">
+  <title>Dramadex</title>
+  <!--
+    A single mask, not the pair. At 16px two overlapping masks turn to mush;
+    one bold silhouette with widely-spaced features still reads as a face.
+  -->
+  <rect width="64" height="64" rx="14" fill="#4f46e5"/>
+  <path fill="#eef0ff"
+        d="M32 11c13 0 21 7 21 19 0 18-10 34-21 34s-21-16-21-34c0-12 8-19 21-19z"/>
+  <ellipse cx="24" cy="32" rx="4.2" ry="5" fill="#2b2f5c"/>
+  <ellipse cx="40" cy="32" rx="4.2" ry="5" fill="#2b2f5c"/>
+  <path fill="none" stroke="#2b2f5c" stroke-width="4" stroke-linecap="round"
+        d="M22 46c6 6 14 6 20 0"/>
+</svg>

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Sign in</h1>
+<p class="muted" style="max-width:56ch">Paste the value of <code>DRAMADEX_API_KEY</code>. It is stored in an
+HttpOnly cookie for this browser so the console and its images can load — browsers
+send no custom headers when you navigate to a page.</p>
+{% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+<form method="post" action="/admin/login">
+  <input type="password" name="key" placeholder="API key" size="44" autofocus>
+  <button class="primary" type="submit">Sign in</button>
+</form>
+{% endblock %}

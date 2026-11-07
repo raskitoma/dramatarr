@@ -25,6 +25,7 @@ cached third-party data and one id column. Nothing an admin typed lives here.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0008_dramadex"

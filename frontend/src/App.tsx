@@ -33,6 +33,8 @@ import { SeriesPage } from '@/pages/SeriesPage'
 const PersonPage = lazy(async () => ({ default: (await import('@/pages/PersonPage')).PersonPage }))
 const WatchPage = lazy(async () => ({ default: (await import('@/pages/WatchPage')).WatchPage }))
 
+const AdminAcquirePage = lazy(async () => ({ default: (await import('@/pages/admin/AdminAcquirePage')).AdminAcquirePage }))
+
 const AdminDashboardPage = lazy(async () => ({
   default: (await import('@/pages/admin/AdminDashboardPage')).AdminDashboardPage,
 }))
@@ -215,6 +217,7 @@ function Routes() {
           <AdminDashboardPage />
         </AdminPage>
       </Route>
+      <Route path="/admin/acquire"><AdminPage><AdminAcquirePage /></AdminPage></Route>
       <Route path="/admin/queue">
         <AdminPage>
           <AdminQueuePage />

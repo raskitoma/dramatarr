@@ -77,7 +77,13 @@ def title_payload(**overrides: Any) -> dict[str, Any]:
             {"id": 8, "name": "Cameron Somers", "role": "actor", "billing_order": 1},
         ],
         "ratings": [
-            {"source": "reelshort", "value": 4.8, "votes": None, "scale": 10.0, "is_editorial": True},
+            {
+                "source": "reelshort",
+                "value": 4.8,
+                "votes": None,
+                "scale": 10.0,
+                "is_editorial": True,
+            },
             {"source": "imdb", "value": 7.3, "votes": 113, "scale": 10.0, "is_editorial": False},
         ],
         **overrides,
@@ -352,7 +358,8 @@ async def test_applying_does_not_destroy_a_synopsis_somebody_wrote(db: AsyncSess
 
     assert series.overview == "Una sinopsis que escribí yo."
     # The cast still lands: it is a cache of the indexer, not something anyone edits here.
-    rows = (await db.execute(select(SeriesCast).where(SeriesCast.series_id == series.id))).scalars().all()
+    result = await db.execute(select(SeriesCast).where(SeriesCast.series_id == series.id))
+    rows = result.scalars().all()
     assert len(rows) == 2
 
 
@@ -846,7 +853,8 @@ async def test_a_synopsis_somebody_wrote_is_offered_but_not_ticked(db: AsyncSess
     series.overview_source = OverviewSource.MANUAL
     await db.flush()
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     assert rows["overview"].changed is True
     assert rows["overview"].default_checked is False
@@ -857,7 +865,8 @@ async def test_a_declared_count_below_the_files_on_disk_is_refused(db: AsyncSess
     """The file count is the number that is a fact. Sixty-six files, a record claiming one."""
     series = await make_series(db, files=80)
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     row = rows["declared_episode_count"]
     assert row.default_checked is False
@@ -952,7 +961,9 @@ async def test_every_planned_field_is_a_field_the_writer_understands(db: AsyncSe
     assert series.genres == fresh.genres
 
 
-async def test_the_poster_row_stops_changing_once_it_is_the_indexers(db: AsyncSession, tmp_env) -> None:
+async def test_the_poster_row_stops_changing_once_it_is_the_indexers(
+    db: AsyncSession, tmp_env
+) -> None:
     """`metadataNothing` was unreachable, and that is a screen lying quietly.
 
     The poster row hardcoded `changed=True`, so a series refreshed a minute ago reopened
@@ -965,7 +976,8 @@ async def test_the_poster_row_stops_changing_once_it_is_the_indexers(db: AsyncSe
     series.poster_path = request_poster_url(f"{dramadex_poster_name(4242)}-abc123def456.webp")
     await db.flush()
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     assert rows["poster"].changed is False
     assert rows["poster"].default_checked is False
@@ -980,7 +992,8 @@ async def test_a_poster_from_somewhere_else_still_counts_as_a_change(
     series.poster_path = request_poster_url("something-else.webp")
     await db.flush()
 
-    rows = {row.field: row for row in await library_service.plan_dramadex_title(db, series, parsed())}
+    plan = await library_service.plan_dramadex_title(db, series, parsed())
+    rows = {row.field: row for row in plan}
 
     assert rows["poster"].changed is True
 
@@ -992,3 +1005,147 @@ async def test_aliases_are_reported_when_they_are_written(db: AsyncSession) -> N
     filled = await library_service.apply_dramadex_title(db, series, parsed())
 
     assert "titles" in filled
+
+
+# --- The brief shape against the detail shape -------------------------------------------
+#
+# `GET /titles` answers with the indexer's brief rows and `GET /titles/{id}` with its detail.
+# Measured against the live instance on 2026-11-06: nine keys against eighteen, and the nine
+# that only the detail carries are `aliases`, `cast`, `completed`, `delisted_at`, `editions`,
+# `first_paid_episode`, `ratings`, `synopsis` and `tags` — which is to say the genres, the cast
+# and the synopsis that a picker exists to show.
+#
+# Both shapes are parsed by the same `_title()`, and `_title()` fills what is absent with empty
+# defaults. So a search row does not report that it does not know: it reports nothing there.
+
+
+def brief_payload(**overrides: Any) -> dict[str, Any]:
+    """A `/titles` row as the indexer really sends one: nine keys, no detail fields."""
+    return {
+        "id": 4242,
+        "primary_title": "You Fired A Genius Surgeon",
+        "year": 2025,
+        "episode_count": 51,
+        "audience_rating": "All Ages",
+        "poster_url": "/titles/4242/poster",
+        "merged_into": None,
+        "updated_at": "2026-08-25T00:00:00",
+        "studios": [
+            {
+                "key": "reelshort",
+                "name": "ReelShort",
+                "external_id": "687",
+                "watch_url": "https://www.reelshort.com/movie/687",
+                "delisted_at": None,
+            }
+        ],
+        **overrides,
+    }
+
+
+async def test_a_search_row_on_its_own_has_no_genres_cast_or_synopsis(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    """Stated as a fact about the payload, so the next person does not look for our bug."""
+    serve(lambda r: httpx.Response(200, json={"items": [brief_payload()], "next_cursor": None}))
+    page = await client().search("surgeon")
+    (row,) = page.items
+    assert row.genres() == ()
+    assert not row.cast
+    assert not row.synopsis
+
+
+async def test_search_results_are_refetched_in_detail(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/titles"):
+            return httpx.Response(200, json={"items": [brief_payload()], "next_cursor": None})
+        return httpx.Response(200, json=title_payload())
+
+    seen = serve(handler)
+    api = client()
+    page = await api.detailed(await api.search("surgeon"))
+    (row,) = page.items
+    assert row.synopsis, "the synopsis only exists on the detail endpoint"
+    assert row.cast, "neither does the cast"
+    assert row.genres(), "and genres come from `tags`, which the brief row omits"
+    assert [r.url.path for r in seen].count("/titles/4242") == 1, "one detail call per row"
+
+
+async def test_a_row_whose_detail_call_fails_keeps_its_brief_self(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    """Thinner is still a result. Losing the hit because a follow-up timed out is not."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/titles"):
+            return httpx.Response(200, json={"items": [brief_payload()], "next_cursor": None})
+        return httpx.Response(503)
+
+    serve(handler)
+    api = client()
+    page = await api.detailed(await api.search("surgeon"))
+    (row,) = page.items
+    assert row.id == 4242
+    assert row.primary_title == "You Fired A Genius Surgeon"
+
+
+async def test_the_next_cursor_survives_being_refetched(
+    serve: Callable[..., list[httpx.Request]],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/titles"):
+            return httpx.Response(200, json={"items": [brief_payload()], "next_cursor": "abc"})
+        return httpx.Response(200, json=title_payload())
+
+    serve(handler)
+    api = client()
+    page = await api.detailed(await api.search("surgeon"))
+    assert page.next_cursor == "abc"
+
+
+# --- Delisted links ---------------------------------------------------------------------
+#
+# Every `studios[]` entry carries its own `delisted_at`, and `studios` is one of the nine keys
+# the brief row does have — so this signal is available on every route, search included. The
+# title-level `delisted_at` is detail-only, which is what made it look unavailable.
+
+
+def test_a_delisted_link_is_not_somewhere_to_watch() -> None:
+    live = dramadex._studio(
+        {"key": "reelshort", "watch_url": "https://x/1", "delisted_at": None}
+    )
+    gone = dramadex._studio(
+        {"key": "reelshort", "watch_url": "https://x/1", "delisted_at": "2026-01-01T00:00:00"}
+    )
+    assert live is not None and gone is not None
+    assert live.is_watchable
+    assert not gone.is_watchable, "the page is gone; offering it is worse than offering nothing"
+
+
+def test_a_delisted_platform_does_not_become_the_network() -> None:
+    """`studio_name` takes the first watchable link, and `first_seen` order puts the oldest
+    first — which is also the one most likely to have been taken down."""
+    parsed = dramadex._title(
+        title_payload(
+            studios=[
+                {
+                    "key": "reelshort",
+                    "name": "ReelShort",
+                    "external_id": "1",
+                    "watch_url": "https://x/1",
+                    "delisted_at": "2026-01-01T00:00:00",
+                },
+                {
+                    "key": "dramabox",
+                    "name": "DramaBox",
+                    "external_id": "2",
+                    "watch_url": "https://y/2",
+                    "delisted_at": None,
+                },
+            ]
+        )
+    )
+    assert parsed is not None
+    assert parsed.studio_name == "DramaBox"

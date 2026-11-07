@@ -35,10 +35,9 @@ import re
 import shutil
 import socket
 import stat as stat_module
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Protocol
-from urllib.parse import quote, unquote, urljoin, urlsplit
+from typing import Literal, Protocol
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 from sqlalchemy import select
@@ -47,7 +46,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.errors import AppError, NotFound
 from app.models import Episode, Series
-from app.services.settings import SettingsService
 from app.utils.ids import new_id
 
 #: TMDB's image CDN. TMDB itself is gone from this application, but `poster_path` rows
@@ -238,7 +236,11 @@ def poster_is_loadable(value: str | None) -> bool:
         name = unquote(value.rsplit("/", 1)[-1])
         try:
             candidate = safe_child_path(get_settings().images_dir, REQUEST_POSTER_KIND, name)
-        except Exception:  # noqa: BLE001 - a refused name is "no usable poster", not an error
+        # A refused name is "no usable poster", not an error. (This reason used to ride on a
+        # BLE001 suppression comment; BLE001 is not an enabled rule, so Ruff removed the
+        # directive and took the explanation with it. Spelled out here instead, and without
+        # the literal directive token, which a newer Ruff reads even inside prose.)
+        except Exception:
             return False
         try:
             return candidate.is_file() and candidate.stat().st_size > 0
@@ -1128,7 +1130,9 @@ __all__ = [
     "MAX_AVATAR_BYTES",
     "MAX_IMAGE_BYTES",
     "MAX_REDIRECTS",
+    "MAX_REQUEST_POSTER_BYTES",
     "POSTER_SIZE",
+    "REQUEST_POSTER_KIND",
     "STILL_SIZE",
     "ArtworkKind",
     "ImageFormat",
@@ -1138,26 +1142,24 @@ __all__ = [
     "avatar_file",
     "avatar_url",
     "cache_episode_still",
+    "cache_request_poster",
     "cache_series_images",
+    "cached_file",
     "close_guarded_client",
     "close_image_client",
     "delete_avatar",
+    "dramadex_poster_name",
     "fetch_remote_image",
     "is_cached_path",
+    "is_dramadex_poster",
+    "is_request_poster",
+    "poster_is_loadable",
     "purge_series_images",
     "read_capped",
     "reencode",
+    "request_poster_url",
     "sniff_image_format",
     "store_avatar",
-    "MAX_REQUEST_POSTER_BYTES",
-    "REQUEST_POSTER_KIND",
-    "cache_request_poster",
-    "cached_file",
-    "dramadex_poster_name",
-    "is_dramadex_poster",
-    "poster_is_loadable",
-    "is_request_poster",
-    "request_poster_url",
     "store_series_artwork",
 ]
 

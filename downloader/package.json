@@ -1,0 +1,28 @@
+{
+  "name": "dramadown",
+  "version": "1.1.0",
+  "description": "Automated Drama Video URI Batch Extractor with Cloudflare Bypass and Next-Episode Iterator",
+  "main": "cli.js",
+  "scripts": {
+    "start": "node cli.js",
+    "extract": "node cli.js",
+    "web": "node server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "drama",
+    "goodshort",
+    "video-extractor",
+    "m3u8",
+    "hls",
+    "batch-downloader"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "puppeteer-real-browser": "^1.4.1"
+  }
+}

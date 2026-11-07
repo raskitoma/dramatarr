@@ -1,0 +1,21 @@
+{
+  "url": "https://www.dramabox.com/_next/data/dramabox_prod_20260720/drama/42000013483/Revenge-Puck.json",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "date": "Sun, 16 Aug 2026 20:57:27 GMT",
+    "vary": "Accept-Encoding",
+    "content-encoding": "gzip",
+    "server": "openresty",
+    "x-nextjs-matched-path": "/en/drama/[bookId]/[bookNameEn]",
+    "x-nextjs-cache": "STALE",
+    "cache-control": "s-maxage=900, stale-while-revalidate=31535100",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 903a85d64aaae705535a5b297b3346a8.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P1",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "HrUMOMPmiNG25XW7_h4tq7gYwFP5mVc9s2tO7bw-Z4Pwt21fKfNtnw=="
+  }
+}

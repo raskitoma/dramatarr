@@ -36,14 +36,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e "./backend[dev]"
 
-      - name: Ruff Lint
-        run: |
-          ruff check backend
-
-      - name: Mypy Typecheck
-        run: |
-          mypy backend/app
-
+      # The tests run before the linters, deliberately. With Ruff and Mypy ahead of them the
+      # suite never ran in CI at all: both have been failing since the day this workflow landed,
+      # so every push reported red without once saying whether the code works. A line-length
+      # warning must not be able to hide a broken test.
       - name: Run Pytest
         run: |
           pytest backend/tests
@@ -53,6 +49,18 @@ jobs:
           python3 scripts/check_error_codes.py
           python3 scripts/check_i18n_keys.py
           python3 scripts/check_neutral_spanish.py
+
+      - name: Ruff Lint
+        run: |
+          ruff check backend
+
+      # From `backend/`, not the repo root: mypy looks for its configuration in the working
+      # directory, and there is no pyproject.toml at the root, so `mypy backend/app` silently
+      # ran with none of the settings in backend/pyproject.toml.
+      - name: Mypy Typecheck
+        working-directory: backend
+        run: |
+          mypy app
 
   frontend:
     name: Frontend Tests & Build
@@ -111,3 +119,52 @@ jobs:
           context: ./frontend
           push: false
           tags: dramatarr-web:test
+
+      - name: Build Catalogue Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./catalogue
+          push: false
+          tags: dramatarr-catalogue:test
+
+      - name: Build Download Engine Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./downloader
+          push: false
+          tags: dramatarr-downloader:test
+
+  catalogue:
+    name: Catalogue Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install catalogue test environment
+        run: pip install -e './catalogue[dev]'
+      - name: Test catalogue independently of household app package
+        working-directory: catalogue
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q
+
+  downloader:
+    name: Download Engine Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: downloader/package-lock.json
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install download engine
+        working-directory: downloader
+        run: npm ci
+      - name: Run offline tests, including internal acquisition protocol
+        working-directory: downloader
+        run: npm test

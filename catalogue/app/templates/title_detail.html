@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>{{ title.primary_title }}</h1>
+
+<dl class="kv">
+  <dt>Year</dt><dd>{{ title.year or '—' }}</dd>
+  <dt>Episodes</dt><dd>{{ episode_count }}{% if title.first_paid_episode %} <span class="muted">(paid from {{ title.first_paid_episode }})</span>{% endif %}</dd>
+  <dt>Audience</dt><dd>{{ title.audience_rating or '—' }}</dd>
+  <dt>Aliases</dt><dd>{{ aliases|join(', ') if aliases else '—' }}</dd>
+  <dt>Updated</dt><dd class="muted">{{ title.updated_at }}</dd>
+</dl>
+
+{% if title.synopsis %}<h2>Synopsis</h2><p style="max-width:60ch">{{ title.synopsis }}</p>{% endif %}
+
+<h2>Where to watch</h2>
+<div class="wrap"><table>
+  <tr><th>Studio</th><th>External id</th><th>Watch URL</th><th>Last seen</th></tr>
+  {% for s in sources %}
+  <tr>
+    <td><strong>{{ s.key }}</strong></td>
+    <td><code>{{ s.external_id }}</code></td>
+    <td>{% if s.watch_url %}<a href="{{ s.watch_url }}" target="_blank" rel="noopener">{{ s.watch_url }}</a>{% else %}—{% endif %}</td>
+    <td class="muted">{{ s.last_seen }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+{% if cast %}
+<h2>Cast</h2>
+<div class="wrap"><table>
+  <tr><th>Name</th><th>Role</th></tr>
+  {% for name, role in cast %}<tr><td>{{ name }}</td><td class="muted">{{ role }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+
+{% if ratings %}
+<h2>Ratings</h2>
+<div class="wrap"><table>
+  <tr><th>Source</th><th>Value</th><th></th></tr>
+  {% for key, value, editorial in ratings %}
+  <tr><td>{{ key }}</td><td>{{ value }}</td>
+      <td>{% if editorial %}<span class="pill warn">editorial — promotional, not a real score</span>{% else %}<span class="pill ok">genuine</span>{% endif %}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+{% if tags %}
+<h2>Tags</h2>
+<p>{% for ns, v in tags %}<span class="pill" style="margin:.15rem"><span class="muted">{{ ns }}</span> {{ v }}</span> {% endfor %}</p>
+{% endif %}
+
+<h2>Per-source record</h2>
+{% for s in sources %}
+<h3 style="font-size:.9rem">{{ s.key }}</h3>
+<div class="wrap"><table>
+  {% for k, v in s.parsed.items() %}<tr><td class="muted">{{ k }}</td><td class="wrapcell">{{ v }}</td></tr>{% endfor %}
+</table></div>
+{% endfor %}
+{% endblock %}

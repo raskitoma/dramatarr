@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+downloads
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.dockerignore
+.DS_Store
+uris.txt
+*.log

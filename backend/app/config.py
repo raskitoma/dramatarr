@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:////data/dramatarr.db"
     library_root: Path = Path("/library")
     data_dir: Path = Path("/data")
+    # Same staging filesystem is mounted at this path in API and download engine.
+    download_staging_root: Path = Path("/incoming")
+    downloader_url: str = "http://downloader:3000"
+    downloader_key: str = ""
+    catalogue_url: str = ""
+    catalogue_key: str = ""
 
     # --- Public identity ------------------------------------------------------------------
     public_url: str = "http://localhost:8080"
@@ -105,7 +111,13 @@ class Settings(BaseSettings):
 
     def ensure_dirs(self) -> None:
         """Create the writable directories. `library_root` is never created — it is a mount."""
-        for path in (self.data_dir, self.images_dir, self.thumbs_dir, self.subs_dir, self.staging_dir):
+        for path in (
+            self.data_dir,
+            self.images_dir,
+            self.thumbs_dir,
+            self.subs_dir,
+            self.staging_dir,
+        ):
             path.mkdir(parents=True, exist_ok=True)
 
     def resolve_secret_key(self) -> str:
