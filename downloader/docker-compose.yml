@@ -1,0 +1,46 @@
+name: dramadown
+
+services:
+  dramadown:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dramadown:latest
+    container_name: dramadown
+    restart: unless-stopped
+    # Chrome spawns a tree of helper processes; an init process reaps them.
+    init: true
+    ports:
+      # Change the left-hand side to publish on a different host port.
+      - "${DRAMADOWN_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - DOWNLOAD_DIR=/app/downloads
+      - CHROME_USER_DATA_DIR=/app/.chrome-profile
+      # Raise if Cloudflare is being slow on a cold profile.
+      - CHALLENGE_TIMEOUT_MS=${DRAMADOWN_CHALLENGE_TIMEOUT_MS:-90000}
+      # Container clock, so log timestamps match the homelab's local time.
+      - TZ=${TZ:-America/Santo_Domingo}
+    # Run as your media user so new files are not root-owned.
+    # The bind mount below must be writable by this uid/gid.
+    user: "${PUID:-0}:${PGID:-0}"
+    volumes:
+      # Where the drama folders are written. Downloads are additive: existing
+      # files are skipped, never overwritten or removed.
+      - ${DRAMADOWN_DOWNLOADS:-./downloads}:/app/downloads:rw
+      # Persists the Chrome profile (and its cf_clearance cookie) between
+      # restarts, so most extractions skip the Cloudflare challenge entirely.
+      - dramadown-profile:/app/.chrome-profile
+    # Shared memory for Chromium; too little makes tabs crash mid-extraction.
+    shm_size: '2gb'
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  dramadown-profile:

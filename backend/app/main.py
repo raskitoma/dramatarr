@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import select
 
-from app.api import admin, auth, library, me, requests, stream, watch
+from app.api import admin, auth, integration, library, me, requests, stream, watch
 from app.api.deps import SessionDep
 from app.config import get_settings
 from app.errors import install_error_handlers
@@ -36,6 +36,7 @@ ROUTERS: tuple[tuple[APIRouter, str, str], ...] = (
     (stream.router, "/stream", "stream"),
     (watch.router, "/watch", "watch"),
     (admin.router, "/admin", "admin"),
+    (integration.router, "/admin/integration", "integration"),
 )
 
 

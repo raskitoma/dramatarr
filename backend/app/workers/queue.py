@@ -326,7 +326,10 @@ class JobContext:
                 # advisory — dropping one tick is the whole point.
                 return
 
-        await publish(JOB_PROGRESS, job_event_payload(self.job, self.series_title))
+        event = job_event_payload(self.job, self.series_title)
+        if self._worker is not None:
+            self._worker._current_payload = event
+        await publish(JOB_PROGRESS, event)
 
     async def log(self, level: str, message: str) -> None:
         self._control.add(JobLog(job_id=self._job_id, level=str(level), message=message))

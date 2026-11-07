@@ -39,16 +39,16 @@ jobs:
           MODELS_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^backend/app/models/' || true)
           MIGRATIONS_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^backend/alembic/versions/' || true)
           if [ -n "$MODELS_CHANGED" ] && [ -z "$MIGRATIONS_CHANGED" ]; then
-            WARNINGS+=("⚠️ Database models in `backend/app/models/` were modified, but no new Alembic migration was found in `backend/alembic/versions/`.")
+            WARNINGS+=('⚠️ Database models in `backend/app/models/` were modified, but no new Alembic migration was found in `backend/alembic/versions/`.')
           fi
 
           # 2. Check i18n parity if translations were changed
           ES_CHANGED=$(echo "$CHANGED_FILES" | grep -E 'frontend/src/i18n/es\.json' || true)
           EN_CHANGED=$(echo "$CHANGED_FILES" | grep -E 'frontend/src/i18n/en\.json' || true)
           if [ -n "$ES_CHANGED" ] && [ -z "$EN_CHANGED" ]; then
-            WARNINGS+=("⚠️ `frontend/src/i18n/es.json` was modified without corresponding changes in `frontend/src/i18n/en.json`.")
+            WARNINGS+=('⚠️ `frontend/src/i18n/es.json` was modified without corresponding changes in `frontend/src/i18n/en.json`.')
           elif [ -z "$ES_CHANGED" ] && [ -n "$EN_CHANGED" ]; then
-            WARNINGS+=("⚠️ `frontend/src/i18n/en.json` was modified without corresponding changes in `frontend/src/i18n/es.json`.")
+            WARNINGS+=('⚠️ `frontend/src/i18n/en.json` was modified without corresponding changes in `frontend/src/i18n/es.json`.')
           fi
 
           # 3. Check for committed sensitive files

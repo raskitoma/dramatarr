@@ -26,6 +26,7 @@ interface AdminNavItem {
 
 const ITEMS: readonly AdminNavItem[] = [
   { href: '/admin', labelKey: 'admin.dashboard', exact: true },
+  { href: '/admin/acquire', labelKey: 'acquisition.title' },
   { href: '/admin/queue', labelKey: 'nav.queue' },
   { href: '/admin/library', labelKey: 'nav.library' },
   { href: '/admin/import', labelKey: 'nav.import' },

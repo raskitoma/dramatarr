@@ -1,0 +1,23 @@
+{
+  "url": "https://www.reelshort.com/fandom/reelshort-actors-actresses/",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=UTF-8",
+    "content-length": "54164",
+    "connection": "keep-alive",
+    "date": "Mon, 17 Aug 2026 03:11:54 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-powered-by": "PHP/8.2.22",
+    "link": "<https://www.reelshort.com/fandom/wp-json/>; rel=\"https://api.w.org/\", <https://www.reelshort.com/fandom/wp-json/wp/v2/pages/8353>; rel=\"alternate\"; title=\"JSON\"; type=\"application/json\", <https://www.reelshort.com/fandom/?p=8353>; rel=shortlink",
+    "vary": "Accept-Encoding",
+    "content-encoding": "gzip",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "*",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 ae1982f00065c7b6ad0185a5e1c1cd84.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P2",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "CqPMB5K7iRB9EReY65z9Ru4I3c1_mXCIXZO6xuQCHUbjLRViEEBmDA=="
+  }
+}

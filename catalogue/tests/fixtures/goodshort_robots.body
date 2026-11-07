@@ -1,0 +1,13 @@
+User-Agent: *
+Allow: /
+Disallow: /subscription
+Disallow: /results
+Disallow: /pay
+
+User-Agent: Googlebot
+Disallow: /down
+Disallow: /amp/
+Disallow: /tags/wszystkie
+Disallow: /tags/tümü
+Disallow: /tag/*-miniseriale-wideo
+Disallow: /tag/*-minidiziler-videolar

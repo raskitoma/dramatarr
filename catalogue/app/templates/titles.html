@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Titles</h1>
+
+<form method="get" action="/admin/titles" style="margin-bottom:1rem">
+  <input type="text" name="q" value="{{ q }}" placeholder="search titles, cast, synopsis" size="36">
+  <button class="primary" type="submit">Search</button>
+  {% if q %}<a href="/admin/titles" class="muted" style="margin-left:.5rem">clear</a>{% endif %}
+</form>
+
+<div class="wrap">
+<table>
+  <tr><th></th><th>Title</th><th>Year</th><th>Eps</th><th>Audience</th><th>Watch on</th></tr>
+  {% for t in titles %}
+  <tr>
+    <td><img src="/titles/{{ t.id }}/poster" alt="" loading="lazy"
+             style="width:44px;height:66px;object-fit:cover;border-radius:4px;background:var(--line)"
+             onerror="this.style.visibility='hidden'"></td>
+    <td class="wrapcell"><a href="/admin/titles/{{ t.id }}">{{ t.primary_title }}</a>
+        {% if t.delisted_at %}<span class="pill err">delisted</span>{% endif %}</td>
+    <td>{{ t.year or '—' }}</td>
+    <td>{{ t.episode_count or '—' }}</td>
+    <td class="muted">{{ t.audience_rating or '—' }}</td>
+    <td>
+      {% for l in links.get(t.id, []) %}
+        {% if l.watch_url %}<a href="{{ l.watch_url }}" target="_blank" rel="noopener">{{ l.key }}</a>{% else %}{{ l.key }}{% endif %}
+      {% endfor %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">No titles{% if q %} matching “{{ q }}”{% endif %}.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

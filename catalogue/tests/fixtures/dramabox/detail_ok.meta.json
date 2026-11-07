@@ -1,0 +1,21 @@
+{
+  "url": "https://www.dramabox.com/_next/data/dramabox_prod_20260720/drama/42000024152/Goodbye-My-Ungrateful-Family.json",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "date": "Sun, 16 Aug 2026 20:51:56 GMT",
+    "vary": "Accept-Encoding",
+    "content-encoding": "gzip",
+    "server": "openresty",
+    "x-nextjs-matched-path": "/en/drama/[bookId]/[bookNameEn]",
+    "x-nextjs-cache": "STALE",
+    "cache-control": "s-maxage=900, stale-while-revalidate=31535100",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 266a90e97e11da9abf4a8ed10543ed6c.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P1",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "oTJkzH7K59_PrrEF1BJ-PUvia3x-mafr0ADFjvtvR2d5sK7U1LjFYg=="
+  }
+}

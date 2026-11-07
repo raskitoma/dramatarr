@@ -1,0 +1,24 @@
+{
+  "url": "https://www.reelshort.com/fandom/reelshort-actor-aaron-oberst-01-6/",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=UTF-8",
+    "content-length": "22922",
+    "connection": "keep-alive",
+    "date": "Mon, 17 Aug 2026 03:11:56 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-powered-by": "PHP/8.2.22",
+    "x-pingback": "https://www.reelshort.com/fandom/xmlrpc.php",
+    "link": "<https://www.reelshort.com/fandom/wp-json/>; rel=\"https://api.w.org/\", <https://www.reelshort.com/fandom/wp-json/wp/v2/posts/10856>; rel=\"alternate\"; title=\"JSON\"; type=\"application/json\", <https://www.reelshort.com/fandom/?p=10856>; rel=shortlink",
+    "vary": "Accept-Encoding",
+    "content-encoding": "gzip",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "*",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 ae1982f00065c7b6ad0185a5e1c1cd84.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P2",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "a5jLhDM5Ctz3XOTDUx9aD3NwxmG0KJ7jZM-alQ5NE2_at3Koo2P6-w=="
+  }
+}

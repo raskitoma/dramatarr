@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets and local state. The API key lives only in .env, never in the repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!app/**/*.key
+secrets/
+credentials.json
+
+# Runtime data: database, response archive, images, backups, IMDb datasets.
+data/
+
+# Fixture bodies ARE committed on purpose: they are the parser corpus and the
+# regression net for source shape changes.

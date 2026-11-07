@@ -16,7 +16,7 @@ build/
 dist/
 
 # Node
-node_modules/
+node_modules
 frontend/dist/
 .vite/
 
@@ -42,3 +42,10 @@ coverage/
 # Claude / Editor local worktrees
 .claude/worktrees/
 
+
+# Private deployment state and migration evidence
+runtime/
+*.dump
+*.backup
+.env.*
+!.env.example

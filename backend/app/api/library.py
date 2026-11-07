@@ -760,7 +760,9 @@ async def dramadex_search(
     if client is None:
         return DramadexHits(configured=False, query=q)
 
-    page = await client.search(q, limit=limit)
+    # Refetched in detail: the search payload has no genres, cast or synopsis, and those are
+    # the three things this dialog is for. See `DramadexClient.detailed`.
+    page = await client.detailed(await client.search(q, limit=limit))
     known = await _known_dramadex_slugs(session, [t.id for t in page.items], sees_restricted=True)
     return DramadexHits(
         configured=True,

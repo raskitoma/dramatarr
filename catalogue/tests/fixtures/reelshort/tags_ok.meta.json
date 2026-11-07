@@ -1,0 +1,21 @@
+{
+  "url": "https://www.reelshort.com/tags/mc-types/1",
+  "status": 200,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "date": "Sun, 16 Aug 2026 20:51:53 GMT",
+    "content-encoding": "gzip",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "cache-control": "public, s-maxage=7200, stale-while-revalidate=36000",
+    "x-powered-by": "Next.js",
+    "etag": "\"eyxpnpqhj92sig\"",
+    "vary": "Accept-Encoding, Origin",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 6d90b034e8427072f3cb7201739b20b2.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P2",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "XVnlAEZeFAFMAhLaRHKo4TFBtkwm-9aiMVbOfnxbriecBcKihYkoKg=="
+  }
+}

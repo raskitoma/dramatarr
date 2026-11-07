@@ -1,0 +1,5 @@
+.page { display: grid; gap: 1rem; max-width: 70rem; }
+.form { display: grid; gap: .8rem; padding: 1.2rem; border: 1px solid var(--border, #555); border-radius: .75rem; }
+.results { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+.card { padding: 1rem; border: 1px solid var(--border, #555); border-radius: .75rem; }
+.card p { max-height: 9rem; overflow: auto; }

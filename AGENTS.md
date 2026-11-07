@@ -1,3 +1,36 @@
+# Unified Dramatarr — current integration instructions
+
+This repository combines the three source histories. The owner explicitly authorized this
+consolidation on 2026-11-06, superseding the previous decision to keep downloads as a bookmark.
+Approving a request now automatically searches its provider namespace on Dramafren. Review is
+enabled by default; admins may choose automatic acquisition for an exact provider-id match.
+Keep provider ids and language variants intact; never select a translated title by similarity.
+
+- `backend/`, `frontend/`: household library, authentication, playback, persistent job queue.
+- `catalogue/`: original Dramadex engine and schema; read `catalogue/AGENTS.md` before edits.
+- `downloader/`: original Node/Chrome engine; read `downloader/AGENTS.md` before edits.
+- Run Python tests with `PYTHONPATH="$PWD/backend"` (or from `backend/` with `PYTHONPATH=.`).
+  An editable installation from a source repository otherwise imports the OLD implementation.
+- Run catalogue tests in a separate process, from `catalogue/`, with `PYTHONPATH=.`. Both
+  Python services use the package name `app`; they must never share an interpreter.
+- Keep the household SQLite database and catalogue Postgres database separate. Preserve every
+  existing id, media path, provenance field, metadata/artwork lock, signing secret, and origin.
+- Host paths are deployment state, never hardcoded. Long-form Compose bind mounts refuse to
+  create missing source directories. Staging and library are distinct mounts; publishing uses
+  a completed temporary copy on the destination filesystem and never replaces an existing file.
+- Only one household API and queue worker. The download engine is a private execution service,
+  not another consumer of the SQLite queue. The original downloader must stop before its Chrome
+  profile is reused; the original catalogue must stop before its scheduler is replaced.
+- Use `scripts/prepare-unification.py` to recover private runtime settings and mount identities.
+  Never commit its output, database snapshots, deployment inventory, or the external handoff.
+- `scripts/snapshot-unification.py` uses online SQLite backup and pg_dump. Verify restores using
+  `scripts/verify-snapshots.py` before any cutover. Never copy a live SQLite DB with plain cp.
+
+The following are the original household instructions. Some defect notes have since been
+fixed in code; verify current implementation rather than applying those notes blindly.
+
+---
+
 # Notes for an incoming agent
 
 Read this before `README.md` and `docs/ARCHITECTURE.md`. Both are stale in ways that matter.

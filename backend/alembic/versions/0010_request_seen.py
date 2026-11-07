@@ -22,6 +22,7 @@ is correct, not a false alarm.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0010_request_seen"

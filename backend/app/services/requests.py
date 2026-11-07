@@ -293,7 +293,9 @@ def _candidate_from(
         source_url=watch.watch_url if watch else None,
         provider=watch.name if watch else "DramaDex",
         # A real synopsis, not a search-engine extract — so unlike the web path, this one is
-        # safe to store on the request.
+        # safe to store on the request. Real only because the page was refetched in detail
+        # first: the search payload carries no `synopsis` key whatsoever, and this line spent
+        # its whole life storing "" under this comment.
         snippet=(found.synopsis or "")[:400],
         matched_person=person,
         matched_by_cast=by_cast or bool(person),
@@ -311,7 +313,9 @@ async def _dramadex_page(
     their spelling for a title the household already owns.
     """
     try:
-        page = await client.search(limit=limit, **params)
+        # In detail, or the snippet below is always the empty string: `GET /titles` sends no
+        # synopsis at all. See `DramadexClient.detailed`.
+        page = await client.detailed(await client.search(limit=limit, **params))
     except AppError as exc:
         log.info("dramadex wishlist search failed (%s)", exc.code)
         return None
@@ -888,6 +892,9 @@ async def update(
     # into fulfilled sends mail: an admin editing the note on a request that was already
     # delivered must not post the announcement again.
     became_ready = patch.status == RequestStatus.FULFILLED and row.status != RequestStatus.FULFILLED
+    became_approved = (
+        patch.status == RequestStatus.APPROVED and row.status != RequestStatus.APPROVED
+    )
 
     if patch.status is not None and patch.status != row.status:
         row.status = patch.status
@@ -898,6 +905,28 @@ async def update(
             row.resolved_at = None
             row.resolved_by_user_id = None
 
+    if became_approved:
+        from app.services.request_acquisition import queue_search
+
+        await queue_search(
+            session,
+            row,
+            created_by=admin.id,
+            languages=patch.languages,
+            review=patch.review_before_download,
+        )
+    if patch.status == RequestStatus.DECLINED:
+        from app.services.request_acquisition import latest_job
+        from app.workers.queue import request_cancel
+
+        job = await latest_job(session, row.id)
+        if job is not None and job.status in {"queued", "running"}:
+            job.cancel_requested = True
+            if job.status == "queued":
+                job.status = "canceled"
+                job.finished_at = utcnow()
+            else:
+                request_cancel(job.id)
     await session.commit()
     await session.refresh(row)
 

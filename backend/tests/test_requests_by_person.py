@@ -22,6 +22,14 @@ pytestmark = pytest.mark.anyio
 
 
 def row(title_id: int, name: str) -> dict[str, Any]:
+    """A `/titles` row for these tests, and deliberately *not* the shape the indexer sends.
+
+    It carries a `synopsis`, which a real list row never does — see `brief_payload` in
+    test_dramadex.py for the faithful nine keys. That generosity is exactly why nothing here
+    ever noticed the wishlist storing an empty snippet, for its whole life, under a comment
+    promising a real one. Left as it is because these tests are about which person a typed
+    name resolves to; a new test that cares about synopses should not copy this.
+    """
     return {
         "id": title_id,
         "primary_title": name,
@@ -206,7 +214,8 @@ async def test_cast_matches_are_not_pushed_off_a_full_page(
         if is_people(request):
             return people("Adam Daniel")
         if "person" in params_of(request):
-            return httpx.Response(200, json={"items": [row(900 + n, f"Cast {n}") for n in range(6)]})
+            items = [row(900 + n, f"Cast {n}") for n in range(6)]
+            return httpx.Response(200, json={"items": items})
         return httpx.Response(200, json={"items": [row(n, f"Title {n}") for n in range(12)]})
 
     serve(handler)

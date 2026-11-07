@@ -10,6 +10,8 @@ services:
   api:
     build:
       context: ./backend
+      args:
+        DRAMATARR_REVISION: ${DRAMATARR_REVISION:-unknown}
     restart: unless-stopped
     environment:
       DRAMATARR_SECRET_KEY: ${DRAMATARR_SECRET_KEY:?set DRAMATARR_SECRET_KEY in .env}
@@ -17,6 +19,11 @@ services:
       DRAMATARR_DATABASE_URL: sqlite+aiosqlite:////data/dramatarr.db
       DRAMATARR_LIBRARY_ROOT: /library
       DRAMATARR_DATA_DIR: /data
+      DRAMATARR_CATALOGUE_URL: http://catalogue:8080
+      DRAMATARR_CATALOGUE_KEY: ${DRAMADEX_API_KEY:?preserve the existing catalogue API key}
+      DRAMATARR_DOWNLOADER_URL: http://downloader:3000
+      DRAMATARR_DOWNLOADER_KEY: ${DRAMATARR_WORKER_KEY:?set a private internal worker key}
+      DRAMATARR_DOWNLOAD_STAGING_ROOT: /incoming
       DRAMATARR_PUBLIC_URL: ${DRAMATARR_PUBLIC_URL:-http://localhost:8080}
       DRAMATARR_WEBAUTHN_RP_ID: ${DRAMATARR_WEBAUTHN_RP_ID:-localhost}
       DRAMATARR_WEBAUTHN_RP_NAME: ${DRAMATARR_WEBAUTHN_RP_NAME:-dramatarr}
@@ -45,11 +52,24 @@ services:
       # If you would rather keep the guarantee than have the feature, put `:ro` back. The
       # rename job is the only thing that stops working, and it fails with a clear error
       # rather than corrupting anything.
-      - ${DRAMATARR_LIBRARY_PATH:?set DRAMATARR_LIBRARY_PATH to your NAS mount}:/library
+      - type: bind
+        source: ${DRAMATARR_LIBRARY_PATH:?preserve the existing library mount}
+        target: /library
+        bind:
+          create_host_path: false
       # Database, cached images, generated thumbnails and extracted subtitles.
       # A host path rather than a named volume: on a NAS this has to sit on the pool you
       # actually back up, and be findable without going through `docker volume inspect`.
-      - ${DRAMATARR_DATA_PATH:?set DRAMATARR_DATA_PATH to a writable host directory}:/data
+      - type: bind
+        source: ${DRAMATARR_DATA_PATH:?preserve the existing household data mount}
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DRAMATARR_INCOMING_PATH:?set a separate staging directory}
+        target: /incoming
+        bind:
+          create_host_path: false
     expose:
       - "8000"
     healthcheck:
@@ -62,6 +82,8 @@ services:
   web:
     build:
       context: ./frontend
+      args:
+        DRAMATARR_REVISION: ${DRAMATARR_REVISION:-unknown}
     restart: unless-stopped
     environment:
       # Same reason as on `api`: nginx's access and error logs, nothing else.
@@ -71,3 +93,65 @@ services:
         condition: service_healthy
     ports:
       - "${DRAMATARR_PORT:-8080}:80"
+
+  catalogue:
+    build:
+      context: ./catalogue
+      args:
+        DRAMATARR_REVISION: ${DRAMATARR_REVISION:-unknown}
+    restart: unless-stopped
+    # Preserve ALL resolved source/scheduler settings, not just the database URL.
+    env_file: ./runtime/catalogue.env
+    environment:
+      DRAMADEX_DATA_DIR: /data
+      DRAMADEX_DB_URL: ${DRAMADEX_DB_URL:?preserve the production Postgres URL}
+      DRAMADEX_API_KEY: ${DRAMADEX_API_KEY:?preserve the catalogue key}
+    volumes:
+      - type: bind
+        source: ${DRAMATARR_CATALOGUE_DATA_PATH:?preserve catalogue data and archives}
+        target: /data
+        bind:
+          create_host_path: false
+    networks:
+      - default
+      - catalogue_database
+    expose:
+      - "8080"
+
+  downloader:
+    build:
+      context: ./downloader
+      args:
+        DRAMATARR_REVISION: ${DRAMATARR_REVISION:-unknown}
+    restart: unless-stopped
+    init: true
+    user: "${DRAMATARR_UID:-1000}:${DRAMATARR_GID:-1000}"
+    env_file: ./runtime/downloader.env
+    environment:
+      PORT: "3000"
+      HOST: 0.0.0.0
+      DOWNLOAD_DIR: /incoming
+      DRAMATARR_WORKER_KEY: ${DRAMATARR_WORKER_KEY:?set the internal worker key}
+      CHROME_USER_DATA_DIR: /app/.chrome-profile
+    volumes:
+      - type: bind
+        source: ${DRAMATARR_INCOMING_PATH:?set a separate staging directory}
+        target: /incoming
+        bind:
+          create_host_path: false
+      - type: volume
+        source: downloader_profile
+        target: /app/.chrome-profile
+    shm_size: 2gb
+    expose:
+      - "3000"
+
+networks:
+  catalogue_database:
+    external: true
+    name: ${DRAMATARR_POSTGRES_NETWORK:?set the existing Postgres Docker network}
+
+volumes:
+  downloader_profile:
+    external: true
+    name: ${DRAMATARR_CHROME_VOLUME:?preserve the existing Chrome profile volume}

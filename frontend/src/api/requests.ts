@@ -5,9 +5,8 @@
  * member-facing list too, or the person who asked keeps seeing "pending" until they reload.
  * Splitting this file would put those two facts in two places.
  *
- * Nothing here downloads anything, and the UI should not suggest otherwise. A request is a
- * note for the admin to act on by hand — every string in `@/i18n` that describes this feature
- * was written to say "ask", never "get".
+ * Creating a request asks the admin. Approval queues automatic provider/language discovery;
+ * reviewed source acceptance (or an exact-id automatic match) queues acquisition.
  */
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
@@ -146,6 +145,8 @@ export interface RequestInput {
 export interface RequestPatch {
   status?: RequestStatus
   adminNote?: string | null
+  reviewBeforeDownload?: boolean
+  languages?: string[]
   /** `''` clears the link; an unknown id is refused with `SERIES_NOT_FOUND`. */
   seriesId?: string | null
 }

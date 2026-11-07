@@ -40,7 +40,7 @@ from app.models import RequestStatus, Series, SeriesRequest, SeriesTitle, User, 
 from app.schemas.library import DiscoveredIds
 from app.services import images as images_service
 from app.services import requests as requests_service
-from app.services.requests import dedupe_key, safe_poster_url
+from app.services.requests import dedupe_key
 
 pytestmark = pytest.mark.anyio
 

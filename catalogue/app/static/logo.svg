@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Dramadex">
+  <title>Dramadex</title>
+  <defs>
+    <linearGradient id="dd-comedy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8b93f8"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="dd-tragedy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f4657"/>
+      <stop offset="1" stop-color="#232833"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Tragedy mask, behind and tilted left. -->
+  <g transform="rotate(-13 46 68)">
+    <path fill="url(#dd-tragedy)"
+          d="M46 20c16 0 26 9 26 24 0 22-12 44-26 44S20 66 20 44c0-15 10-24 26-24z"/>
+    <!-- Downturned eyes and mouth: the grief half of the pair. -->
+    <path fill="#0f1115" d="M31 45c1.6-3.4 5-4.6 8-3.1-2.6 1-4.4 2.7-5.4 5.2-1.2-.4-2-1.1-2.6-2.1z"/>
+    <path fill="#0f1115" d="M61 45c-1.6-3.4-5-4.6-8-3.1 2.6 1 4.4 2.7 5.4 5.2 1.2-.4 2-1.1 2.6-2.1z"/>
+    <path fill="none" stroke="#0f1115" stroke-width="3.4" stroke-linecap="round"
+          d="M36 70c5-6 15-6 20 0"/>
+  </g>
+
+  <!-- Comedy mask, in front and tilted right. -->
+  <g transform="rotate(13 82 68)">
+    <path fill="url(#dd-comedy)"
+          d="M82 20c16 0 26 9 26 24 0 22-12 44-26 44S56 66 56 44c0-15 10-24 26-24z"/>
+    <!-- Upturned eyes and mouth: the mirror of the mask behind it. -->
+    <path fill="#0f1115" d="M67 43c1.6 3.4 5 4.6 8 3.1-2.6-1-4.4-2.7-5.4-5.2-1.2.4-2 1.1-2.6 2.1z"/>
+    <path fill="#0f1115" d="M97 43c-1.6 3.4-5 4.6-8 3.1 2.6-1 4.4-2.7 5.4-5.2 1.2.4 2 1.1 2.6 2.1z"/>
+    <path fill="none" stroke="#0f1115" stroke-width="3.4" stroke-linecap="round"
+          d="M72 64c5 6 15 6 20 0"/>
+  </g>
+</svg>

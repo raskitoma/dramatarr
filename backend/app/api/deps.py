@@ -70,7 +70,9 @@ async def create_session(
     return auth
 
 
-async def revoke_current_session(session: AsyncSession, request: Request, response: Response) -> None:
+async def revoke_current_session(
+    session: AsyncSession, request: Request, response: Response
+) -> None:
     settings = get_settings()
     raw = request.cookies.get(settings.session_cookie_name)
     if raw:

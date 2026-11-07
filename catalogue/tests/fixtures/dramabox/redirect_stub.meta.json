@@ -1,0 +1,20 @@
+{
+  "url": "https://www.dramabox.com/_next/data/dramabox_prod_20260720/browse/161/1.json",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "date": "Sun, 16 Aug 2026 20:51:45 GMT",
+    "x-nextjs-cache": "MISS",
+    "cache-control": "s-maxage=900, stale-while-revalidate=31535100",
+    "server": "openresty",
+    "vary": "Accept-Encoding, Accept-Encoding",
+    "x-nextjs-matched-path": "/en/browse/[typeTwoId]/[page]",
+    "x-cache": "Miss from cloudfront",
+    "via": "1.1 56944c17909cc5b7a4102b8096acac2c.cloudfront.net (CloudFront)",
+    "x-amz-cf-pop": "BOG50-P1",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "x-amz-cf-id": "nF_w98Zqxy1rpaW39Q6k0dsP7-HyZm5GxRAPR0HMCw4BurUHzcXunQ=="
+  }
+}

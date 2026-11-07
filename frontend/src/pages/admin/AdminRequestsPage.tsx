@@ -55,13 +55,12 @@ import {
   TrashIcon,
 } from '@/components/icons'
 
+import { RequestAcquisition } from '@/components/admin/RequestAcquisition'
 import styles from './AdminRequestsPage.module.css'
 
 const PAGE_SIZE = 25
 
-/** Where the owner actually goes to find a requested show. Change it here; it is a bookmark,
- *  not a service this application calls, so it needs no setting and no key. */
-const DRAMADOWN_URL = 'https://dramadown.raskitoma.io'
+const ACQUISITION_URL = '/admin/acquire'
 
 const STATUS_TONE: Record<RequestStatus, BadgeTone> = {
   pending: 'warning',
@@ -118,14 +117,11 @@ export function AdminRequestsPage() {
           </h1>
           <p className={styles.intro}>{t('admin.requests.intro')}</p>
 
-          {/* A shortcut, and only a shortcut. Attending a request means going and finding the
-              show by hand, and DramaDown is where the owner does that — so the useful thing
-              this screen can offer is one click to the other tab, not an integration. Nothing
-              here talks to it: no request is handed over, no transfer is started, and closing
-              that tab leaves this page exactly as it was. */}
+          {/* Acquisition is explicit: opening this page or approving a request does not
+              enqueue a download. The admin chooses its source and metadata there. */}
           <a
             className={styles.shortcut}
-            href={DRAMADOWN_URL}
+            href={ACQUISITION_URL}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -221,13 +217,15 @@ function RequestRow({ row }: { row: AdminSeriesRequest }) {
 
   const [replying, setReplying] = useState(false)
   const [reply, setReply] = useState(row.adminNote ?? '')
+  const [reviewDownload, setReviewDownload] = useState(true)
+  const [downloadLanguages, setDownloadLanguages] = useState('es,en')
 
   const links = externalLinks(row.ids)
   const open = OPEN_REQUEST_STATUSES.includes(row.status)
 
   const setStatus = (status: RequestStatus, adminNote?: string) => {
     patch.mutate(
-      { id: row.id, patch: { status, ...(adminNote === undefined ? {} : { adminNote }) } },
+      { id: row.id, patch: { status, reviewBeforeDownload: reviewDownload, languages: downloadLanguages.split(',').map(v => v.trim()).filter(Boolean), ...(adminNote === undefined ? {} : { adminNote }) } },
       {
         onSuccess: () => {
           setReplying(false)
@@ -285,6 +283,7 @@ function RequestRow({ row }: { row: AdminSeriesRequest }) {
           {row.provider ? <span className={styles.provider}>{row.provider}</span> : null}
         </div>
 
+        {open && <RequestAcquisition id={row.id} approved={row.status === 'approved'} review={reviewDownload} languages={downloadLanguages} onReview={setReviewDownload} onLanguages={setDownloadLanguages} />}
         {row.note ? (
           <p className={styles.note}>
             <span className={styles.noteLabel}>{t('admin.requests.requesterNote')}</span>

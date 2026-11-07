@@ -18,6 +18,7 @@ import { IconButton } from '@/components/IconButton'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Spinner } from '@/components/Spinner'
 import { formatDuration, formatPercent, formatRelativeTime } from '@/lib/format'
+import { AcquisitionProgress } from './AcquisitionProgress'
 import styles from './JobRow.module.css'
 
 const LOG_POLL_MS = 3_000
@@ -111,8 +112,8 @@ export function JobRow({
 
         <div className={styles.identity}>
           <span className={styles.type}>{t(`admin.jobType.${job.type}`)}</span>
-          {job.seriesTitle !== null && job.seriesTitle !== '' ? (
-            <span className={styles.target}>{job.seriesTitle}</span>
+          {(job.seriesTitle || job.payload.title) ? (
+            <span className={styles.target}>{job.seriesTitle || String(job.payload.title || '')}</span>
           ) : null}
         </div>
 
@@ -136,7 +137,7 @@ export function JobRow({
         {actions ? <div className={styles.actions}>{actions}</div> : null}
       </div>
 
-      {live && job.status === 'running' ? (
+      {live && job.status === 'running' && job.type !== 'download_series' ? (
         <div className={styles.progress}>
           <ProgressBar
             percent={job.progressPercent}
@@ -155,6 +156,7 @@ export function JobRow({
         </div>
       ) : null}
 
+      <AcquisitionProgress job={job} />
       {job.error !== null && job.error !== '' ? (
         <p className={styles.error}>{job.error}</p>
       ) : null}

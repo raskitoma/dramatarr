@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Match review</h1>
+{% if message %}<div class="msg">{{ message }}</div>{% endif %}
+<p class="muted" style="max-width:66ch">IMDb links the matcher would not commit to on its own.
+It only auto-accepts a <strong>unique exact title match confirmed by episode shape</strong>, or an id a
+platform handed us outright. Everything else lands here, because these titles come from a template grammar
+where string similarity means almost nothing — six different shows are called
+<em>Fated to My&nbsp;…&nbsp;Alpha</em>.</p>
+<p class="muted" style="max-width:66ch"><strong>Pick the row that is right</strong>, not just the one the
+matcher guessed. Its guess is marked <span class="pill">suggested</span>; choosing any other row records
+both, so the decision stays auditable. <em>None of these</em> rejects the lot, and a rejected target is never
+proposed again.</p>
+
+{% for i in items %}
+<div class="card" style="margin-bottom:1rem">
+  <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:baseline">
+    <div>
+      <strong>{{ i.t.primary_title }}</strong>
+      <span class="muted">{{ i.t.year or '—' }} · {{ i.t.episode_count or '?' }} eps</span>
+      <span class="pill">{{ i.m.method }}</span>
+    </div>
+    <form class="inline" method="post" action="/admin/matches/{{ i.m.id }}/reject">
+      <button type="submit">None of these</button>
+    </form>
+  </div>
+
+  {% if i.e.get('note') %}<p class="warn" style="margin:.5rem 0 0">{{ i.e.note }}</p>{% endif %}
+
+  <div class="wrap" style="margin-top:.7rem"><table>
+    <tr><th></th><th>Candidate</th><th>Year</th><th>Eps</th><th>Type</th><th>Matched on</th><th></th></tr>
+    {% for c in i.e.get('candidates', []) %}
+    {% set agrees = c.episodes and i.t.episode_count and (c.episodes - i.t.episode_count)|abs <= [3, (i.t.episode_count * 0.25)|int]|max %}
+    <tr>
+      <td>{% if c.tconst == i.m.target_external_id %}<span class="pill">suggested</span>{% endif %}</td>
+      <td class="wrapcell">
+        <a href="https://www.imdb.com/title/{{ c.tconst }}/" target="_blank" rel="noopener">{{ c.title }}</a>
+        <code class="muted">{{ c.tconst }}</code>
+      </td>
+      <td>{{ c.year or '—' }}</td>
+      <td class="{{ 'ok' if agrees else ('err' if c.episodes else 'muted') }}">
+        {{ c.episodes or '—' }}{% if c.episodes %}{{ ' ✓' if agrees else ' ✗' }}{% endif %}
+      </td>
+      <td class="muted">{{ c.type }}</td>
+      <td class="muted">{{ c.matched_on }}</td>
+      <td>
+        <form class="inline" method="post" action="/admin/matches/{{ i.m.id }}/confirm">
+          <input type="hidden" name="tconst" value="{{ c.tconst }}">
+          <button class="primary" type="submit">Use this</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td></td>
+      <td colspan="5">
+        <form class="inline" method="post" action="/admin/matches/{{ i.m.id }}/confirm">
+          <input type="text" name="tconst" placeholder="tt1234567" size="14">
+          <button type="submit">Use a tconst not listed</button>
+        </form>
+      </td>
+      <td></td>
+    </tr>
+  </table></div>
+  <p class="muted" style="margin:.5rem 0 0;font-size:.85rem">
+    Ours: {{ i.t.episode_count or '?' }} episodes. ✓ marks a candidate whose episode count agrees —
+    the fingerprint that separates a 60-episode vertical from a 400-episode reality series.
+  </p>
+</div>
+{% else %}
+<p class="ok">Nothing awaiting review.</p>
+{% endfor %}
+{% endblock %}

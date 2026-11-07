@@ -1,0 +1,11 @@
+{
+  "url": "https://www.reelshort.com/tags/mc-types/120",
+  "status": 202,
+  "headers": {
+    "content-length": "0",
+    "x-amzn-waf-action": "challenge",
+    "access-control-expose-headers": "x-amzn-waf-action",
+    "server": "CloudFront"
+  },
+  "_note": "SYNTHETIC: documented shape, not captured live."
+}

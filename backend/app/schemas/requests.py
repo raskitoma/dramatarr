@@ -177,6 +177,18 @@ class RequestPatchIn(APIModel):
     """The admin's answer. Every field optional; omitted means untouched."""
 
     status: RequestStatusName | None = None
+    review_before_download: bool = True
+    languages: list[str] = Field(default_factory=lambda: ["es", "en"], min_length=1, max_length=5)
+
+    @field_validator("languages")
+    @classmethod
+    def validate_languages(cls, values: list[str]) -> list[str]:
+        import re
+
+        if any(not re.fullmatch(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})?", v) for v in values):
+            raise ValueError("Use language codes such as es, en, pt-BR")
+        return list(dict.fromkeys(values))
+
     admin_note: str | None = Field(default=None, max_length=1000)
     #: Ties the request to the series it became. Validated to exist; `""` clears the link.
     series_id: str | None = Field(default=None, max_length=32)

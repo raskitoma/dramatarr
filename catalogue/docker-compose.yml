@@ -1,0 +1,21 @@
+services:
+  dramadex:
+    build: .
+    image: dramadex:0.1.0
+    environment:
+      DRAMADEX_DB_URL: sqlite:////data/dramadex.db
+      DRAMADEX_DATA_DIR: /data
+      DRAMADEX_API_KEY: ${DRAMADEX_API_KEY:?set DRAMADEX_API_KEY in .env}
+      DRAMADEX_TZ: ${DRAMADEX_TZ:-UTC}
+      DRAMADEX_MAX_ITEMS: ${DRAMADEX_MAX_ITEMS:-50}
+      DRAMADEX_USER_AGENT: ${DRAMADEX_USER_AGENT:-DramadexBot/0.1 (self-hosted metadata indexer)}
+    volumes:
+      # Database, raw response archive and images all live here. Back this up.
+      # SQLite needs the .backup API or a WAL checkpoint, not a naive cp.
+      - ./data:/data
+    ports:
+      # Loopback by default. Set DRAMADEX_BIND=0.0.0.0 to reach it from the LAN
+      # -- the API key is then the only thing protecting it, and it travels in
+      # clear over plain HTTP, so keep that to a network you trust.
+      - "${DRAMADEX_BIND:-127.0.0.1}:${DRAMADEX_PORT:-8080}:8080"
+    restart: unless-stopped
