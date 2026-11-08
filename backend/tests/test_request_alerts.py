@@ -269,3 +269,58 @@ async def test_a_fulfilled_request_with_no_series_still_links_somewhere(
     await requests_service.update(db, admin, row.id, RequestPatchIn(status="fulfilled"))
 
     assert captured[0]["series_url"].endswith("/requests")
+
+
+@pytest.mark.parametrize(
+    ("locale", "heading", "button"),
+    [("es", "Descargado!", "Verla ahora"), ("en", "Downloaded!", "Watch it now")],
+)
+async def test_ready_email_embeds_poster_after_message(
+    db, monkeypatch, tmp_path, locale, heading, button
+):
+    from types import SimpleNamespace
+
+    from app.services import mail
+    from app.services.settings import SmtpConfig
+
+    poster = tmp_path / "requests" / "poster.jpg"
+    poster.parent.mkdir()
+    poster.write_bytes(b"cached JPEG")
+
+    async def smtp(_service):
+        return SmtpConfig("smtp.example.com", 25, "", "", "mail@example.com", "", False, False)
+
+    async def base_context(_session):
+        return {"site_name": "Dramatarr"}
+
+    sent = []
+
+    async def capture(message, **_kwargs):
+        sent.append(message)
+
+    monkeypatch.setattr(mail, "get_settings", lambda: SimpleNamespace(images_dir=tmp_path))
+    monkeypatch.setattr(mail.SettingsService, "smtp", smtp)
+    monkeypatch.setattr(mail, "base_context", base_context)
+    monkeypatch.setattr(mail.aiosmtplib, "send", capture)
+
+    await mail.send_mail(
+        db,
+        "viewer@example.com",
+        "request_ready",
+        locale,
+        {
+            "title": "A Drama",
+            "display_name": "Viewer",
+            "series_year": "",
+            "series_url": "https://example.com/series/a-drama",
+            "poster_path": "/api/stream/images/requests/poster.jpg",
+        },
+    )
+
+    html = sent[0].get_body(preferencelist=("html",)).get_content()
+    image = next(part for part in sent[0].walk() if part.get_content_type() == "image/jpeg")
+    cid = image["Content-ID"][1:-1]
+    assert html.index(heading) < html.index("<strong>A Drama</strong>") < html.index(f"cid:{cid}")
+    assert html.index(f"cid:{cid}") < html.index(button)
+    assert 'width="240"' in html
+    assert image.get_content() == b"cached JPEG"
