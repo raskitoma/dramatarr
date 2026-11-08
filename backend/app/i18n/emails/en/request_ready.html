@@ -1,8 +1,8 @@
 {% extends "_layout.html" %}
-{% from "_macros.html" import button, fallback_link %}
+{% from "_macros.html" import button, fallback_link, poster %}
 
 {% block preheader %}"{{ title }}" is in the library now.{% endblock %}
-{% block heading %}It's here{% endblock %}
+{% block heading %}Downloaded!{% endblock %}
 
 {% block body %}
 <p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#3a3a48;">
@@ -14,6 +14,7 @@
   A note from whoever fetched it: {{ admin_note }}
 </p>
 {% endif %}
+{{ poster(poster_src, title) }}
 {% endblock %}
 
 {% block action %}{{ button(series_url, "Watch it now") }}{% endblock %}

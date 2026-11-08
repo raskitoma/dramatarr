@@ -16,14 +16,16 @@ from email.utils import formataddr, formatdate, make_msgid
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import aiosmtplib
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.errors import AppError, MailNotConfigured
+from app.errors import AppError, MailNotConfigured, NotFound
 from app.services.settings import SettingsService, SmtpConfig
+from app.services.streaming import content_type_for, safe_child_path
 from app.utils.time import utcnow
 
 log = logging.getLogger(__name__)
@@ -137,6 +139,31 @@ def _build_message(smtp: SmtpConfig, to: str, mail: RenderedMail) -> EmailMessag
     return message
 
 
+def _read_cached_poster(stored: str) -> tuple[bytes, str] | None:
+    route = "/api/stream/images/"
+    if stored.startswith(route):
+        parts = [unquote(part) for part in stored.removeprefix(route).split("/")]
+    elif stored.startswith("images/"):
+        parts = stored.removeprefix("images/").split("/")
+    else:
+        return None
+    if len(parts) != 2:
+        return None
+    try:
+        path = safe_child_path(get_settings().images_dir, *parts)
+        mime = content_type_for(path)
+        if mime not in {"image/jpeg", "image/png", "image/webp"} or not path.is_file():
+            return None
+        limit = 2 * 1024 * 1024
+        with path.open("rb") as file:
+            data = file.read(limit + 1)
+        if data and len(data) <= limit:
+            return data, mime.removeprefix("image/")
+    except (NotFound, OSError):
+        pass
+    return None
+
+
 async def send_mail(
     session: AsyncSession,
     to: str,
@@ -154,9 +181,18 @@ async def send_mail(
         raise MailNotConfigured()
 
     merged = {**await base_context(session), "locale": locale, **context}
+    poster_path = merged.pop("poster_path", None)
+    poster = await asyncio.to_thread(_read_cached_poster, poster_path) if poster_path else None
+    poster_cid = make_msgid(domain=_msgid_domain(smtp.from_email)) if poster else None
+    if poster_cid:
+        merged["poster_src"] = f"cid:{poster_cid[1:-1]}"
     mail = await render_mail(template, locale, merged)
     try:
         message = _build_message(smtp, to, mail)
+        html_part = message.get_body(preferencelist=("html",))
+        if poster and poster_cid and html_part is not None:
+            data, subtype = poster
+            html_part.add_related(data, maintype="image", subtype=subtype, cid=poster_cid)
     except ValueError as exc:
         # A CR/LF in the address (header injection) or an unencodable header. Surfaced as a
         # coded error so callers see a 4xx they can explain, not an opaque 500.

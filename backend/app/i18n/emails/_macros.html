@@ -12,3 +12,11 @@
   <span style="color:#5b6ef5;word-break:break-all;">{{ url }}</span>
 </p>
 {% endmacro %}
+
+{% macro poster(src, title) %}
+{% if src %}
+<p style="margin:20px 0 4px;">
+  <img src="{{ src }}" alt="{{ title }}" width="240" style="display:block;width:240px;max-width:100%;height:auto;border:0;border-radius:10px;" />
+</p>
+{% endif %}
+{% endmacro %}

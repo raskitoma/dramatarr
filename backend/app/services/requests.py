@@ -976,6 +976,7 @@ async def _announce_ready(session: AsyncSession, row: SeriesRequest) -> None:
                 "title": series.title if series else row.title,
                 "series_year": (series.year if series else row.year) or "",
                 "series_url": target,
+                "poster_path": series.poster_path if series else None,
                 "admin_note": row.admin_note or "",
             },
         )
