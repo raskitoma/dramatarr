@@ -175,6 +175,7 @@ async def catalogue_console(
 class SearchRequestIn(APIModel):
     languages: list[str] = Field(default_factory=lambda: ["es", "en"], min_length=1, max_length=5)
     review_before_download: bool = True
+    refresh: bool = False
 
     @field_validator("languages")
     @classmethod
@@ -198,6 +199,14 @@ async def request_acquisition(request_id: str, session: SessionDep) -> Job | Non
     return await latest_job(session, request_id)
 
 
+@router.get("/requests/{request_id}/results", response_model=JobOut | None)
+async def request_search_results(request_id: str, session: SessionDep) -> Job | None:
+    from app.services.request_acquisition import cached_search
+    from app.services.requests import get_or_404
+
+    return await cached_search(session, await get_or_404(session, request_id))
+
+
 @router.post("/requests/{request_id}/search", response_model=JobOut, status_code=202)
 async def search_request(
     request_id: str,
@@ -215,6 +224,7 @@ async def search_request(
         created_by=user.id,
         languages=body.languages,
         review=body.review_before_download,
+        refresh=body.refresh,
     )
 
 

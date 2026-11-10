@@ -275,9 +275,11 @@ async def handle_download_series(ctx: JobContext) -> None:
     await ctx.session.commit()
     await ctx.log(LogLevel.INFO, f"Imported {folder}; staging retained for recovery")
     if payload.get("requestId"):
+        from app.services.request_acquisition import clear_cached_searches
         from app.services.requests import _announce_ready
         from app.utils.time import utcnow
 
+        await clear_cached_searches(ctx.session, payload["requestId"])
         request = await ctx.session.get(SeriesRequest, payload["requestId"], populate_existing=True)
         if request is not None and request.status == RequestStatus.APPROVED:
             from sqlalchemy import update
