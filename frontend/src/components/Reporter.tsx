@@ -37,7 +37,6 @@ function ReportDialog({ errors, close, dismiss }: {
 }) {
   const { t } = useTranslation()
   const [selected, setSelected] = useState(() => errors.map(error => error.id))
-  const [comments, setComments] = useState<Record<string, string>>({})
   const [message, setMessage] = useState('')
   const [category, setCategory] = useState<Category | ''>(errors.length ? 'error' : '')
   const [action, setAction] = useState<Action>()
@@ -75,7 +74,6 @@ function ReportDialog({ errors, close, dismiss }: {
           }).slice(0, 2000),
           section: error.section.slice(0, 200),
           timestamp: error.timestamp,
-          comment: comments[error.id]?.trim() || '',
         })),
       })
       dismiss(selected)
@@ -117,22 +115,24 @@ function ReportDialog({ errors, close, dismiss }: {
               </select>
             </label>
           )}
-          {errors.map(error => (
-            <fieldset key={error.id}>
-              <label>
-                <input type="checkbox" checked={selected.includes(error.id)} onChange={event => {
-                  setSelected(event.target.checked ? [...selected, error.id] : selected.filter(id => id !== error.id))
-                }} /> {t('reports.include')}
-              </label>
-              <pre>{error.message}</pre>
-              <small>{error.section} · {new Date(error.timestamp).toLocaleString()}</small>
-              <label>{t('reports.comment')}
-                <textarea maxLength={1000} value={comments[error.id] || ''}
-                  onChange={event => setComments({ ...comments, [error.id]: event.target.value })} />
-              </label>
-            </fieldset>
-          ))}
-          <label>{t(hasErrors ? 'reports.sharedComment' : 'reports.message')}
+          {hasErrors && (
+            <div className={styles.errorList}>
+              {errors.map(error => (
+                <div key={error.id} className={styles.errorCard} data-selected={selected.includes(error.id)}>
+                  {errors.length > 1 && (
+                    <label className={styles.errorSelection}>
+                      <input type="checkbox" checked={selected.includes(error.id)} onChange={event => {
+                        setSelected(event.target.checked ? [...selected, error.id] : selected.filter(id => id !== error.id))
+                      }} /> {t('reports.include')}
+                    </label>
+                  )}
+                  <small>{error.section} · {new Date(error.timestamp).toLocaleString()}</small>
+                  <pre>{error.message}</pre>
+                </div>
+              ))}
+            </div>
+          )}
+          <label>{t(!hasErrors ? 'reports.message' : selected.length > 1 ? 'reports.sharedComment' : 'reports.comment')}
             <textarea required={!hasErrors} maxLength={2000} value={message} onChange={event => setMessage(event.target.value)} />
           </label>
           {failure && <p role="alert">{failure}</p>}

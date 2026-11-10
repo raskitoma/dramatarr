@@ -43,8 +43,10 @@ it('sends selected errors with shared context and leaves the rest in the stack',
   const launcher = screen.getByRole('button', { name: 'Enviar un reporte' })
   expect(launcher.dataset.alert).toBe('true')
   fireEvent.click(launcher)
+  expect(screen.getAllByRole('textbox')).toHaveLength(1)
+  expect(screen.getByLabelText('Comentario para los errores seleccionados (opcional)')).toBeTruthy()
   fireEvent.click(screen.getAllByRole('checkbox')[1]!)
-  fireEvent.change(screen.getByLabelText('Comentario para los errores seleccionados (opcional)'), {
+  fireEvent.change(screen.getByLabelText('Comentario (opcional)'), {
     target: { value: 'Shared context' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
