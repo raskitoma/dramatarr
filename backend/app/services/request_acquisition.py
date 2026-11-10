@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError
@@ -25,6 +25,37 @@ async def latest_job(session: AsyncSession, request_id: str) -> Job | None:
     )
 
 
+def _request_searches(request_id: str) -> Select[Job]:
+    return select(Job).where(
+        Job.type == JobType.FIND_SOURCE,
+        Job.payload["requestId"].as_string() == request_id,
+    )
+
+
+async def cached_search(session: AsyncSession, row: SeriesRequest) -> Job | None:
+    if row.status != RequestStatus.APPROVED:
+        return None
+    searches = await session.scalars(
+        _request_searches(row.id)
+        .where(Job.status == JobStatus.SUCCEEDED)
+        .order_by(Job.created_at.desc(), Job.id.desc())
+    )
+    return next(
+        (
+            job
+            for job in searches
+            if job.payload.get("candidates") and job.payload.get("sourceUrl") == row.source_url
+        ),
+        None,
+    )
+
+
+async def clear_cached_searches(session: AsyncSession, request_id: str) -> None:
+    for search in await session.scalars(_request_searches(request_id)):
+        if "candidates" in search.payload:
+            search.payload = {k: v for k, v in search.payload.items() if k != "candidates"}
+
+
 async def queue_search(
     session: AsyncSession,
     row: SeriesRequest,
@@ -32,12 +63,22 @@ async def queue_search(
     created_by: str | None,
     languages: list[str] | None = None,
     review: bool = True,
+    refresh: bool = False,
 ) -> Job:
     if row.status != RequestStatus.APPROVED:
         raise AppError("INVALID_PAYLOAD", "The request must be approved", 409)
     current = await latest_job(session, row.id)
     if current is not None and current.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
         return current
+    preferred = languages or ["es", "en"]
+    if not refresh:
+        cached = await cached_search(session, row)
+        if (
+            cached
+            and cached.payload.get("languages") == preferred
+            and (cached.payload.get("reviewBeforeDownload", True) == review)
+        ):
+            return cached
     job = await enqueue(
         session,
         JobType.FIND_SOURCE,
@@ -45,7 +86,7 @@ async def queue_search(
             "requestId": row.id,
             "title": row.title,
             "sourceUrl": row.source_url,
-            "languages": languages or ["es", "en"],
+            "languages": preferred,
             "reviewBeforeDownload": review,
             "acquisition": {"stage": "searching"},
         },
@@ -76,7 +117,11 @@ async def confirm_candidate(
         }
     ):
         return current
-    if search.type != JobType.FIND_SOURCE or search.status != JobStatus.SUCCEEDED:
+    if (
+        search.type != JobType.FIND_SOURCE
+        or search.status != JobStatus.SUCCEEDED
+        or search.payload.get("sourceUrl") != row.source_url
+    ):
         raise AppError("INVALID_PAYLOAD", "Search has not completed", 409)
     candidate = next((c for c in search.payload.get("candidates", []) if c.get("url") == url), None)
     if candidate is None:
