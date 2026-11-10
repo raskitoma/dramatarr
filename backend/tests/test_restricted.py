@@ -637,6 +637,8 @@ def test_every_member_facing_route_has_been_reviewed() -> None:
         "/requests/",
         "/requests/search",
         "/requests/acknowledge",
+        # Feedback intake returns no content and never reads series or artwork.
+        "/reports",
         "/requests/{request_id}",
     }
 

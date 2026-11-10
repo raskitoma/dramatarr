@@ -142,9 +142,15 @@ async def handle_find_source(ctx: JobContext) -> None:
         "perLanguageLimit": result.get("perLanguageLimit", 10),
         "acquisition": {"stage": stage, "candidatesCount": len(candidates)},
     }
-    await ctx.progress(100, "Review source results" if candidates else "No verified source found")
     if stage == "search_failed":
-        raise AppError("REMOTE_IMPORT_FAILED", "Source search failed; retry is available", 502)
+        errors = result.get("errors") or []
+        first = errors[0]
+        detail = (
+            f"{first.get('provider', '?')} / {first.get('language', '?')}: {first.get('error', '')}"
+        )
+        await ctx.progress(100, "Dramafren search failed")
+        raise AppError("REMOTE_IMPORT_FAILED", f"Dramafren search failed ({detail[:350]})", 502)
+    await ctx.progress(100, "Review source results" if candidates else "No verified source found")
     # Never infer identity from a translated title. Automatic mode requires exactly one
     # matching provider-published id in the first available preferred language.
     if not payload.get("reviewBeforeDownload", True):

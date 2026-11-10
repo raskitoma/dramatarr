@@ -45,3 +45,35 @@ test('maps a base language to the sole published region without inventing an amb
  assert.equal(resolveLanguage('es-ES',[{code:'es-MX'}]),null);
  assert.equal(resolveLanguage('zh',[{code:'zh-CN'},{code:'zh-TW'}]),null);
 });
+
+test('ready main content wins over stalled frame navigation', async () => {
+  const {navigateDiscovery} = require('../src/discovery');
+  const url = new URL('https://reelshort.dramafren.org/index.php?page=home&lang=es');
+  let listener;
+  const frame = {};
+  const response = {
+    request: () => ({isNavigationRequest: () => true}),
+    frame: () => frame,
+    headers: () => ({}),
+    url: () => url.href,
+    ok: () => true,
+  };
+  const page = {
+    mainFrame: () => frame,
+    on: (_, callback) => { listener = callback; },
+    off: () => { listener = undefined; },
+    goto: () => { listener(response); return new Promise(() => {}); },
+    waitForFunction: async (_check, options, target) => {
+      assert.equal(options.timeout, 90000);
+      assert.deepEqual(target, {href:url.href, selector:'input[type="search"]'});
+      return {dispose:async () => {}};
+    },
+  };
+  assert.equal(await navigateDiscovery(page, url, 'input[type="search"]'), response);
+  assert.equal(listener, undefined);
+  const timeout = Object.assign(new Error('Navigation timeout'), {name:'TimeoutError'});
+  response.ok = () => false;
+  response.headers = () => ({'cf-mitigated':'challenge'});
+  page.goto = async () => { listener(response); throw timeout; };
+  await assert.rejects(navigateDiscovery(page, url, 'input[type="search"]'), /access challenge/);
+});

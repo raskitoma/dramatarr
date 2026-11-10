@@ -1,3 +1,4 @@
+import { JobErrorButton } from '@/components/Reporter'
 /** One job in the queue page: summary line, optional live progress, and an expandable log.
  *
  * The log is fetched lazily — `GET /admin/jobs/{id}` returns the full log with the job, and a
@@ -158,7 +159,7 @@ export function JobRow({
 
       <AcquisitionProgress job={job} />
       {job.error !== null && job.error !== '' ? (
-        <p className={styles.error}>{job.error}</p>
+        <JobErrorButton job={job} />
       ) : null}
 
       {/* The wrapper always exists so `aria-controls` resolves; its contents mount on expand,

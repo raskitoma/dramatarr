@@ -1,3 +1,5 @@
+import { Reporter } from '@/components/Reporter'
+import { AdminReportsPage } from '@/pages/admin/AdminReportsPage'
 /** Routing table and the chrome every page sits inside.
  *
  * Two rules shape this file. First, nothing renders until the session question is answered —
@@ -218,6 +220,7 @@ function Routes() {
         </AdminPage>
       </Route>
       <Route path="/admin/acquire"><AdminPage><AdminAcquirePage /></AdminPage></Route>
+      <Route path="/admin/reports"><AdminPage><AdminReportsPage /></AdminPage></Route>
       <Route path="/admin/queue">
         <AdminPage>
           <AdminQueuePage />
@@ -272,10 +275,13 @@ function Routes() {
 
 export function App() {
   return (
-    <ErrorBoundary>
-      <ToastProvider>
-        <Routes />
-      </ToastProvider>
-    </ErrorBoundary>
+    <>
+      <ErrorBoundary>
+        <ToastProvider>
+          <Routes />
+        </ToastProvider>
+      </ErrorBoundary>
+      <Reporter />
+    </>
   )
 }

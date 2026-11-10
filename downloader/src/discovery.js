@@ -47,6 +47,56 @@ function classifyCandidates(rows, query, sourceUrl) {
   return [...unique.values()].sort((a,b) => Number(b.idMatch)-Number(a.idMatch) || Number(b.titleMatch)-Number(a.titleMatch));
 }
 
+const DISCOVERY_TIMEOUT = 90_000;
+const RESULT_LINK = 'a[href*="page=detail"],a[href*="page=watch"],a[href*="/watch/"]';
+
+async function navigateDiscovery(page, url, readySelector) {
+  let response;
+  const readiness = new AbortController();
+  const remember = candidate => {
+    if (candidate.request().isNavigationRequest() && candidate.frame() === page.mainFrame()) {
+      response = candidate;
+    }
+  };
+  page.on('response', remember);
+  try {
+    const navigation = page.goto(url.href, {waitUntil:'domcontentloaded', timeout:DISCOVERY_TIMEOUT});
+    // Child frames can stall the lifecycle. Only accept early readiness after the requested
+    // main document has received a successful response and contains the expected content.
+    const content = page.waitForFunction(({href, selector}) =>
+      location.href === href && Boolean(document.querySelector(selector)),
+    {timeout:DISCOVERY_TIMEOUT, signal:readiness.signal}, {href:url.href, selector:readySelector})
+      .then(handle => {
+        void handle.dispose();
+        if (response?.ok() && response.url() === url.href) return response;
+        return navigation;
+      }, () => navigation);
+    return await Promise.race([navigation, content]);
+  } catch (error) {
+    if (error.name === 'TimeoutError' && response?.headers()['cf-mitigated'] === 'challenge') {
+      throw new Error('Provider access challenge did not finish loading before the navigation deadline', {cause:error});
+    }
+    throw error;
+  } finally {
+    readiness.abort();
+    page.off('response', remember);
+  }
+}
+
+async function waitForSearchOutcome(page) {
+  const handle = await page.waitForFunction(selector => {
+    if (document.querySelector(selector)) return 'results';
+    const text = document.body?.innerText || '';
+    return /no results found|no dramas found|no search results|no se encontraron resultados|nenhum resultado encontrado/i.test(text)
+      ? 'empty' : false;
+  }, {timeout:DISCOVERY_TIMEOUT}, RESULT_LINK);
+  try {
+    return await handle.jsonValue();
+  } finally {
+    await handle.dispose();
+  }
+}
+
 async function searchWithPage(page, options, waitForChallenge) {
   const { query, sourceUrl, languages = ['es','en'], signal, onProgress = () => {} } = options;
   const provider = sourceProvider(sourceUrl);
@@ -58,13 +108,17 @@ async function searchWithPage(page, options, waitForChallenge) {
     for (const lang of languageList) {
       if (signal?.aborted) throw new Error('Cancelled.');
       onProgress({stage:'searching', provider:p, language:lang, message:`Searching ${p}: ${lang}`});
+      let step = 'Opening provider home';
       try {
         const home = new URL(`https://${p}.dramafren.org/index.php`);
         home.search = new URLSearchParams({page:'home',lang}).toString();
-        const response = await page.goto(home.href,{waitUntil:'domcontentloaded',timeout:60000});
+        const searchSelector = 'input[name="q"],input[name="query"],input[name="search"],input[name="keyword"],input[type="search"],input[placeholder*="Search"],input[placeholder*="search"]';
+        const response = await navigateDiscovery(page, home, searchSelector);
         if (response && response.status() >= 500) throw new Error(`HTTP ${response.status()}`);
+        step = response?.headers()['cf-mitigated'] === 'challenge' ? 'Provider access challenge' : 'Checking provider access';
         await waitForChallenge(page,90000,onProgress);
-        await page.waitForSelector('input[name="q"],input[name="query"],input[name="search"],input[name="keyword"],input[type="search"],input[placeholder*="Search"],input[placeholder*="search"]',{timeout:60000});
+        step = 'Reading provider search form';
+        await page.waitForSelector(searchSelector,{timeout:DISCOVERY_TIMEOUT});
         // Read the site's real search form. Preserve hidden fields (provider/language/page),
         // use the site's declared query field and reject actions leaving the chosen origin.
         const search = await page.evaluate(() => {
@@ -84,9 +138,14 @@ async function searchWithPage(page, options, waitForChallenge) {
         for (const [k,v] of search.fields) url.searchParams.set(k,v);
         url.searchParams.set(search.name,query);
         url.searchParams.set('lang',actualLang);
-        await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:60000});
+        step = 'Loading search results';
+        await navigateDiscovery(page, url, RESULT_LINK);
         await waitForChallenge(page,90000,onProgress);
-        await page.waitForFunction(() => document.querySelector('a[href*="page=detail"],a[href*="page=watch"]') || document.readyState === 'complete',{timeout:20000});
+        step = 'Waiting for search results';
+        const outcome = await waitForSearchOutcome(page).catch(error => {
+          if (error.name !== 'TimeoutError') throw error;
+          return 'unconfirmed';
+        });
         const found = await page.evaluate(() => [...document.querySelectorAll('a[href]')].filter(a => /page=(?:watch|detail)|\/watch\//.test(a.href)).map(a => ({
           url:a.href, title:a.querySelector('[class*="title"],h2,h3,h4')?.textContent || a.querySelector('img')?.alt || a.title || a.innerText.replace(/\bWatch Now\b/gi,''),
           language:new URL(a.href).searchParams.get('lang') || document.documentElement.lang || 'und'
@@ -121,6 +180,9 @@ async function searchWithPage(page, options, waitForChallenge) {
             errors.push({provider:p,language:actualLang,error:'Direct language lookup unavailable'});
           }
         }
+        if (outcome === 'unconfirmed' && !found.length) {
+          errors.push({provider:p,language:actualLang,error:'Search did not publish results or an explicit no-results message before the deadline'});
+        }
         const seen=new Set();
         for (const item of found.slice(0,10)) {
           const candidateUrl=validateWatchUrl(item.url);
@@ -128,7 +190,8 @@ async function searchWithPage(page, options, waitForChallenge) {
           seen.add(candidateUrl.href);
           if (candidateUrl.searchParams.get('page') === 'detail') {
             if (signal?.aborted) throw new Error('Cancelled.');
-            await page.goto(candidateUrl.href,{waitUntil:'domcontentloaded',timeout:60000});
+            step = 'Opening candidate details';
+            await navigateDiscovery(page, candidateUrl, 'a[href*="page=watch"]');
             await waitForChallenge(page,90000,onProgress);
             await page.waitForSelector('a[href*="page=watch"]',{timeout:20000});
             const detail=await page.evaluate(() => {
@@ -141,10 +204,10 @@ async function searchWithPage(page, options, waitForChallenge) {
         }
       } catch (err) {
         if (signal?.aborted) throw err;
-        errors.push({provider:p,language:lang,error:String(err.message).slice(0,200)});
+        errors.push({provider:p,language:lang,error:`${step}: ${String(err.message)}`.slice(0,240)});
       }
     }
   }
   return {candidates:classifyCandidates(rows,query,sourceUrl),errors,provider,languages:languageList,availableLanguages,perLanguageLimit:10};
 }
-module.exports = { PROVIDERS, validateWatchUrl, sourceProvider, classifyCandidates, searchWithPage, resolveLanguage };
+module.exports = { PROVIDERS, validateWatchUrl, sourceProvider, classifyCandidates, searchWithPage, resolveLanguage, navigateDiscovery };

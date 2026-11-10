@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ApiRequestError } from '@/api/client'
 
 import { Button } from './Button'
+import { ReportErrorButton } from './Reporter'
 import { cx } from './cx'
 import styles from './ErrorState.module.css'
 
@@ -21,6 +22,15 @@ export interface ErrorStateProps {
  */
 export function ErrorState({ error, onRetry, className }: ErrorStateProps) {
   const { t, i18n } = useTranslation()
+
+  if (window.location.pathname.startsWith('/admin/')) {
+    return (
+      <div className={cx(styles.body, className)}>
+        <ReportErrorButton error={error} />
+        {onRetry && <Button variant="secondary" size="sm" onClick={onRetry}>{t('common.retry')}</Button>}
+      </div>
+    )
+  }
 
   let message = t('errors.generic')
   /* Only shown when we had no translation for the code — then it is the one clue the
