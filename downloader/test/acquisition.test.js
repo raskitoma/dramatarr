@@ -4,9 +4,11 @@ const assert = require('node:assert/strict');
 const { before, after } = require('node:test');
 let extracted = 0;
 let downloaded = 0;
+let extractError;
 require.cache[require.resolve('../src/extractor')] = { exports: {
   extractDramaVideoUris: async (url, options) => {
     extracted++;
+    if (extractError) throw extractError;
     assert.equal(url, 'https://dramafren.org/watch/test');
     assert.equal(options.signal.aborted, false);
     return { dramaTitle: 'A Show', episodes: [{ episode: 1, uri: 'private-signed-url' }], requestContext: { cookies: 'secret' } };
@@ -16,7 +18,7 @@ require.cache[require.resolve('../src/downloader')] = { exports: {
   downloadDramaEpisodes: async (result, options) => {
     downloaded++;
     assert.equal(options.force, false);
-    assert.equal(options.concurrency, 1);
+    assert.equal(options.concurrency, 3);
     assert.match(options.baseDir, /a{32}$/);
     assert.equal(result.requestContext.cookies, 'secret');
     return { cleanTitle: 'A Show', failedCount: 0, downloadedCount: 1 };
@@ -59,4 +61,16 @@ test('extracts and downloads under a stable job folder without disclosing solved
   assert.doesNotMatch(events, /private-signed-url|cookies|secret/);
   assert.equal(extracted, 1);
   assert.equal(downloaded, 1);
+});
+
+
+test('reports provider HTTP failures without exposing signed links', async () => {
+  extractError = new Error('Provider returned HTTP 521 https://example.com/?signature=private');
+  try {
+    const events = await (await post(body, 'test-key')).text();
+    assert.match(events, /"phase":"extracting","reason":"provider_http","httpStatus":521/);
+    assert.doesNotMatch(events, /signature|private/);
+  } finally {
+    extractError = undefined;
+  }
 });

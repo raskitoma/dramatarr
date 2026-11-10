@@ -110,6 +110,27 @@ def publish_download(source: Path, library: Path, job_id: str) -> str:
     return name
 
 
+_ENGINE_FAILURES = {
+    "provider_access": "Provider access was blocked or its browser challenge did not finish",
+    "timeout": "Provider operation timed out",
+    "no_playable_episodes": "The provider page did not expose playable episodes",
+    "extraction_failed": "Could not extract episode links",
+    "transfer_failed": "Could not transfer episodes",
+}
+
+
+def _engine_failure(event: dict[str, Any]) -> str:
+    phase = {"extracting": "Extraction", "downloading": "Download"}.get(
+        str(event.get("phase")), "Source operation"
+    )
+    reason = event.get("reason")
+    status = event.get("httpStatus")
+    if reason == "provider_http" and type(status) is int and 400 <= status <= 599:
+        return f"{phase}: provider returned HTTP {status}"
+    detail = _ENGINE_FAILURES.get(str(reason))
+    return f"{phase}: {detail}" if detail else "Source operation failed; retry available"
+
+
 async def engine_events(
     ctx: JobContext,
     operation: str,
@@ -135,7 +156,7 @@ async def engine_events(
                 event = json.loads(line[6:])
                 if event.get("kind") == "error":
                     raise AppError(
-                        "REMOTE_IMPORT_FAILED", "Source operation failed; retry available", 502
+                        "REMOTE_IMPORT_FAILED", _engine_failure(event), 502
                     )
                 yield event
 

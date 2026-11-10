@@ -295,6 +295,16 @@ async function handleDownloadStream(req, res) {
   }
 }
 
+function acquisitionFailure(error, phase) {
+  const message = String(error?.message || '');
+  const http = /\bHTTP ([45]\d{2})\b/.exec(message);
+  if (http) return { reason: 'provider_http', httpStatus: Number(http[1]) };
+  if (/challenge|block page/i.test(message)) return { reason: 'provider_access' };
+  if (error?.name === 'TimeoutError' || /timed? ?out|timeout/i.test(message)) return { reason: 'timeout' };
+  if (/episode list|episode information|no playable video/i.test(message)) return { reason: 'no_playable_episodes' };
+  return { reason: phase === 'extracting' ? 'extraction_failed' : 'transfer_failed' };
+}
+
 /** Internal worker protocol. Job identity and progress live in Dramatarr's durable queue. */
 async function handleAcquire(req, res) {
   let payload;
@@ -311,17 +321,19 @@ async function handleAcquire(req, res) {
   extractionInFlight = true;
   const stream = startEventStream(req, res);
   const report = createProgressReporter(data => stream.send('progress', data));
+  let phase = 'extracting';
   try {
     const result = await extractDramaVideoUris(payload.url, {
       signal: stream.signal,
       onProgress: report
     });
+    phase = 'downloading';
     const summary = await downloadDramaEpisodes(result, {
       baseDir: path.join(DOWNLOAD_DIR, payload.jobId),
       sourceUrl: payload.url,
       strategy: result.strategy,
       totalEpisodes: result.totalEpisodes,
-      concurrency: 1,
+      concurrency: clampConcurrency(undefined),
       force: false,
       signal: stream.signal,
       onProgress: report
@@ -332,7 +344,7 @@ async function handleAcquire(req, res) {
       downloadedCount: summary.downloadedCount, episodesTotal: result.totalEpisodes || summary.total
     });
   } catch (err) {
-    if (!stream.signal.aborted) stream.send('error', { kind: 'error', message: 'Acquisition failed.' });
+    if (!stream.signal.aborted) stream.send('error', { kind: 'error', phase, ...acquisitionFailure(err, phase) });
   } finally {
     extractionInFlight = false;
     stream.close();
