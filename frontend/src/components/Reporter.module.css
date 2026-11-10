@@ -46,3 +46,23 @@
 }
 .reportCard p, .reportCard pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .reportActions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-block: .75rem; }
+
+.errorList {
+  display: grid;
+  gap: .6rem;
+  max-block-size: min(38vh, 20rem);
+  overflow: auto;
+}
+
+.errorCard {
+  min-inline-size: 0;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: .65rem;
+  background: var(--surface);
+}
+
+.errorCard[data-selected="true"] { border-inline-start: 3px solid #d25c51; }
+.errorCard small { color: var(--text-muted); overflow-wrap: anywhere; }
+.errorCard pre { margin: .45rem 0 0; font-size: var(--text-sm); }
+.form .errorSelection { display: flex; align-items: center; margin-block-end: .35rem; }
