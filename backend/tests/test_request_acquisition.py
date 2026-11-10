@@ -137,3 +137,33 @@ async def test_source_failure_does_not_report_an_empty_success(db, series_reques
     with pytest.raises(AppError):
         await service.handle_find_source(ctx)
     assert job.payload["acquisition"]["stage"] == "search_failed"
+
+
+async def test_retry_keeps_search_preferences_and_rejects_superseded_jobs(
+    db, admin_user, series_request
+):
+    from app.api.admin import retry_job
+
+    series_request.status = RequestStatus.APPROVED
+    job = await service.queue_search(
+        db, series_request, created_by=admin_user.id, languages=["pt", "es"], review=False
+    )
+    job.status = JobStatus.FAILED
+    job.error = "Navigation timeout"
+    job.payload = {**job.payload, "searchErrors": [{"error": job.error}], "candidates": []}
+    await db.commit()
+
+    result = await retry_job(job.id, db, admin_user)
+    assert result.status == JobStatus.QUEUED
+    assert result.error is None
+    assert result.payload["languages"] == ["pt", "es"]
+    assert result.payload["reviewBeforeDownload"] is False
+    assert result.payload["acquisition"] == {"stage": "searching"}
+    assert "searchErrors" not in result.payload
+
+    job.status = JobStatus.FAILED
+    await db.flush()
+    await service.queue_search(db, series_request, created_by=admin_user.id)
+    await db.commit()
+    with pytest.raises(AppError, match="newer acquisition"):
+        await retry_job(job.id, db, admin_user)

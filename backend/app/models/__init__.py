@@ -43,6 +43,7 @@ from app.models.library import (
     SeriesTranslation,
     SubtitleTrack,
 )
+from app.models.reports import Report, ReportBlock
 from app.models.requests import OPEN_STATUSES, RequestStatus, SeriesRequest
 from app.models.watch import PlayEvent, WatchProgress
 
@@ -70,6 +71,8 @@ __all__ = [
     "OAuthState",
     "OAuthStateKind",
     "PlayEvent",
+    "Report",
+    "ReportBlock",
     "RequestStatus",
     "ScanDirectory",
     "Series",

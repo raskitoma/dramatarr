@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import select
 
-from app.api import admin, auth, integration, library, me, requests, stream, watch
+from app.api import admin, auth, integration, library, me, reports, requests, stream, watch
 from app.api.deps import SessionDep
 from app.config import get_settings
 from app.errors import install_error_handlers
@@ -153,6 +153,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(meta_router, prefix=API_PREFIX)
+    app.include_router(reports.router, prefix=API_PREFIX)
     for router, prefix, tag in ROUTERS:
         _mount(app, router, prefix, tag)
 

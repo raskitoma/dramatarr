@@ -8,6 +8,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 import { AppLayout } from '@/components/AppLayout'
+import { captureReportError } from '@/components/Reporter'
 import { ErrorState } from '@/components/ErrorState'
 
 interface ErrorBoundaryProps {
@@ -26,7 +27,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
-    // Nothing collects client logs in a self-hosted install, so the console is the only sink.
+    captureReportError(error)
     console.error('dramatarr: unhandled UI error', error, info.componentStack)
   }
 

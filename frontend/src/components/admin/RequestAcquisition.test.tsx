@@ -43,3 +43,16 @@ it('shows episode counters and an unknown size without inventing a total', () =>
   expect(screen.getByText(/Descargando episodio 13/)).toBeTruthy()
   expect(screen.getByText('La fuente todavía no informa el tamaño completo.')).toBeTruthy()
 })
+
+it('offers a retry that preserves the failed search configuration', async () => {
+  get.mockResolvedValue({
+    ...job,
+    status: 'failed',
+    error: 'REMOTE_IMPORT_FAILED: Source search failed',
+    finishedAt: '2026-11-10T12:00:00Z',
+    payload: { searchErrors: [{ provider: 'reelshort', language: 'es', error: 'Navigation timeout' }] },
+  })
+  mount()
+  fireEvent.click(await screen.findByRole('button', { name: 'Reintentar búsqueda' }))
+  await waitFor(() => expect(post).toHaveBeenCalledWith(`/admin/jobs/${job.id}/retry`))
+})

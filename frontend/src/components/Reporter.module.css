@@ -1,0 +1,48 @@
+.launcher {
+  position: fixed;
+  z-index: 20;
+  inset-inline-start: max(12px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: .65;
+  cursor: pointer;
+}
+
+.launcher:hover, .launcher:focus-visible { opacity: 1; }
+.launcher[data-alert="true"], .errorButton { color: #d25c51; opacity: 1; }
+
+.errorButton {
+  padding: .25rem .65rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.form, .form label { display: grid; gap: .65rem; }
+.form textarea, .form select {
+  width: 100%;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: .4rem;
+  padding: .45rem;
+}
+.form textarea { min-height: 4rem; resize: vertical; }
+.form pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.reportCard {
+  border: 1px solid currentColor;
+  border-radius: .75rem;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.reportCard p, .reportCard pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.reportActions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-block: .75rem; }

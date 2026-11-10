@@ -1,3 +1,4 @@
+import { JobErrorButton, ReportErrorButton } from '@/components/Reporter'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +18,18 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
   const cache = useQueryClient()
   const key = ['request-acquisition', id]
   const job = useQuery({ queryKey: key, queryFn: () => api.get<Job | null>(`/admin/integration/requests/${id}`), enabled: approved, refetchInterval: approved ? 3000 : false })
-  const search = useMutation({ mutationFn: () => api.post<Job>(`/admin/integration/requests/${id}/search`, { languages: languages.split(',').map(v => v.trim()).filter(Boolean), reviewBeforeDownload: review }), onSuccess: data => { cache.setQueryData(key, data) } })
+  const selectedLanguages = languages.split(',').map(value => value.trim()).filter(Boolean)
+  const search = useMutation({ mutationFn: () => api.post<Job>(`/admin/integration/requests/${id}/search`, { languages: selectedLanguages, reviewBeforeDownload: review }), onSuccess: data => { cache.setQueryData(key, data) } })
+  const retry = useMutation({
+    mutationFn: (jobId: string) => api.post<Job>(`/admin/jobs/${jobId}/retry`),
+    onSuccess: data => cache.setQueryData(key, data),
+  })
+  const failedSearch = job.data?.type === 'find_source' && ['failed', 'canceled'].includes(job.data.status)
+    ? job.data : null
+  const changedSettings = failedSearch && (
+    JSON.stringify(selectedLanguages) !== JSON.stringify(failedSearch.payload.languages) ||
+    review !== failedSearch.payload.reviewBeforeDownload
+  )
   const confirm = useMutation({ mutationFn: (url: string) => api.post<Job>(`/admin/integration/requests/${id}/download`, { searchJobId: job.data?.id, url }), onSuccess: data => { cache.setQueryData(key, data) } })
   const candidates = (job.data?.payload.candidates || []) as Candidate[]
   const available = (job.data?.payload.availableLanguages || {}) as Record<string, { code: string; label: string }[]>
@@ -55,9 +67,16 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
       {approved && (
         <>
           <div className={styles.actions}>
-            <Button size="sm" loading={search.isPending} disabled={Boolean(busy) || job.data?.type === 'download_series' && job.data.status === 'succeeded'} onClick={() => search.mutate()}>
-              {t('acquisitionFlow.search')}
-            </Button>
+            {failedSearch && (
+              <Button size="sm" loading={retry.isPending} disabled={search.isPending} onClick={() => retry.mutate(failedSearch.id)}>
+                {t('reports.retrySearch')}
+              </Button>
+            )}
+            {(!failedSearch || changedSettings) && (
+              <Button size="sm" loading={search.isPending} disabled={retry.isPending || Boolean(busy) || job.data?.type === 'download_series' && job.data.status === 'succeeded'} onClick={() => search.mutate()}>
+                {t('acquisitionFlow.search')}
+              </Button>
+            )}
             {job.data && <Link href="/admin/queue">{t('acquisitionFlow.queue')}</Link>}
           </div>
           {job.data && <AcquisitionProgress job={job.data} />}
@@ -91,8 +110,8 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
               )}
             </div>
           )}
-          {job.data?.error && <p role="alert">{job.data.error}</p>}
-          {(job.isError || search.isError || confirm.isError) && <p role="alert">{t('acquisitionFlow.error')}</p>}
+          {job.data?.error && <JobErrorButton job={job.data} />}
+          {[job.error, search.error, retry.error, confirm.error].map((error, index) => error && <ReportErrorButton key={index} error={error} />)}
         </>
       )}
     </section>
