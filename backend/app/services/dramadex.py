@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError
 from app.services.settings import SettingsService
+from app.services.synopsis import clean_synopsis
 
 log = logging.getLogger(__name__)
 
@@ -304,7 +305,7 @@ def _title(raw: Any) -> DramadexTitle | None:
         Edition(
             lang=str(e.get("lang") or "").strip(),
             title=str(e.get("title") or "").strip(),
-            synopsis=(str(e.get("synopsis")).strip() or None) if e.get("synopsis") else None,
+            synopsis=clean_synopsis(e.get("synopsis")),
             watch_url=(str(e.get("watch_url")).strip() or None) if e.get("watch_url") else None,
             is_primary=bool(e.get("is_primary")),
             source=str(e.get("source") or "").strip(),
@@ -325,7 +326,7 @@ def _title(raw: Any) -> DramadexTitle | None:
         else None,
         poster_url=(str(raw.get("poster_url")).strip() or None) if raw.get("poster_url") else None,
         studios=studios,
-        synopsis=(str(raw.get("synopsis")).strip() or None) if raw.get("synopsis") else None,
+        synopsis=clean_synopsis(raw.get("synopsis")),
         completed=raw.get("completed") if isinstance(raw.get("completed"), bool) else None,
         aliases=tuple(str(a).strip() for a in raw.get("aliases") or [] if str(a).strip()),
         tags=tags,
