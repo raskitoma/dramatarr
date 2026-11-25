@@ -19,7 +19,6 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
     "types": ["vite/client", "vitest/globals"],
-    "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"],

@@ -144,8 +144,9 @@ export function EpisodeGrid({ episodes, posterUrl, label }: EpisodeGridProps) {
   const markWatched = useMarkEpisodeWatched()
   const clearProgress = useClearEpisodeProgress()
 
+  const pendingMarkWatchedId = markWatched.isPending ? markWatched.variables : undefined
   const pendingId: string | null =
-    (markWatched.isPending ? (markWatched.variables ?? null) : null) ??
+    pendingMarkWatchedId ??
     (clearProgress.isPending ? (clearProgress.variables ?? null) : null)
 
   const faceRefs = useRef<Array<HTMLElement | null>>([])
