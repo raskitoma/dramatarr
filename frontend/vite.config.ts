@@ -50,11 +50,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'wouter'],
-          i18n: ['i18next', 'react-i18next'],
+        // Rolldown uses code-splitting groups for named package chunks.
+        codeSplitting: {
+          groups: [
+            { name: 'vendor', test: /[\\/]node_modules[\\/](react|react-dom|wouter)[\\/]/ },
+            { name: 'i18n', test: /[\\/]node_modules[\\/](i18next|react-i18next)[\\/]/ },
+          ],
         },
       },
     },
