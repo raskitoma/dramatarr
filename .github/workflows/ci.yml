@@ -107,28 +107,28 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Backend Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: false
           tags: dramatarr-api:test
 
       - name: Build Frontend Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: false
           tags: dramatarr-web:test
 
       - name: Build Catalogue Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./catalogue
           push: false
           tags: dramatarr-catalogue:test
 
       - name: Build Download Engine Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./downloader
           push: false
