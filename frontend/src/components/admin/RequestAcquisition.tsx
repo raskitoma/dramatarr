@@ -18,23 +18,46 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
   const cache = useQueryClient()
   const key = ['request-acquisition', id]
   const job = useQuery({ queryKey: key, queryFn: () => api.get<Job | null>(`/admin/integration/requests/${id}`), enabled: approved, refetchInterval: approved ? 3000 : false })
+  const latest = job.data
+  const active = latest?.status === 'running' || latest?.status === 'queued'
+  const completed = latest?.type === 'download_series' && latest.status === 'succeeded'
+  const currentSearch = latest?.type === 'find_source' && latest.status === 'succeeded' && Array.isArray(latest.payload.candidates) && latest.payload.candidates.length > 0
+    ? latest : null
+  const saved = useQuery({
+    queryKey: ['request-search-results', id, latest?.id, latest?.status],
+    queryFn: () => api.get<Job | null>(`/admin/integration/requests/${id}/results`),
+    enabled: approved && Boolean(latest) && !currentSearch && !completed,
+  })
+  const results = currentSearch ?? saved.data
   const selectedLanguages = languages.split(',').map(value => value.trim()).filter(Boolean)
-  const search = useMutation({ mutationFn: () => api.post<Job>(`/admin/integration/requests/${id}/search`, { languages: selectedLanguages, reviewBeforeDownload: review }), onSuccess: data => { cache.setQueryData(key, data) } })
+  const search = useMutation({
+    mutationFn: () => api.post<Job>(`/admin/integration/requests/${id}/search`, {
+      languages: selectedLanguages,
+      reviewBeforeDownload: review,
+      ...(results?.payload.candidates ? { refresh: true } : {}),
+    }),
+    onSuccess: data => cache.setQueryData(key, data),
+  })
   const retry = useMutation({
     mutationFn: (jobId: string) => api.post<Job>(`/admin/jobs/${jobId}/retry`),
     onSuccess: data => cache.setQueryData(key, data),
   })
-  const failedSearch = job.data?.type === 'find_source' && ['failed', 'canceled'].includes(job.data.status)
-    ? job.data : null
+  const retryable = latest && (latest.status === 'failed' || latest.status === 'canceled') ? latest : null
+  const failedSearch = retryable?.type === 'find_source'
   const changedSettings = failedSearch && (
-    JSON.stringify(selectedLanguages) !== JSON.stringify(failedSearch.payload.languages) ||
-    review !== failedSearch.payload.reviewBeforeDownload
+    JSON.stringify(selectedLanguages) !== JSON.stringify(retryable.payload.languages) ||
+    review !== retryable.payload.reviewBeforeDownload
   )
-  const confirm = useMutation({ mutationFn: (url: string) => api.post<Job>(`/admin/integration/requests/${id}/download`, { searchJobId: job.data?.id, url }), onSuccess: data => { cache.setQueryData(key, data) } })
-  const candidates = (job.data?.payload.candidates || []) as Candidate[]
-  const available = (job.data?.payload.availableLanguages || {}) as Record<string, { code: string; label: string }[]>
-  const busy = job.data && ['running','queued'].includes(job.data.status)
-  const expanded = expandedSearch === job.data?.id
+  const confirm = useMutation({
+    mutationFn: (url: string) => api.post<Job>(`/admin/integration/requests/${id}/download`, {
+      searchJobId: results?.id, url,
+    }),
+    onSuccess: data => cache.setQueryData(key, data),
+  })
+  const candidates = (results?.payload.candidates || []) as Candidate[]
+  const available = (results?.payload.availableLanguages || {}) as Record<string, { code: string; label: string }[]>
+  const mutating = search.isPending || retry.isPending || confirm.isPending
+  const expanded = expandedSearch === results?.id
   const visible = expanded ? candidates : candidates.slice(0, 4)
   const languageNames = new Intl.DisplayNames([i18n.resolvedLanguage || 'es'], { type: 'language' })
   function languageName(code: string) {
@@ -67,21 +90,22 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
       {approved && (
         <>
           <div className={styles.actions}>
-            {failedSearch && (
-              <Button size="sm" loading={retry.isPending} disabled={search.isPending} onClick={() => retry.mutate(failedSearch.id)}>
-                {t('reports.retrySearch')}
+            {retryable && (!failedSearch || candidates.length === 0) && (
+              <Button size="sm" loading={retry.isPending} disabled={mutating} onClick={() => retry.mutate(retryable.id)}>
+                {t(failedSearch ? 'reports.retrySearch' : 'acquisitionFlow.retryDownload')}
               </Button>
             )}
-            {(!failedSearch || changedSettings) && (
-              <Button size="sm" loading={search.isPending} disabled={retry.isPending || Boolean(busy) || job.data?.type === 'download_series' && job.data.status === 'succeeded'} onClick={() => search.mutate()}>
-                {t('acquisitionFlow.search')}
+            {(!failedSearch || changedSettings || candidates.length > 0) && (
+              <Button size="sm" variant={candidates.length ? 'secondary' : undefined} loading={search.isPending} disabled={mutating || active || completed} onClick={() => search.mutate()}>
+                {t(candidates.length ? 'acquisitionFlow.refreshResults' : 'acquisitionFlow.search')}
               </Button>
             )}
             {job.data && <Link href="/admin/queue">{t('acquisitionFlow.queue')}</Link>}
           </div>
           {job.data && <AcquisitionProgress job={job.data} />}
-          {job.data?.type === 'find_source' && job.data.status === 'succeeded' && candidates.length > 0 && (
+          {!completed && candidates.length > 0 && (
             <div className={styles.results}>
+              {!currentSearch && <p className={styles.muted}>{t('acquisitionFlow.savedResults')}</p>}
               <div className={styles.grid}>
                 {visible.map(candidate => (
                   <article className={styles.card} key={candidate.url} data-match={candidate.idMatch}>
@@ -94,7 +118,7 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
                     {candidate.idMatch && <span className={styles.muted}>{t('acquisitionFlow.idMatch')}</span>}
                     <div className={styles.actions}>
                       <a href={candidate.url} target="_blank" rel="noopener noreferrer">{t('acquisitionFlow.inspect')}</a>
-                      <Button size="sm" variant="primary" loading={confirm.isPending && confirm.variables === candidate.url} disabled={confirm.isPending} onClick={() => confirm.mutate(candidate.url)}>
+                      <Button size="sm" variant="primary" loading={confirm.isPending && confirm.variables === candidate.url} disabled={mutating || active || retryable?.payload.url === candidate.url} onClick={() => confirm.mutate(candidate.url)}>
                         {t('acquisitionFlow.downloadEdition')}
                       </Button>
                     </div>
@@ -103,7 +127,7 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
               </div>
               {candidates.length > 4 && (
                 <div>
-                  <Button size="sm" aria-expanded={expanded} onClick={() => setExpandedSearch(expanded ? undefined : job.data?.id)}>
+                  <Button size="sm" aria-expanded={expanded} onClick={() => setExpandedSearch(expanded ? undefined : results?.id)}>
                     {expanded ? t('acquisitionFlow.showFewer') : t('acquisitionFlow.showAll', { count: candidates.length })}
                   </Button>
                 </div>
@@ -111,7 +135,7 @@ export function RequestAcquisition({ id, approved, review, languages, onReview, 
             </div>
           )}
           {job.data?.error && <JobErrorButton job={job.data} />}
-          {[job.error, search.error, retry.error, confirm.error].map((error, index) => error && <ReportErrorButton key={index} error={error} />)}
+          {[job.error, saved.error, search.error, retry.error, confirm.error].map((error, index) => error && <ReportErrorButton key={index} error={error} />)}
         </>
       )}
     </section>

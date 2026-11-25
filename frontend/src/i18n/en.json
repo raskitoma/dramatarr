@@ -1114,6 +1114,9 @@
     "console": "Manage catalogue"
   },
   "acquisitionFlow": {
+    "retryDownload": "Retry download",
+    "refreshResults": "Refresh search results",
+    "savedResults": "Saved results are available until the download is imported.",
     "searchOptions": "Search options",
     "downloadEdition": "Download",
     "showFewer": "Show fewer editions",

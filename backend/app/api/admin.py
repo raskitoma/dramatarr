@@ -405,7 +405,9 @@ async def retry_job(job_id: str, session: SessionDep, admin: AdminUser) -> JobOu
     if job.status not in {JobStatus.FAILED, JobStatus.CANCELED}:
         raise Conflict("JOB_NOT_RETRYABLE", "Only a failed or canceled job can be retried")
 
-    if job.type == JobType.FIND_SOURCE:
+    if job.type == JobType.FIND_SOURCE or (
+        job.type == JobType.DOWNLOAD_SERIES and job.payload.get("requestId")
+    ):
         from app.services.request_acquisition import latest_job
 
         request_id = job.payload.get("requestId")
@@ -417,7 +419,7 @@ async def retry_job(job_id: str, session: SessionDep, admin: AdminUser) -> JobOu
             raise Conflict("JOB_NOT_RETRYABLE", "A newer acquisition already exists")
         job.payload = {
             **{k: v for k, v in job.payload.items() if k not in {"searchErrors", "candidates"}},
-            "acquisition": {"stage": "searching"},
+            "acquisition": {"stage": "searching" if job.type == JobType.FIND_SOURCE else "queued"},
         }
 
     job.status = JobStatus.QUEUED

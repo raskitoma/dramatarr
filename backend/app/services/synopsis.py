@@ -45,7 +45,7 @@ def clean_synopsis(value: object) -> str | None:
     parser = _SynopsisParser()
     parser.feed(value)
     parser.close()
-    paragraphs = []
+    paragraphs: list[str] = []
     for line in "".join(parser.parts).splitlines():
         text = line.strip()
         if not text:

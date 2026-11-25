@@ -1114,6 +1114,9 @@
     "console": "Administrar el catálogo"
   },
   "acquisitionFlow": {
+    "retryDownload": "Reintentar descarga",
+    "refreshResults": "Actualizar resultados",
+    "savedResults": "Los resultados se conservan hasta que la descarga se importe.",
     "searchOptions": "Opciones de búsqueda",
     "downloadEdition": "Descargar",
     "showFewer": "Ver menos ediciones",

@@ -30,8 +30,8 @@ it('shows a localized edition for review and starts nothing before explicit acce
 it('submits the chosen language order and review preference when searching again', async () => {
   mount()
   await screen.findByText('O Rei Dragão')
-  fireEvent.click(screen.getByRole('button', { name: 'Buscar en Dramafren' }))
-  await waitFor(() => expect(post).toHaveBeenCalledWith('/admin/integration/requests/r1/search', { languages: ['pt','en'], reviewBeforeDownload: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar resultados' }))
+  await waitFor(() => expect(post).toHaveBeenCalledWith('/admin/integration/requests/r1/search', { languages: ['pt','en'], reviewBeforeDownload: true, refresh: true }))
 })
 it('shows episode counters and an unknown size without inventing a total', () => {
   const download = { ...job, type: 'download_series', status: 'running', progressPercent: 35, payload: { acquisition: { stage: 'downloading', episodesTotal: 32, episodesCompleted: 12, currentEpisode: 13, currentEpisodePercent: 25, downloadedBytes: 1048576 } } }
@@ -55,4 +55,16 @@ it('offers a retry that preserves the failed search configuration', async () => 
   mount()
   fireEvent.click(await screen.findByRole('button', { name: 'Reintentar búsqueda' }))
   await waitFor(() => expect(post).toHaveBeenCalledWith(`/admin/jobs/${job.id}/retry`))
+})
+
+
+it('keeps the saved results visible after a failed download and retries the existing job', async () => {
+  const download = { id: 'd'.repeat(32), type: 'download_series', status: 'failed', payload: { url } }
+  get.mockImplementation((path: string) => Promise.resolve(path.endsWith('/results') ? job : download))
+  mount()
+  await screen.findByText('O Rei Dragão')
+  expect((screen.getByRole('button', { name: 'Descargar' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Reintentar descarga' }))
+  await waitFor(() => expect(post).toHaveBeenCalledWith(`/admin/jobs/${download.id}/retry`))
+  expect(post).toHaveBeenCalledTimes(1)
 })

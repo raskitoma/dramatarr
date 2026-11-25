@@ -167,3 +167,28 @@ async def test_retry_keeps_search_preferences_and_rejects_superseded_jobs(
     await db.commit()
     with pytest.raises(AppError, match="newer acquisition"):
         await retry_job(job.id, db, admin_user)
+
+
+async def test_cached_search_survives_failed_download_until_cleanup(db, admin_user, series_request):
+    series_request.status = RequestStatus.APPROVED
+    search = await service.queue_search(db, series_request, created_by=admin_user.id)
+    search.status = JobStatus.SUCCEEDED
+    url = "https://reelshort.dramafren.org/index.php?page=watch&id=abc&lang=es"
+    search.payload = {**search.payload, "candidates": [{"url": url, "language": "es"}]}
+    await db.commit()
+
+    download = await service.confirm_candidate(db, series_request, search, url, admin_user.id)
+    download.status = JobStatus.FAILED
+    await db.commit()
+
+    assert (await service.cached_search(db, series_request)).id == search.id
+    assert (
+        await service.queue_search(db, series_request, created_by=admin_user.id)
+    ).id == search.id
+    fresh = await service.queue_search(db, series_request, created_by=admin_user.id, refresh=True)
+    assert fresh.id != search.id
+    assert (await service.cached_search(db, series_request)).id == search.id
+    await service.clear_cached_searches(db, series_request.id)
+    await db.commit()
+    assert await service.cached_search(db, series_request) is None
+    assert "candidates" not in search.payload
