@@ -16,7 +16,6 @@
     "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true,
     "types": [],
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
