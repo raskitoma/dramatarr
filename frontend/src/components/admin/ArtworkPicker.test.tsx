@@ -57,11 +57,6 @@ function renderIn(ui: ReactElement) {
 }
 
 beforeAll(async () => {
-  // jsdom has no blob URLs, and the file preview is built on one.
-  if (typeof URL.createObjectURL !== 'function') {
-    URL.createObjectURL = () => 'blob:preview'
-    URL.revokeObjectURL = () => {}
-  }
   // jsdom ships <dialog> without the modal methods the Dialog component relies on.
   if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
     HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
@@ -77,13 +72,19 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Vitest's object URL shim relies on a private Blob symbol removed in jsdom 31.
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
   // Every test mounts the dialog, and the dialog searches on mount now.
   searchDramadex.mockResolvedValue({ configured: true, query: '', items: [] })
   chooseDramadexArtwork.mockResolvedValue({ seriesId: 's1', kind: 'poster' })
   patchSeries.mockResolvedValue({})
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('ArtworkPicker', () => {
   it('offers only the two paths that still exist, and says what choosing costs', async () => {

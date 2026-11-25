@@ -105,18 +105,19 @@ function renderIn(ui: ReactElement) {
 
 beforeAll(async () => {
   await setupI18n('es')
-  // jsdom has no object-URL support; the preview path needs one.
-  if (typeof URL.createObjectURL !== 'function') {
-    Object.defineProperty(URL, 'createObjectURL', { value: () => 'blob:preview', writable: true })
-    Object.defineProperty(URL, 'revokeObjectURL', { value: () => {}, writable: true })
-  }
 })
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Vitest's object URL shim relies on a private Blob symbol removed in jsdom 31.
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('AccountPage avatar block', () => {
   it('states the privacy consequence and previews before uploading', async () => {
